@@ -4,6 +4,7 @@ session_start();
 
 include '../assets/conexion.php'; 
 
+// Verificación de sesión y rol de administrador administrativo
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
     header("Location: ../index.php");
     exit();
@@ -17,102 +18,130 @@ $nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nuevo Vehículo - Sistema de Transporte</title>
+    <title>SGET - Registrar Nuevo Vehículo</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'bg-principal': '#0b0f19',
+                        'bg-tarjeta': '#1e293b',
+                        'neon-azul': '#38bdf8',
+                        'neon-morado': '#a855f7',
+                        'color-mutado': '#94a3b8'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=400;500;600;700;800&display=swap');
     </style>
 </head>
-<body class="bg-gray-50 flex min-h-screen">
+<body class="bg-bg-principal flex min-h-screen antialiased text-slate-100">
 
-    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col fixed h-full shadow-sm">
-        <div class="p-6">
-            <h2 class="text-blue-600 font-bold text-lg uppercase tracking-wider leading-tight">Sistema de <br> Transporte</h2>
-        </div>
-        <nav class="mt-6 px-4 flex-grow">
-            <ul class="space-y-2 text-sm font-medium">
-                <li><a href="admin.php" class="flex items-center space-x-3 p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition"><i class="fas fa-chart-pie"></i><span>Dashboard</span></a></li>
-                <li><a href="usuarios.php" class="flex items-center space-x-3 p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition"><i class="fas fa-users-cog"></i><span>Gestión Usuarios</span></a></li>
-                <li><a href="asignaciones.php" class="flex items-center space-x-3 p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition"><i class="fas fa-clipboard-check"></i><span>Asignaciones</span></a></li>
-                <li><a href="rutas.php" class="flex items-center space-x-3 p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition"><i class="fas fa-map-signs"></i><span>Rutas</span></a></li>
-                <li><a href="vehiculos.php" class="flex items-center space-x-3 p-3 rounded-lg bg-blue-50 text-blue-600 transition shadow-sm"><i class="fas fa-car"></i><span>Vehículos</span></a></li>
-                <li><a href="viajes.php" class="flex items-center space-x-3 p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition"><i class="fas fa-bus"></i><span>Viajes</span></a></li>
-            </ul>
-        </nav>
-    </aside>
+    <?php include 'sidebar.php'; ?>
 
     <main class="flex-1 ml-64 flex flex-col">
-        <header class="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-8 sticky top-0 z-10">
-            <div class="text-gray-400 italic text-sm font-medium">Control de Flota</div>
-            <div class="flex items-center space-x-4">
-                <p class="text-sm font-bold text-gray-700"><?php echo htmlspecialchars($nombreReal); ?></p>
-                <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold border-2 border-white shadow-sm">
+        
+        <header class="h-16 bg-bg-tarjeta/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-8 sticky top-0 z-10">
+            <div class="text-color-mutado font-medium text-sm tracking-wide">
+                Flota &nbsp;/&nbsp; <span class="text-white font-semibold">Alta de Unidad</span>
+            </div>
+            <div class="flex items-center space-x-6">
+                <div class="hidden md:block text-right">
+                    <p class="text-sm font-bold text-white"><?php echo htmlspecialchars($nombreReal); ?></p>
+                    <p class="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest flex items-center justify-end gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span> Admin
+                    </p>
+                </div>
+                <div class="w-10 h-10 bg-gradient-to-tr from-neon-azul to-neon-morado rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md shadow-neon-azul/10">
                     <?php echo strtoupper(substr($nombreReal, 0, 1)); ?>
                 </div>
             </div>
         </header>
 
-        <div class="p-8 flex justify-center">
-            <div class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 w-full max-w-lg">
-                <div class="mb-8 text-center">
-                    <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-                        <i class="fas fa-car-side text-2xl"></i>
+        <div class="flex-1 flex items-center justify-center p-8">
+            <div class="bg-bg-tarjeta w-full max-w-lg rounded-2xl shadow-2xl border border-white/5 overflow-hidden relative backdrop-blur-sm">
+                
+                <div class="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-blue-500 via-indigo-500 to-neon-morado"></div>
+
+                <div class="p-8 border-b border-white/5 text-center bg-gradient-to-b from-white/[0.01] to-transparent">
+                    <div class="w-14 h-14 bg-gradient-to-tr from-blue-600/20 to-indigo-600/20 text-neon-azul rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/5 shadow-inner">
+                        <i class="fas fa-car-side text-xl"></i>
                     </div>
-                    <h2 class="text-2xl font-bold text-gray-800">Registrar Nuevo Vehículo</h2>
-                    <p class="text-gray-500 text-sm">Ingrese los datos técnicos para dar de alta la unidad.</p>
+                    <h2 class="text-xl font-extrabold text-white tracking-tight">Registrar Nuevo Vehículo</h2>
+                    <p class="text-color-mutado text-xs mt-1">Ingrese los datos técnicos requeridos para vincular la unidad al sistema.</p>
                 </div>
 
-                <form action="guardar_vehiculo.php" method="POST" class="space-y-6">
+                <form action="guardar_vehiculo.php" method="POST" class="p-8 space-y-6">
                     
-                    <div class="border-b border-gray-100 pb-4">
-                        <label class="block text-[10px] font-extrabold text-gray-400 uppercase mb-2 tracking-widest flex items-center gap-1.5"><i class="fas fa-id-card text-blue-500/70"></i>Identificación Única</label>
-                        <div class="relative">
-                            <input type="text" name="pla_veh" required placeholder="Ej: FUSA-123" maxlength="7"
-                                   class="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition uppercase font-bold text-lg text-gray-800 tracking-wider shadow-inner">
-                            <div class="absolute inset-y-0 left-0 flex items-center px-4 pointer-events-none text-gray-400 border-r border-gray-200 mr-2 bg-gray-100 rounded-l-xl">
+                    <div class="space-y-2">
+                        <label class="block text-[10px] font-bold text-color-mutado uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-id-card text-neon-azul"></i> Matrícula / Placa Identificadora
+                        </label>
+                        <div class="relative group">
+                            <input type="text" name="pla_veh" required placeholder="EJ: FUSA-123" maxlength="7"
+                                   class="w-full pl-14 pr-4 py-3.5 bg-bg-principal/60 border border-white/5 rounded-xl outline-none focus:border-neon-azul/50 text-white font-mono font-bold text-lg tracking-widest uppercase transition-all shadow-inner placeholder-white/10">
+                            <div class="absolute inset-y-0 left-0 flex items-center px-4 pointer-events-none text-white/30 border-r border-white/5 bg-white/[0.02] rounded-l-xl">
                                 <i class="fas fa-hashtag text-xs"></i>
                             </div>
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div class="col-span-1 md:col-span-2">
-                            <label class="block text-[10px] font-extrabold text-gray-400 uppercase mb-1 tracking-widest flex items-center gap-1.5"><i class="fas fa-tag text-blue-500/70"></i>Modelo / Línea / Descripción</label>
-                            <div class="relative">
-                                <input type="text" name="mode_veh" required placeholder="Ej: Chevrolet Sail 2023"
-                                       class="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition text-gray-700">
-                                <div class="absolute inset-y-0 left-0 flex items-center px-4 pointer-events-none text-gray-400">
-                                    <i class="fas fa-car text-xs"></i>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-[10px] font-extrabold text-gray-400 uppercase mb-1 tracking-widest flex items-center gap-1.5"><i class="fas fa-users text-blue-500/70"></i>Capacidad Total</label>
-                            <div class="relative">
-                                <input type="number" name="cap_veh" required placeholder="0" min="1"
-                                       class="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition font-mono font-bold text-blue-600">
-                                <div class="absolute inset-y-0 left-0 flex items-center px-4 pointer-events-none text-gray-400">
-                                    <i class="fas fa-hashtag text-xs"></i>
-                                </div>
-                                <div class="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-400 text-[10px] font-bold uppercase">pasajeros</div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-[10px] font-extrabold text-gray-400 uppercase mb-1 tracking-widest flex items-center gap-1.5"><i class="fas fa-info-circle text-blue-500/70"></i>Estado Inicial</label>
-                            <div class="w-full px-4 py-3 bg-green-50 border border-green-100 rounded-xl font-bold text-green-700 text-sm flex items-center gap-2">
-                                <i class="fas fa-check-circle"></i> ACTIVO (Por defecto)
+                    <div class="space-y-2">
+                        <label class="block text-[10px] font-bold text-color-mutado uppercase tracking-wider flex items-center gap-2">
+                            <i class="fas fa-tag text-neon-azul"></i> Línea / Modelo / Descripción
+                        </label>
+                        <div class="relative">
+                            <input type="text" name="mode_veh" required placeholder="Ej: Chevrolet Sail 2023"
+                                   class="w-full pl-12 pr-4 py-3 bg-bg-principal/60 border border-white/5 rounded-xl outline-none focus:border-neon-azul/50 text-white text-sm transition-all placeholder-white/20">
+                            <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-white/20">
+                                <i class="fas fa-car text-xs"></i>
                             </div>
                         </div>
                     </div>
 
-                    <div class="flex gap-4 pt-4 border-t border-gray-100">
-                        <a href="vehiculos.php" class="flex-1 text-center py-3.5 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition">Cancelar</a>
-                        <button type="submit" class="flex-1 py-3.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition shadow-lg shadow-blue-100">
-                            Guardar Vehículo
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-bold text-color-mutado uppercase tracking-wider flex items-center gap-2">
+                                <i class="fas fa-users text-neon-azul"></i> Capacidad Total
+                            </label>
+                            <div class="relative">
+                                <input type="number" name="cap_veh" required placeholder="0" min="1"
+                                       class="w-full pl-11 pr-16 py-3 bg-bg-principal/60 border border-white/5 rounded-xl outline-none focus:border-neon-azul/50 text-white font-mono font-bold text-sm transition-all placeholder-white/20">
+                                <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-white/20">
+                                    <i class="fas fa-layer-group text-xs"></i>
+                                </div>
+                                <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-[9px] font-bold uppercase text-color-mutado tracking-wider">
+                                    puestos
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-[10px] font-bold text-color-mutado uppercase tracking-wider flex items-center gap-2">
+                                <i class="fas fa-info-circle text-neon-azul"></i> Estado Inicial
+                            </label>
+                            <div class="w-full px-4 py-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl font-extrabold text-emerald-400 text-xs tracking-wider flex items-center gap-2 shadow-inner h-[46px]">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block"></span>
+                                DISPONIBLE (Automático)
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3 pt-4 border-t border-white/5">
+                        <a href="vehiculos.php" class="flex-1 text-center py-3.5 bg-white/5 border border-white/10 hover:bg-white/10 text-color-mutado hover:text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all">
+                            Cancelar
+                        </a>
+                        <button type="submit" class="flex-1 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-500/10 hover:opacity-95 transition-all">
+                            Guardar Unidad
                         </button>
                     </div>
                 </form>

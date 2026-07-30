@@ -29,27 +29,7 @@ $res = $conexion->query($sql);
 
 <body class="bg-gray-100 flex min-h-screen">
 
-<!-- SIDEBAR -->
-<aside class="w-64 bg-white border-r border-gray-200 flex flex-col fixed h-full shadow-sm">
-    <div class="p-6">
-        <h2 class="text-blue-600 font-bold text-lg uppercase tracking-wider leading-tight">Sistema de <br> Transporte</h2>
-    </div>
-    <nav class="mt-6 px-4 flex-grow">
-        <ul class="space-y-2 text-sm font-medium">
-            <li><a href="admin.php" class="flex items-center space-x-3 p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition"><i class="fas fa-chart-pie"></i><span>Dashboard</span></a></li>
-            <li><a href="usuarios.php" class="flex items-center space-x-3 p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition"><i class="fas fa-users-cog"></i><span>Usuarios</span></a></li>
-            <li><a href="asignaciones.php" class="flex items-center space-x-3 p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition"><i class="fas fa-clipboard-check"></i><span>Asignaciones</span></a></li>
-            <li><a href="rutas.php" class="flex items-center space-x-3 p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition"><i class="fas fa-map-signs"></i><span>Rutas</span></a></li>
-            <li><a href="viajes.php" class="flex items-center space-x-3 p-3 rounded-lg text-gray-500 hover:bg-gray-100 transition"><i class="fas fa-bus"></i><span>Viajes</span></a></li>
-            <li><a href="reportes.php" class="flex items-center space-x-3 p-3 rounded-lg bg-green-50 text-green-600 shadow-sm transition"><i class="fas fa-file-invoice-dollar"></i><span>Reportes</span></a></li>
-        </ul>
-    </nav>
-     <div class="p-4 border-t border-gray-100">
-            <a href="../assets/cerrar.php" class="w-full flex items-center space-x-3 p-3 text-red-500 hover:bg-red-50 rounded-lg transition font-bold text-sm">
-                <i class="fas fa-sign-out-alt"></i><span>Cerrar Sesión</span>
-            </a>
-        </div>
-</aside>
+    <?php include 'sidebar.php'; ?>
 
 <!-- CONTENIDO -->
 <main class="flex-1 ml-64 p-8">

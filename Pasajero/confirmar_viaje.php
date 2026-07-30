@@ -1,37 +1,39 @@
 <?php
-Date_default_timezone_set('America/Bogota');
 session_start();
-include '../assets/conexion.php';
+include '../assets/conexion.php'; 
 
-if (!isset($_SESSION['documento'])) {
+// 1. Verificamos que sea un pasajero (rol 3) y que exista la sesión
+if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3 || !isset($_SESSION['id_usu'])) {
     header("Location: ../index.php");
     exit();
 }
 
-if (isset($_GET['id_rut'])) {
-    $id_rut = $_GET['id_rut'];
-    $documento = $_SESSION['documento'];
+$id_via = $_GET['id_via'];
+$id_usu = $_SESSION['id_usu']; 
 
-    $user_q = $conexion->query("SELECT id_usu FROM usuario WHERE num_doc_usu = '$documento'");
-    $userData = $user_q->fetch_assoc();
-    $id_pasajero = $userData['id_usu'];
+// 2. Verificamos si aún hay cupos
+$stmt = $conexion->prepare("SELECT cup_dis FROM viaje WHERE id_via = ?");
+$stmt->bind_param("i", $id_via);
+$stmt->execute();
+$viaje = $stmt->get_result()->fetch_assoc();
 
-    $fecha_actual = date("Y-m-d H:i:s");
+if ($viaje && $viaje['cup_dis'] > 0) {
+    // 3. Descontamos el cupo
+    $update = $conexion->prepare("UPDATE viaje SET cup_dis = cup_dis - 1 WHERE id_via = ?");
+    $update->bind_param("i", $id_via);
+    $update->execute();
+
+    // 4. Insertamos la reserva
+    $sql_reserva = $conexion->prepare("INSERT INTO reserva (id_via_res, id_usu_res) VALUES (?, ?)");
+    $sql_reserva->bind_param("ii", $id_via, $id_usu);
     
-    $sql = "INSERT INTO viaje (fec_via, est_via, id_rut_via, id_usu_via, val_via) 
-            SELECT '$fecha_actual', 'Pendiente', id_rut, '$id_pasajero', val_rut 
-            FROM rutas WHERE id_rut = '$id_rut'";
-
-    if ($conexion->query($sql)) {
-        echo "<script>
-            alert('¡Listo, sumercé! Su solicitud quedó registrada. El administrador la revisará pronto.');
-            window.location.href = 'mis_viajes_pasajero.php';
-        </script>";
+    if ($sql_reserva->execute()) {
+        header("Location: viajes_pasajero.php?mensaje=reserva_exitosa");
     } else {
-        echo "Huy parce, hubo un error: " . $conexion->error;
+        echo "Error al registrar la reserva: " . $conexion->error;
     }
 } else {
-    header("Location: rutas_pasajero.php");
-    exit();
+    echo "Lo sentimos, ya no quedan cupos para este viaje.";
+    echo "<br><a href='viajes_pasajero.php'>Volver</a>";
 }
 ?>
