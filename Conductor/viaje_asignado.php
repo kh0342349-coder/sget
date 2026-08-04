@@ -135,6 +135,7 @@ if ($viaje) {
         <!-- Cuerpo Principal -->
         <div class="p-8 space-y-6 flex-1 max-w-6xl">
             
+            <!-- ENCABEZADO DE PÁGINA LIMPIO -->
             <div>
                 <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Reporte de Viaje Asignado</h1>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Detalle del servicio, itinerario y listado oficial de pasajeros abonados.</p>
@@ -175,36 +176,48 @@ if ($viaje) {
                         </ul>
                     </div>
 
-                    <!-- 2. Detalles del Viaje y Ruta -->
-                    <div class="bg-white dark:bg-[#1e293b] p-6 rounded-2xl border border-slate-200 dark:border-white/5 shadow-xl space-y-4">
-                        <div class="flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
-                            <i class="fas fa-route text-indigo-500 dark:text-neon-morado text-lg"></i>
-                            <h2 class="font-bold text-slate-900 dark:text-white text-base">2. Detalles de Ruta</h2>
+                    <!-- 2. Detalles del Viaje y Ruta + BOTÓN INTEGRADO -->
+                    <div class="bg-white dark:bg-[#1e293b] p-6 rounded-2xl border border-slate-200 dark:border-white/5 shadow-xl flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3 mb-4">
+                                <i class="fas fa-route text-indigo-500 dark:text-neon-morado text-lg"></i>
+                                <h2 class="font-bold text-slate-900 dark:text-white text-base">2. Detalles de Ruta</h2>
+                            </div>
+                            <ul class="space-y-3 text-sm">
+                                <li class="flex justify-between">
+                                    <span class="text-slate-400 dark:text-slate-500">Ruta:</span>
+                                    <span class="font-bold text-slate-800 dark:text-slate-200 capitalize"><?= htmlspecialchars($viaje['ori_rut'] ?? 'Origen') ?> &rarr; <?= htmlspecialchars($viaje['des_rut'] ?? 'Destino') ?></span>
+                                </li>
+                                <li class="flex justify-between">
+                                    <span class="text-slate-400 dark:text-slate-500">Distancia Estimada:</span>
+                                    <span class="font-mono text-slate-800 dark:text-slate-200"><?= htmlspecialchars($viaje['dis_rut'] ?? '0') ?> km</span>
+                                </li>
+                                <li class="flex justify-between">
+                                    <span class="text-slate-400 dark:text-slate-500">Fecha y Hora Programada:</span>
+                                    <span class="font-mono text-slate-800 dark:text-slate-200"><?= !empty($viaje['fec_via']) ? date('d/m/Y - h:i A', strtotime($viaje['fec_via'])) : 'N/A' ?></span>
+                                </li>
+                                <li class="flex justify-between items-center">
+                                    <span class="text-slate-400 dark:text-slate-500">Estado del Viaje:</span>
+                                    <span class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold px-2.5 py-0.5 rounded-md text-xs uppercase">
+                                        <?= htmlspecialchars($viaje['est_via']) ?>
+                                    </span>
+                                </li>
+                                <li class="flex justify-between">
+                                    <span class="text-slate-400 dark:text-slate-500">Disponibilidad:</span>
+                                    <span class="font-bold text-amber-500"><?= htmlspecialchars($viaje['cup_dis']) ?> cupos libres / <?= htmlspecialchars($viaje['cup_tot']) ?> totales</span>
+                                </li>
+                            </ul>
                         </div>
-                        <ul class="space-y-3 text-sm">
-                            <li class="flex justify-between">
-                                <span class="text-slate-400 dark:text-slate-500">Ruta:</span>
-                                <span class="font-bold text-slate-800 dark:text-slate-200 capitalize"><?= htmlspecialchars($viaje['ori_rut'] ?? 'Origen') ?> &rarr; <?= htmlspecialchars($viaje['des_rut'] ?? 'Destino') ?></span>
-                            </li>
-                            <li class="flex justify-between">
-                                <span class="text-slate-400 dark:text-slate-500">Distancia Estimada:</span>
-                                <span class="font-mono text-slate-800 dark:text-slate-200"><?= htmlspecialchars($viaje['dis_rut'] ?? '0') ?> km</span>
-                            </li>
-                            <li class="flex justify-between">
-                                <span class="text-slate-400 dark:text-slate-500">Fecha y Hora Programada:</span>
-                                <span class="font-mono text-slate-800 dark:text-slate-200"><?= !empty($viaje['fec_via']) ? date('d/m/Y - h:i A', strtotime($viaje['fec_via'])) : 'N/A' ?></span>
-                            </li>
-                            <li class="flex justify-between items-center">
-                                <span class="text-slate-400 dark:text-slate-500">Estado del Viaje:</span>
-                                <span class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold px-2.5 py-0.5 rounded-md text-xs uppercase">
-                                    <?= htmlspecialchars($viaje['est_via']) ?>
-                                </span>
-                            </li>
-                            <li class="flex justify-between">
-                                <span class="text-slate-400 dark:text-slate-500">Disponibilidad:</span>
-                                <span class="font-bold text-amber-500"><?= htmlspecialchars($viaje['cup_dis']) ?> cupos libres / <?= htmlspecialchars($viaje['cup_tot']) ?> totales</span>
-                            </li>
-                        </ul>
+
+                        <!-- Botón ubicado de forma destacada al final de la tarjeta de ruta -->
+                        <div class="pt-4 border-t border-slate-100 dark:border-white/5">
+                            <a href="finalizar_viaje.php?id=<?= $viaje['id_via'] ?>" 
+                               onclick="return confirm('¿Estás seguro de que deseas finalizar este viaje? Tu estado cambiará a disponible.');"
+                               class="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all duration-200 shadow-lg shadow-emerald-600/20 active:scale-[0.98]">
+                                <i class="fas fa-flag-checkered text-sm"></i>
+                                Finalizar Viaje
+                            </a>
+                        </div>
                     </div>
                 </div>
 

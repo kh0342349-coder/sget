@@ -1,12 +1,11 @@
-
-/* --------------------------------------------------------------------------
+/* ==========================================================================
    1. VARIABLES GLOBALES, PALETA DE COLORES Y MODO DE TEMA
-   -------------------------------------------------------------------------- */
+   ========================================================================== */
 :root {
     /* TEMA OSCURO PREDETERMINADO */
     --bg-principal: #0b0f19;       /* Fondo principal de la aplicación */
     --bg-tarjeta: #1e293b;         /* Fondo para contenedores, tarjetas y formularios */
-    --bg-navbar: #111827;          /* Fondo para la barra de navegación superior */
+    --bg-navbar: rgba(15, 23, 42, 0.5); /* Fondo traslúcido optimizado */
     --bg-sidebar: #0f172a;         /* Fondo específico para el menú lateral */
     --color-texto: #f8fafc;        /* Color de texto principal en modo oscuro */
     --color-mutado: #94a3b8;       /* Color de texto secundario/desactivado */
@@ -32,10 +31,11 @@
 }
 
 /* TEMA CLARO DINÁMICO */
-[data-theme="light"] {
+[data-theme="light"],
+html.light {
     --bg-principal: #f8fafc;
     --bg-tarjeta: #ffffff;
-    --bg-navbar: #ffffff;
+    --bg-navbar: rgba(255, 255, 255, 0.6);
     --bg-sidebar: #f1f5f9;
     --color-texto: #0f172a;
     --color-mutado: #64748b;
@@ -49,9 +49,9 @@
     --sombra-boton: 0 4px 12px rgba(2, 132, 199, 0.2);
 }
 
-/* --------------------------------------------------------------------------
+/* ==========================================================================
    2. RESETEO GLOBAL Y CONFIGURACIÓN BASE DE PÁGINA
-   -------------------------------------------------------------------------- */
+   ========================================================================== */
 * {
     margin: 0;
     padding: 0;
@@ -83,7 +83,7 @@ header, .service-card, .navbar, a, h1, h2, h3, p, input, select, button, .sideba
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
 }
 
-/* ENLACES Y ELEMENTOS LISTA LIMS */
+/* ENLACES Y ELEMENTOS LISTA */
 ul, ol {
     list-style: none;
 }
@@ -99,20 +99,61 @@ img {
     display: block;
 }
 
-/* --------------------------------------------------------------------------
-   3. CABECERA SUPERIOR Y NAVABAR (LANDING PAGE)
-   -------------------------------------------------------------------------- */
+/* ==========================================================================
+   3. CABECERA SUPERIOR, GLASSMORPHISM Y CÁPSULA NAVEGACIÓN
+   ========================================================================== */
 header {
-    background-color: var(--bg-navbar);
+    background-color: transparent;
     position: fixed;
     width: 100%;
     top: 0;
     left: 0;
     z-index: 1000;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-    border-bottom: 1px solid var(--border-color);
 }
 
+/* Estilos mejorados para la cápusla traslúcida */
+#nav-pills {
+    background-color: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+[data-theme="light"] #nav-pills,
+html.light #nav-pills {
+    background-color: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+/* La Isla Azul (Indicador animado que se mueve) */
+#nav-indicator {
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    background: #008be3;
+    border-radius: 9999px;
+    z-index: 1;
+    transition: left 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+                width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 14px rgba(0, 139, 227, 0.45);
+    pointer-events: none;
+}
+
+/* Ajustes para enlaces dentro de la píldora */
+.nav-link {
+    position: relative;
+    z-index: 10;
+    transition: color 0.25s ease;
+}
+
+.nav-active {
+    color: #0f172a !important;
+    font-weight: 700 !important;
+}
+
+/* Reglas originales de la barra antigua (mantenidas por compatibilidad) */
 .navbar {
     display: flex;
     justify-content: space-between;
@@ -223,9 +264,9 @@ header {
     border-color: var(--neon-azul);
 }
 
-/* --------------------------------------------------------------------------
+/* ==========================================================================
    4. SECCIÓN HERO (PORTADA PRINCIPAL)
-   -------------------------------------------------------------------------- */
+   ========================================================================== */
 .hero-section {
     padding: 180px 20px 100px 20px;
     max-width: 1100px;
@@ -244,7 +285,8 @@ header {
     -webkit-text-fill-color: transparent;
 }
 
-[data-theme="light"] .hero-section h1 {
+[data-theme="light"] .hero-section h1,
+html.light .hero-section h1 {
     background: linear-gradient(135deg, #0f172a 0%, #334155 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -329,9 +371,9 @@ header {
     transform: translateY(-3px);
 }
 
-/* --------------------------------------------------------------------------
+/* ==========================================================================
    5. SECCIÓN DE SERVICIOS Y TARJETAS
-   -------------------------------------------------------------------------- */
+   ========================================================================== */
 .services-section {
     max-width: 1200px;
     margin: 80px auto;
@@ -391,9 +433,9 @@ header {
     line-height: 1.6;
 }
 
-/* --------------------------------------------------------------------------
+/* ==========================================================================
    6. VISTAS DE AUTENTICACIÓN (LOGIN Y REGISTRO)
-   -------------------------------------------------------------------------- */
+   ========================================================================== */
 body.auth-body {
     display: flex !important;
     flex-direction: column;
@@ -492,9 +534,9 @@ body.auth-body {
     fill: var(--neon-azul);
 }
 
-/* --------------------------------------------------------------------------
+/* ==========================================================================
    7. FORMULARIOS Y CAMPOS FLOTANTES (FLOATING LABELS)
-   -------------------------------------------------------------------------- */
+   ========================================================================== */
 .form-group {
     position: relative;
     margin-bottom: 24px;
@@ -517,7 +559,9 @@ body.auth-body {
 }
 
 [data-theme="light"] .form-group input,
-[data-theme="light"] .form-group select {
+[data-theme="light"] .form-group select,
+html.light .form-group input,
+html.light .form-group select {
     background-color: #f1f5f9;
     border: 1px solid #cbd5e1;
     color: #0f172a;
@@ -619,9 +663,9 @@ input[type=number] {
     color: #86efac;
 }
 
-/* --------------------------------------------------------------------------
+/* ==========================================================================
    8. ESTRUCTURA DE DASHBOARD Y SIDEBAR (PARA USUARIOS AUTENTICADOS)
-   -------------------------------------------------------------------------- */
+   ========================================================================== */
 .dashboard-layout {
     display: flex;
     min-height: 100vh;
@@ -700,9 +744,9 @@ input[type=number] {
     min-height: 100vh;
 }
 
-/* --------------------------------------------------------------------------
+/* ==========================================================================
    9. COMPONENTES TABLAS Y CONTENEDORES DE DATOS
-   -------------------------------------------------------------------------- */
+   ========================================================================== */
 .table-container {
     width: 100%;
     background-color: var(--bg-tarjeta);
@@ -761,9 +805,9 @@ input[type=number] {
     color: #f87171;
 }
 
-/* --------------------------------------------------------------------------
+/* ==========================================================================
    10. PIE DE PÁGINA (FOOTER)
-   -------------------------------------------------------------------------- */
+   ========================================================================== */
 footer {
     background-color: var(--bg-navbar);
     text-align: center;
@@ -774,9 +818,9 @@ footer {
     font-size: 0.92rem;
 }
 
-/* --------------------------------------------------------------------------
+/* ==========================================================================
    11. DISEÑO RESPONSIVO (MEDIA QUERIES)
-   -------------------------------------------------------------------------- */
+   ========================================================================== */
 @media (max-width: 1024px) {
     .navbar {
         padding: 10px 25px;
@@ -825,4 +869,32 @@ footer {
         width: 40px;
         height: 40px;
     }
+}
+
+/* Header Base (Modo Claro) */
+.navbar-sget {
+    background-color: #ffffff !important;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.btn-theme-toggle {
+    background-color: #f8f9fa;
+    color: #212529;
+    border-color: #dee2e6 !important;
+}
+
+/* Header (Modo Oscuro) */
+body.dark-theme .navbar-sget {
+    background-color: #0f172a !important;
+    border-color: #1e293b !important;
+}
+
+body.dark-theme .btn-theme-toggle {
+    background-color: #1e293b;
+    color: #f8fafc;
+    border-color: #334155 !important;
+}
+
+body.dark-theme .nav-link {
+    color: #f8fafc !important;
 }
