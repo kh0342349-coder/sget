@@ -17,7 +17,8 @@ function verificarIconoActivo($archivo, $pagina_actual, $clase_color = 'text-blu
 }
 ?>
 
-<aside class="w-64 bg-white dark:bg-[#0b0f19] border-r border-slate-200 dark:border-white/5 flex flex-col fixed h-full shadow-xl z-20 transition-colors duration-300">
+<!-- Se agregó el id="sidebar-menu" para que el botón del header lo pueda controlar -->
+<aside id="sidebar-menu" class="w-64 bg-white dark:bg-[#0b0f19] border-r border-slate-200 dark:border-white/5 flex flex-col fixed h-full shadow-xl z-20 transition-colors duration-300">
     
     <!-- CONTENEDOR DEL LOGO DINÁMICO (TAMAÑO MÁS GRANDE) -->
     <div class="px-4 py-6 border-b border-slate-200 dark:border-white/5 bg-slate-50/50 dark:bg-[#1e293b]/20 transition-colors duration-300 flex items-center justify-center min-h-[85px]">

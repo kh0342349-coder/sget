@@ -145,3 +145,5 @@ CREATE TABLE `reportes_pasajeros` (
   CONSTRAINT `fk_reportes_usuario` FOREIGN KEY (`id_usu_rep`) REFERENCES `usuario` (`id_usu`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_reportes_viaje` FOREIGN KEY (`id_via_rep`) REFERENCES `viaje` (`id_via`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+ALTER TABLE rutas ADD COLUMN img_rut VARCHAR(255) NULL;

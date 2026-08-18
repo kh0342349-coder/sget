@@ -42,9 +42,29 @@ $inicialUsuario = !empty($nombreRealHeader) ? strtoupper(substr($nombreRealHeade
     </div>
 </header>
 
-<!-- SCRIPT AUTOCONTENIDO Y SYNCRONIZADO -->
+<!-- MODAL DE ADVERTENCIA POR INACTIVIDAD (Oculto por defecto) -->
+<div id="inactivityModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl text-center space-y-4">
+        <div class="w-14 h-14 bg-amber-100 dark:bg-amber-900/30 text-amber-500 rounded-full flex items-center justify-center mx-auto text-2xl">
+            <i class="fas fa-user-clock"></i>
+        </div>
+        <h3 class="text-lg font-bold text-slate-800 dark:text-white">¡Inactividad Detectada!</h3>
+        <p class="text-sm text-slate-500 dark:text-slate-400">
+            Tu sesión está a punto de cerrarse por falta de actividad en el sistema.
+        </p>
+        <div class="text-2xl font-black text-red-500 dark:text-red-400 bg-slate-100 dark:bg-slate-900 py-3 rounded-xl">
+            Cierre en: <span id="countdownTimer">30</span> segundos
+        </div>
+        <button id="btnContinuar" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-blue-600/25 cursor-pointer">
+            Continuar en la sesión
+        </button>
+    </div>
+</div>
+
+<!-- SCRIPT AUTOCONTENIDO Y SINCRONIZADO (Tema + Inactividad) -->
 <script>
 (function() {
+    // --- GESTIÓN DE TEMA ---
     function actualizarIcono(esOscuro) {
         const iconos = document.querySelectorAll('#themeIcon, .theme-icon');
         iconos.forEach(icon => {
@@ -80,5 +100,69 @@ $inicialUsuario = !empty($nombreRealHeader) ? strtoupper(substr($nombreRealHeade
     document.addEventListener('DOMContentLoaded', function() {
         actualizarIcono(document.documentElement.classList.contains('dark'));
     });
+
+    // --- GESTIÓN DE INACTIVIDAD (3 Minutos + 30s Cuenta Regresiva) ---
+    const TOTAL_INACTIVITY_TIME = 3 * 60 * 1000; // 3 minutos en total
+    const WARNING_TIME = 30 * 1000;              // Últimos 30 segundos
+
+    let inactivityTimer;
+    let countdownInterval;
+    let timeLeft = 30;
+
+    const modal = document.getElementById('inactivityModal');
+    const countdownSpan = document.getElementById('countdownTimer');
+    const btnContinuar = document.getElementById('btnContinuar');
+
+    function iniciarTemporizadorInactividad() {
+        clearTimeout(inactivityTimer);
+        clearInterval(countdownInterval);
+        
+        // Ocultar modal si estaba visible
+        if (modal) modal.classList.add('hidden');
+        
+        // Programar el aviso a los 2 minutos y 30 segundos
+        inactivityTimer = setTimeout(() => {
+            mostrarAdvertenciaCierre();
+        }, TOTAL_INACTIVITY_TIME - WARNING_TIME);
+    }
+
+    function mostrarAdvertenciaCierre() {
+        timeLeft = 30;
+        if (countdownSpan) countdownSpan.textContent = timeLeft;
+        if (modal) modal.classList.remove('hidden');
+
+        countdownInterval = setInterval(() => {
+            timeLeft--;
+            if (countdownSpan) countdownSpan.textContent = timeLeft;
+
+            if (timeLeft <= 0) {
+                clearInterval(countdownInterval);
+                // Redirigir al script de cierre de sesión
+                window.location.href = "../assets/cerrar.php";
+            }
+        }, 1000);
+    }
+
+    // Eventos que detectan actividad del conductor
+    const eventosUsuario = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
+
+    eventosUsuario.forEach(evento => {
+        document.addEventListener(evento, () => {
+            // Solo reiniciar si el modal no se encuentra visible
+            if (modal && modal.classList.contains('hidden')) {
+                iniciarTemporizadorInactividad();
+            }
+        }, true);
+    });
+
+    // Botón para mantener la sesión activa
+    if (btnContinuar) {
+        btnContinuar.addEventListener('click', () => {
+            iniciarTemporizadorInactividad();
+        });
+    }
+
+    // Arrancar el temporizador al cargar el componente
+    iniciarTemporizadorInactividad();
 })();
 </script>

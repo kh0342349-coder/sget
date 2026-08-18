@@ -22,14 +22,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($id_via > 0) {
         
-        // 4. Sentencia SQL optimizada para la tabla 'viaje'
+        // 4. Sentencia SQL optimizada para la tabla 'viaje' (Incluyendo est_via = 'Activo')
         $sql = "UPDATE viaje 
                 SET id_rut_via  = $id_rut_via,
                     id_usu_via  = $id_usu_via,
                     id_veh      = $id_veh,
                     fec_via     = '$fec_via',
                     hor_sal_via = '$hor_sal_via',
-                    val_via     = $val_via
+                    val_via     = $val_via,
+                    est_via     = 'Activo'
                 WHERE id_via    = $id_via";
 
         // 5. Ejecutar actualización

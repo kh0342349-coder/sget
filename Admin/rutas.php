@@ -20,7 +20,7 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SGET - Rutas de Transporte</title>
     
-    <!-- Script Anti-Parpadeo Sincronizado (Soporta múltiples llaves de Storage) -->
+    <!-- Script Anti-Parpadeo Sincronizado -->
     <script>
         (function() {
             const tema = localStorage.getItem('theme') || localStorage.getItem('color-theme');
@@ -78,7 +78,7 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                 <div>
                     <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Gestión de Rutas</h1>
-                    <p class="text-xs text-slate-500 dark:text-color-mutado mt-1">Administre los trayectos, origen, destino y tarifas base del sistema.</p>
+                    <p class="text-xs text-slate-500 dark:text-color-mutado mt-1">Administre los trayectos, origen, destino, tarifas base y fotos de despacho.</p>
                 </div>
                 <button onclick="abrirModalRuta()" class="px-5 py-2.5 bg-gradient-to-r from-neon-azul to-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-neon-azul/20 hover:opacity-95 transition-all flex items-center gap-2">
                     <i class="fas fa-plus text-sm"></i>
@@ -93,6 +93,7 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                         <thead>
                             <tr class="border-b border-slate-200 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-color-mutado">
                                 <th class="p-4 pl-6">ID</th>
+                                <th class="p-4">Imagen Despacho</th>
                                 <th class="p-4">Ruta</th>
                                 <th class="p-4">Origen</th>
                                 <th class="p-4">Destino</th>
@@ -106,6 +107,15 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                                 <?php while ($ruta = mysqli_fetch_assoc($resultado_rutas)): ?>
                                     <tr class="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors">
                                         <td class="p-4 pl-6 font-mono text-xs text-slate-400">#<?php echo $ruta['id_rut']; ?></td>
+                                        <td class="p-4">
+                                            <?php if (!empty($ruta['img_rut']) && file_exists("../uploads/rutas/" . $ruta['img_rut'])): ?>
+                                                <img src="../uploads/rutas/<?php echo htmlspecialchars($ruta['img_rut']); ?>" alt="Despacho" class="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+                                            <?php else: ?>
+                                                <div class="w-12 h-12 bg-slate-100 dark:bg-white/5 rounded-xl border border-dashed border-slate-300 dark:border-white/10 flex items-center justify-center text-slate-400 text-xs">
+                                                    <i class="fas fa-image"></i>
+                                                </div>
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="p-4 font-semibold text-slate-900 dark:text-white"><?php echo htmlspecialchars($ruta['nom_rut']); ?></td>
                                         <td class="p-4"><span class="inline-flex items-center gap-1.5"><i class="fas fa-map-marker-alt text-xs text-red-500/70"></i><?php echo htmlspecialchars($ruta['ori_rut']); ?></span></td>
                                         <td class="p-4"><span class="inline-flex items-center gap-1.5"><i class="fas fa-flag-checkered text-xs text-emerald-500/70"></i><?php echo htmlspecialchars($ruta['des_rut']); ?></span></td>
@@ -113,19 +123,19 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                                         <td class="p-4 font-bold text-blue-600 dark:text-neon-azul font-mono">$<?php echo number_format($ruta['val_rut'], 0, ',', '.'); ?></td>
                                         <td class="p-4 pr-6 text-center">
                                             <div class="flex items-center justify-center gap-2">
-                                                <button class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all" title="Editar">
+                                                <button onclick="editarRuta(<?php echo htmlspecialchars(json_encode($ruta)); ?>)" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all" title="Editar">
                                                     <i class="fas fa-pen text-xs"></i>
                                                 </button>
-                                                <button class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center transition-all" title="Eliminar">
+                                                <a href="eliminar_ruta.php?id=<?php echo $ruta['id_rut']; ?>" onclick="return confirm('¿Está seguro de eliminar esta ruta?')" class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center transition-all" title="Eliminar">
                                                     <i class="fas fa-trash-alt text-xs"></i>
-                                                </button>
+                                                </a>
                                             </div>
                                         </td>
                                     </tr>
                                 <?php endwhile; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="7" class="p-8 text-center text-slate-400 dark:text-color-mutado text-xs">
+                                    <td colspan="8" class="p-8 text-center text-slate-400 dark:text-color-mutado text-xs">
                                         No hay rutas registradas actualmente.
                                     </td>
                                 </tr>
@@ -154,8 +164,8 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                     <i class="fas fa-road text-base"></i>
                 </div>
                 <div>
-                    <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Registrar Nueva Ruta</h3>
-                    <p class="text-[11px] text-slate-500 dark:text-color-mutado">Logística de trayecto y costos</p>
+                    <h3 id="tituloModal" class="text-base font-extrabold text-slate-900 dark:text-white">Registrar Nueva Ruta</h3>
+                    <p class="text-[11px] text-slate-500 dark:text-color-mutado">Logística de trayecto, costos e imagen</p>
                 </div>
             </div>
             <button onclick="cerrarModalRuta()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-all">
@@ -164,14 +174,20 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
         </div>
 
         <div class="p-6 flex-1 overflow-y-auto space-y-5">
-            <form id="formNuevaRuta" action="guardar_ruta.php" method="POST" class="space-y-5">
+            <form id="formNuevaRuta" action="guardar_ruta.php" method="POST" enctype="multipart/form-data" class="space-y-5">
+                
+                <!-- ID Oculto para Edición -->
+                <input type="hidden" name="id_rut" id="id_rut" value="">
+                <!-- Flag Oculto para Eliminar Imagen -->
+                <input type="hidden" name="eliminar_imagen" id="eliminar_imagen" value="0">
+
                 <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-color-mutado uppercase tracking-wider">Nombre de la Ruta</label>
                     <div class="relative">
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400 dark:text-white/20 text-xs">
                             <i class="fas fa-font"></i>
                         </span>
-                        <input type="text" name="nom_rut" required placeholder="Ej: Ruta Fusagasugá - Bogotá"
+                        <input type="text" name="nom_rut" id="nom_rut" required placeholder="Ej: Ruta Fusagasugá - Bogotá"
                                class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all placeholder:text-slate-400 dark:placeholder:text-white/20">
                     </div>
                 </div>
@@ -182,7 +198,7 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-red-500/60 text-xs">
                             <i class="fas fa-map-marker-alt"></i>
                         </span>
-                        <input type="text" name="ori_rut" required placeholder="Ciudad o terminal de salida"
+                        <input type="text" name="ori_rut" id="ori_rut" required placeholder="Ciudad o terminal de salida"
                                class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all placeholder:text-slate-400 dark:placeholder:text-white/20">
                     </div>
                 </div>
@@ -193,7 +209,7 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-emerald-500/60 text-xs">
                             <i class="fas fa-flag-checkered"></i>
                         </span>
-                        <input type="text" name="des_rut" required placeholder="Ciudad o terminal de llegada"
+                        <input type="text" name="des_rut" id="des_rut" required placeholder="Ciudad o terminal de llegada"
                                class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all placeholder:text-slate-400 dark:placeholder:text-white/20">
                     </div>
                 </div>
@@ -205,7 +221,7 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                             <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-purple-500/60 dark:text-neon-morado/60 text-xs">
                                 <i class="fas fa-tachometer-alt"></i>
                             </span>
-                            <input type="number" step="0.01" name="dis_rut" required placeholder="0.00"
+                            <input type="number" step="0.01" name="dis_rut" id="dis_rut" required placeholder="0.00"
                                    class="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all placeholder:text-slate-400 dark:placeholder:text-white/20 font-mono">
                         </div>
                     </div>
@@ -214,11 +230,50 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                         <label class="block text-[10px] font-bold text-blue-600 dark:text-neon-azul uppercase tracking-wider">Precio Sugerido</label>
                         <div class="relative">
                             <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-blue-600 dark:text-neon-azul font-bold text-sm">$</span>
-                            <input type="number" name="val_rut" required placeholder="0"
+                            <input type="number" name="val_rut" id="val_rut" required placeholder="0"
                                    class="w-full pl-8 pr-4 py-2.5 bg-blue-50/50 dark:bg-neon-azul/5 border border-blue-200 dark:border-neon-azul/20 rounded-xl outline-none focus:border-neon-azul text-blue-600 dark:text-neon-azul text-sm transition-all font-bold tracking-wide placeholder:text-blue-600/30 dark:placeholder:text-neon-azul/30">
                         </div>
                     </div>
                 </div>
+
+                <!-- CAMPO DE IMAGEN DEL LUGAR DE DESPACHO -->
+                <div class="space-y-1.5">
+                    <label class="block text-[10px] font-bold text-slate-500 dark:text-color-mutado uppercase tracking-wider">Imagen del Lugar de Despacho</label>
+                    
+                    <!-- Previsualización dinámica de la imagen existente/seleccionada -->
+                    <div id="contenedorImagenActual" class="hidden items-center justify-between p-3 bg-slate-50 dark:bg-black/20 rounded-xl border border-slate-200 dark:border-white/5">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <img id="imagenPrevia" src="" alt="Vista Previa" 
+                                 class="w-12 h-12 min-w-[48px] object-cover rounded-lg border border-slate-200 dark:border-white/10"
+                                 onerror="this.onerror=null; this.src='https://via.placeholder.com/150?text=No+Img';">
+                            <div class="text-xs min-w-0">
+                                <p id="textoEstadoImagen" class="font-semibold text-slate-700 dark:text-slate-300 truncate">Imagen Actual de la Ruta</p>
+                                <p id="subtextoEstadoImagen" class="text-[10px] text-slate-400 truncate">Para cambiarla, primero elimine la actual.</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="eliminarImagenActual()" class="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shrink-0 ml-2" title="Eliminar Imagen">
+                            <i class="fas fa-trash-alt"></i>
+                            <span>Eliminar</span>
+                        </button>
+                    </div>
+
+                    <!-- Contenedor de Carga (Dropzone) -->
+                    <div id="contenedorDropzone" class="relative flex items-center justify-center w-full">
+                        <label id="labelDropArea" class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-xl cursor-pointer bg-slate-50 dark:bg-[#0b0f19]/60 border-slate-200 dark:border-white/10 hover:border-neon-azul dark:hover:border-neon-azul transition-all">
+                            <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                                <i class="fas fa-cloud-upload-alt text-2xl text-slate-400 dark:text-white/20 mb-2"></i>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                                    <span class="text-neon-azul">Haz clic para subir</span> o arrastra un archivo
+                                </p>
+                                <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">PNG, JPG o WEBP (Máx. 5MB)</p>
+                            </div>
+                            <input type="file" name="img_rut" id="img_rut" accept="image/*" class="hidden" onchange="mostrarNombreArchivo(this)" />
+                        </label>
+                    </div>
+
+                    <p id="nombreArchivoSeleccionado" class="text-xs text-neon-azul font-medium truncate mt-1"></p>
+                </div>
+
             </form>
         </div>
 
@@ -235,12 +290,96 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
     <!-- JS CONTROLADOR -->
     <script>
         function abrirModalRuta() {
+            document.getElementById('formNuevaRuta').reset();
+            document.getElementById('id_rut').value = '';
+            document.getElementById('eliminar_imagen').value = '0';
+            document.getElementById('tituloModal').innerText = 'Registrar Nueva Ruta';
+            
+            const contenedorImagen = document.getElementById('contenedorImagenActual');
+            contenedorImagen.classList.add('hidden');
+            contenedorImagen.classList.remove('flex');
+            
+            // Mostrar Zona de Carga
+            const contenedorDropzone = document.getElementById('contenedorDropzone');
+            contenedorDropzone.classList.remove('hidden');
+            document.getElementById('img_rut').disabled = false;
+
+            document.getElementById('nombreArchivoSeleccionado').innerText = '';
+
             const drawer = document.getElementById('drawerRuta');
             const overlay = document.getElementById('overlayRuta');
             overlay.classList.remove('opacity-0', 'pointer-events-none');
             overlay.classList.add('opacity-100', 'pointer-events-auto');
             drawer.classList.remove('translate-x-full');
             drawer.classList.add('translate-x-0');
+        }
+
+        function editarRuta(ruta) {
+            document.getElementById('id_rut').value = ruta.id_rut;
+            document.getElementById('nom_rut').value = ruta.nom_rut;
+            document.getElementById('ori_rut').value = ruta.ori_rut;
+            document.getElementById('des_rut').value = ruta.des_rut;
+            document.getElementById('dis_rut').value = ruta.dis_rut;
+            document.getElementById('val_rut').value = ruta.val_rut;
+            document.getElementById('eliminar_imagen').value = '0';
+
+            document.getElementById('tituloModal').innerText = 'Editar Ruta #' + ruta.id_rut;
+            document.getElementById('nombreArchivoSeleccionado').innerText = '';
+
+            const contenedorImagen = document.getElementById('contenedorImagenActual');
+            const contenedorDropzone = document.getElementById('contenedorDropzone');
+            const imgPrevia = document.getElementById('imagenPrevia');
+            const textoEstado = document.getElementById('textoEstadoImagen');
+            const subtextoEstado = document.getElementById('subtextoEstadoImagen');
+
+            // Si la ruta ya tiene una imagen guardada
+            if (ruta.img_rut && ruta.img_rut.trim() !== '') {
+                imgPrevia.src = '../uploads/rutas/' + ruta.img_rut;
+                textoEstado.innerText = "Imagen Actual de la Ruta";
+                subtextoEstado.innerText = "Para cambiarla, primero elimine la actual.";
+                
+                contenedorImagen.classList.remove('hidden');
+                contenedorImagen.classList.add('flex');
+                
+                // Ocultar zona de carga para no permitir subir otra
+                contenedorDropzone.classList.add('hidden');
+                document.getElementById('img_rut').disabled = true;
+            } else {
+                contenedorImagen.classList.add('hidden');
+                contenedorImagen.classList.remove('flex');
+                
+                // Mostrar zona de carga
+                contenedorDropzone.classList.remove('hidden');
+                document.getElementById('img_rut').disabled = false;
+            }
+
+            const drawer = document.getElementById('drawerRuta');
+            const overlay = document.getElementById('overlayRuta');
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100', 'pointer-events-auto');
+            drawer.classList.remove('translate-x-full');
+            drawer.classList.add('translate-x-0');
+        }
+
+        function eliminarImagenActual() {
+            // Marcar flag para que el backend borre la imagen
+            document.getElementById('eliminar_imagen').value = '1';
+            
+            // Ocultar previsualización
+            const contenedorImagen = document.getElementById('contenedorImagenActual');
+            contenedorImagen.classList.add('hidden');
+            contenedorImagen.classList.remove('flex');
+
+            // Limpiar archivo seleccionado previo si lo había
+            const fileInput = document.getElementById('img_rut');
+            fileInput.value = '';
+            fileInput.disabled = false;
+
+            // Habilitar y mostrar la zona de carga para subir una nueva
+            const contenedorDropzone = document.getElementById('contenedorDropzone');
+            contenedorDropzone.classList.remove('hidden');
+
+            document.getElementById('nombreArchivoSeleccionado').innerText = '';
         }
 
         function cerrarModalRuta() {
@@ -252,7 +391,66 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
             overlay.classList.add('opacity-0', 'pointer-events-none');
         }
 
+        function mostrarNombreArchivo(input) {
+            const label = document.getElementById('nombreArchivoSeleccionado');
+            const contenedorImagen = document.getElementById('contenedorImagenActual');
+            const imgPrevia = document.getElementById('imagenPrevia');
+            const textoEstado = document.getElementById('textoEstadoImagen');
+            const subtextoEstado = document.getElementById('subtextoEstadoImagen');
+
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                label.innerText = "Archivo seleccionado: " + file.name;
+
+                // Previsualizar la nueva imagen mediante FileReader
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    imgPrevia.src = e.target.result;
+                    textoEstado.innerText = "Nueva Previsualización";
+                    subtextoEstado.innerText = "Imagen seleccionada lista para guardar.";
+                    contenedorImagen.classList.remove('hidden');
+                    contenedorImagen.classList.add('flex');
+                }
+                reader.readAsDataURL(file);
+            } else {
+                label.innerText = "";
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
+            // Drag and Drop funcional en el recuadro
+            const dropArea = document.getElementById('labelDropArea');
+            const fileInput = document.getElementById('img_rut');
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!fileInput.disabled) {
+                        dropArea.classList.add('border-neon-azul', 'bg-neon-azul/10');
+                    }
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropArea.classList.remove('border-neon-azul', 'bg-neon-azul/10');
+                }, false);
+            });
+
+            dropArea.addEventListener('drop', (e) => {
+                if (fileInput.disabled) return;
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length) {
+                    fileInput.files = files;
+                    mostrarNombreArchivo(fileInput);
+                }
+            });
+
+            // Control de temas
             const themeToggleBtn = document.getElementById('theme-toggle');
             const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
             const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
@@ -276,17 +474,12 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
             }
 
             function guardarYNotificar(modo) {
-                // Guarda en ambos nombres de llave para compatibilidad total con otras vistas
                 localStorage.setItem('theme', modo);
                 localStorage.setItem('color-theme', modo);
-                
                 aplicarTema(modo === 'dark');
-                
-                // Dispara evento personalizado para componentes incluidos como header/sidebar
                 window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: modo } }));
             }
 
-            // Aplicar el estado inicial al cargar el DOM
             aplicarTema(obtenerTemaActual() === 'dark');
 
             if (themeToggleBtn) {
@@ -297,7 +490,6 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                 });
             }
 
-            // Escuchar cambios en otras pestañas o componentes
             window.addEventListener('storage', function(e) {
                 if (e.key === 'theme' || e.key === 'color-theme') {
                     aplicarTema(e.newValue === 'dark');

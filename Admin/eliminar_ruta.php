@@ -2,32 +2,30 @@
 session_start();
 include '../assets/conexion.php';
 
-// Validar privilegios y sesión
-if (!isset($_SESSION['rol']) || $_SESSION['rol'] != 1) {
+if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
     header("Location: ../index.php");
     exit();
 }
 
-if (isset($_GET['id']) && !empty($_GET['id'])) {
-    $id = $_GET['id'];
+if (isset($_GET['id'])) {
+    $id_rut = mysqli_real_escape_string($conexion, $_GET['id']);
 
-    // Usamos try-catch para capturar el error de la base de datos
-    try {
-        $stmt = $conexion->prepare("DELETE FROM rutas WHERE id_rut = ?");
-        $stmt->bind_param("i", $id); 
-        $stmt->execute();
-        
-        // Si no hubo error, redirigimos como éxito
-        header("Location: rutas.php?status=deleted");
-    } catch (mysqli_sql_exception $e) {
-        // Aquí capturamos el error de "Foreign Key Constraint"
-        // Redirigimos a rutas.php con un estado de error específico
-        header("Location: rutas.php?status=error_fk");
+    // Consultar imagen actual para eliminarla del servidor
+    $sql_img = "SELECT img_rut FROM rutas WHERE id_rut = '$id_rut'";
+    $res_img = mysqli_query($conexion, $sql_img);
+    if ($res_img && $row = mysqli_fetch_assoc($res_img)) {
+        if (!empty($row['img_rut'])) {
+            $archivo = "../uploads/rutas/" . $row['img_rut'];
+            if (file_exists($archivo)) {
+                unlink($archivo);
+            }
+        }
     }
-    
-    $stmt->close();
-} else {
-    header("Location: rutas.php");
+
+    // Eliminar registro
+    $sql = "DELETE FROM rutas WHERE id_rut = '$id_rut'";
+    mysqli_query($conexion, $sql);
 }
+
+header("Location: rutas.php");
 exit();
-?>
