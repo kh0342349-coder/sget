@@ -1,7 +1,7 @@
 <?php
 session_start();
 // Ruta de conexión a la base de datos
-require_once 'assets/conexion.php'; 
+require_once 'assets/conexion.php';
 
 // Consulta SQL utilizando la relación directa entre viaje (v.id_veh) y vehiculo (veh.id_veh)
 $query_viajes = "SELECT 
@@ -36,6 +36,9 @@ if (!$resultado_viajes) {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
+    <!-- SDK de Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -54,6 +57,26 @@ if (!$resultado_viajes) {
             document.documentElement.classList.add('dark');
         } else {
             document.documentElement.classList.remove('dark');
+        }
+
+        // Manejador del Token devuelto por Google
+        function handleGoogleResponse(response) {
+            fetch('controllers/auth_google.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ token: response.credential })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = data.redirect;
+                } else {
+                    alert('Error en inicio de sesión con Google: ' + data.message);
+                }
+            })
+            .catch(error => console.error('Error al comunicarse con el servidor:', error));
         }
     </script>
 
@@ -248,13 +271,59 @@ if (!$resultado_viajes) {
     <!-- INCLUSIÓN DEL MODAL AUTENTICACIÓN -->
     <?php include 'modal_auth.php'; ?>
 
-    <!-- SCRIPTS DE CONTROL DEL MODAL -->
+    <!-- SCRIPTS DE CONTROL DEL MODAL Y GOOGLE SIGN-IN -->
     <script>
+        function inicializarBotonGoogle(panel) {
+            if (window.google && google.accounts && google.accounts.id) {
+                google.accounts.id.initialize({
+                    client_id: "916674198156-4uh6adhaklk2bpsvli6hnmrgg0bgktlp.apps.googleusercontent.com",
+                    callback: handleGoogleResponse
+                });
+
+                let googleContainer = panel.querySelector('.g_id_signin');
+                
+                if (!googleContainer) {
+                    const form = panel.querySelector('form');
+                    if (form) {
+                        const divisor = document.createElement('div');
+                        divisor.className = 'relative flex py-2 items-center my-4';
+                        divisor.innerHTML = `
+                            <div class="flex-grow border-t border-slate-200 dark:border-white/10"></div>
+                            <span class="flex-shrink mx-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">O INICIA CON</span>
+                            <div class="flex-grow border-t border-slate-200 dark:border-white/10"></div>
+                        `;
+
+                        googleContainer = document.createElement('div');
+                        googleContainer.className = 'g_id_signin flex justify-center';
+
+                        form.parentNode.insertBefore(divisor, form.nextSibling);
+                        form.parentNode.insertBefore(googleContainer, divisor.nextSibling);
+                    }
+                }
+
+                if (googleContainer) {
+                    google.accounts.id.renderButton(googleContainer, {
+                        theme: 'outline',
+                        size: 'large',
+                        type: 'standard',
+                        shape: 'pill',
+                        width: 250
+                    });
+                }
+            }
+        }
+
         function abrirPanel(idPanel) {
             const panel = document.getElementById(idPanel);
             if (!panel) return;
-            const card = panel.querySelector('.modal-isla-card');
+            const card = panel.querySelector('.modal-isla-card') || panel.querySelector('> div');
+            
             panel.classList.remove('hidden');
+
+            setTimeout(() => {
+                inicializarBotonGoogle(panel);
+            }, 50);
+
             setTimeout(() => {
                 panel.classList.remove('opacity-0');
                 if (card) {
@@ -267,7 +336,7 @@ if (!$resultado_viajes) {
         function cerrarPanel(idPanel) {
             const panel = document.getElementById(idPanel);
             if (!panel) return;
-            const card = panel.querySelector('.modal-isla-card');
+            const card = panel.querySelector('.modal-isla-card') || panel.querySelector('> div');
             if (card) {
                 card.classList.remove('scale-100');
                 card.classList.add('scale-95');
@@ -282,7 +351,6 @@ if (!$resultado_viajes) {
             setTimeout(() => { abrirPanel(idDestino); }, 200);
         }
 
-        // AUTO-ABRIR SI OCURRIÓ UN ERROR EN PHP (validar.php)
         document.addEventListener("DOMContentLoaded", function () {
             <?php if (isset($_SESSION['abrir_login']) && $_SESSION['abrir_login'] === true): ?>
                 abrirPanel('panelLogin');

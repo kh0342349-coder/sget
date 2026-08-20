@@ -1,168 +1,136 @@
-<?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-?>
+<!-- SDK Oficial de Google reCAPTCHA v2 -->
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
 
-<!-- ISLA FLOTANTE: LOGIN -->
-<div id="panelLogin" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 modal-isla-container hidden opacity-0 transition-all duration-300">
-    <div class="relative w-full max-w-4xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl modal-isla-card overflow-hidden flex flex-col md:flex-row transform scale-95 transition-all duration-300" id="contenidoLogin">
+<!-- ========================================== -->
+<!--     ESTRUCTURA HTML DE LA ISLA FLOTANTE    -->
+<!-- ========================================== -->
+
+<!-- MODAL LOGIN -->
+<div id="panelLogin" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 modal-isla-container opacity-0 hidden transition-all duration-300">
+    <div class="modal-isla-card bg-[#111827] border border-white/10 rounded-3xl max-w-3xl w-full relative transform scale-95 transition-all duration-300 shadow-2xl overflow-hidden grid md:grid-cols-2">
         
-        <button type="button" onclick="cerrarPanel('panelLogin')" class="absolute top-4 right-4 z-10 p-2 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors cursor-pointer">
+        <!-- Botón para cerrar -->
+        <button onclick="cerrarPanel('panelLogin')" class="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-colors">
             <i class="fas fa-times text-sm"></i>
         </button>
 
-        <div class="w-full md:w-1/2 p-8 sm:p-12 flex flex-col justify-center space-y-6 overflow-y-auto max-h-[85vh]">
-            <div class="border-b border-slate-200 dark:border-white/10 pb-4">
-                <h3 class="text-xl font-extrabold text-slate-900 dark:text-white">Bienvenido de nuevo</h3>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Inicia sesión en SGET</p>
+        <!-- COLUMNA IZQUIERDA: FORMULARIO -->
+        <div class="p-6 sm:p-8 flex flex-col justify-between space-y-6">
+            <div>
+                <h3 class="text-2xl font-black text-white tracking-tight">Bienvenido de nuevo</h3>
+                <p class="text-xs text-slate-400 mt-1 font-medium">Inicia sesión en SGET</p>
             </div>
 
-            <!-- MENSAJE DE ÉXITO TRAS REGISTRARSE (VERDE) -->
-            <?php if (isset($_SESSION['msg_success_login'])): ?>
-                <div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2">
-                    <i class="fas fa-check-circle text-sm shrink-0"></i>
-                    <span>
-                        <?php 
-                            echo htmlspecialchars($_SESSION['msg_success_login']); 
-                            unset($_SESSION['msg_success_login']); 
-                        ?>
-                    </span>
-                </div>
-            <?php endif; ?>
-
-            <!-- MENSAJE DE ERROR LOGIN (ROJO) -->
+            <!-- Mensaje de Error (si existe) -->
             <?php if (isset($_SESSION['msg'])): ?>
-                <div class="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold flex items-center gap-2">
-                    <i class="fas fa-exclamation-circle text-sm shrink-0"></i>
-                    <span>
-                        <?php 
-                            echo htmlspecialchars($_SESSION['msg']); 
-                            unset($_SESSION['msg']); 
-                        ?>
-                    </span>
+                <div class="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold text-center">
+                    <?= $_SESSION['msg']; ?>
                 </div>
+                <?php unset($_SESSION['msg']); ?>
             <?php endif; ?>
 
+            <!-- Formulario de Iniciar Sesión -->
             <form action="validar.php" method="POST" class="space-y-4">
-                <div class="space-y-1.5">
-                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">N° Documento</label>
-                    <input type="text" name="documento" required placeholder="Ingrese su número de documento" class="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-300 dark:border-white/10 rounded-xl py-3 px-4 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-sky-500">
+                <div>
+                    <label class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-300 mb-1.5">N° DOCUMENTO</label>
+                    <input type="text" name="documento" placeholder="Ej: 113050" required
+                           class="w-full px-4 py-2.5 bg-[#1f293d] border border-white/10 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all">
                 </div>
-                <div class="space-y-1.5">
-                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Contraseña</label>
-                    <input type="password" name="clave" required placeholder="••••••••" class="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-300 dark:border-white/10 rounded-xl py-3 px-4 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-sky-500">
+
+                <div>
+                    <label class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-300 mb-1.5">CONTRASEÑA</label>
+                    <input type="password" name="clave" placeholder="••••••" required
+                           class="w-full px-4 py-2.5 bg-[#1f293d] border border-white/10 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all">
                 </div>
-                <button type="submit" class="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-slate-950 font-extrabold rounded-xl shadow-lg hover:opacity-90 transition-all text-xs tracking-wider uppercase cursor-pointer">
-                    Ingresar al Sistema
+
+                <!-- WIDGET reCAPTCHA v2 (CLAVE OFICIAL DE PRUEBA GOOGLE LOCALHOST) -->
+                <div class="flex justify-center overflow-hidden py-1">
+                    <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" data-theme="dark"></div>
+                </div>
+
+                <button type="submit" class="w-full py-3 rounded-xl bg-sky-500 text-slate-950 font-black text-xs hover:bg-sky-400 transition-all shadow-lg shadow-sky-500/20 cursor-pointer uppercase tracking-wider mt-2">
+                    INGRESAR AL SISTEMA
                 </button>
             </form>
+
+            <!-- Contenedor dinámico del botón de Google -->
+            <div class="g_id_signin flex justify-center"></div>
         </div>
 
-        <div class="w-full md:w-1/2 bg-gradient-to-br from-slate-900 to-blue-950 p-8 sm:p-12 flex flex-col justify-between text-white relative overflow-hidden">
-            <div>
-                <span class="px-3 py-1 bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded-full text-[10px] font-bold uppercase tracking-wider">SGET Platform</span>
-                <h4 class="text-xl font-bold mt-4">Control total de tu flota</h4>
-                <p class="text-xs text-slate-300 leading-relaxed my-4">Gestiona rutas, asignaciones y monitorea cada unidad de transporte de manera eficiente.</p>
+        <!-- COLUMNA DERECHA: TARJETA INFORMATIVA -->
+        <div class="hidden md:flex flex-col justify-between p-8 bg-gradient-to-br from-slate-900 to-[#0b1329] border-l border-white/5 relative overflow-hidden">
+            <div class="absolute -top-10 -right-10 w-40 h-40 bg-sky-500/10 rounded-full blur-2xl pointer-events-none"></div>
+            
+            <div class="space-y-4 relative z-10">
+                <span class="inline-block px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-[10px] font-extrabold uppercase tracking-widest">
+                    SGET PLATFORM
+                </span>
+                <h4 class="text-xl font-black text-white leading-snug">Control total de tu flota</h4>
+                <p class="text-xs text-slate-400 leading-relaxed font-medium">
+                    Gestiona rutas, asignaciones y monitorea cada unidad de transporte de manera eficiente.
+                </p>
             </div>
-            <div class="text-[11px] text-slate-400 border-t border-white/10 pt-4">
-                ¿No tienes cuenta? <button type="button" onclick="cambiarAPanel('panelRegistro')" class="text-sky-400 font-semibold hover:underline cursor-pointer">Regístrate aquí</button>
+
+            <div class="pt-6 border-t border-white/10 relative z-10">
+                <p class="text-xs text-slate-400 font-medium">
+                    ¿No tienes cuenta? 
+                    <button onclick="cambiarAPanel('panelRegistro')" class="text-sky-400 font-bold hover:underline ml-1">Regístrate aquí</button>
+                </p>
             </div>
         </div>
 
     </div>
 </div>
 
-<!-- ISLA FLOTANTE: REGISTRO -->
-<div id="panelRegistro" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 modal-isla-container hidden opacity-0 transition-all duration-300">
-    <div class="relative w-full max-w-4xl bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl modal-isla-card overflow-hidden flex flex-col md:flex-row transform scale-95 transition-all duration-300" id="contenidoRegistro">
+<!-- MODAL REGISTRO -->
+<div id="panelRegistro" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 modal-isla-container opacity-0 hidden transition-all duration-300">
+    <div class="modal-isla-card bg-[#111827] border border-white/10 rounded-3xl p-6 sm:p-8 max-w-md w-full relative transform scale-95 transition-all duration-300 shadow-2xl">
         
-        <button type="button" onclick="cerrarPanel('panelRegistro')" class="absolute top-4 right-4 z-10 p-2 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 transition-colors cursor-pointer">
-            <i class="fas fa-times text-sm"></i>
+        <button onclick="cerrarPanel('panelRegistro')" class="absolute top-5 right-5 text-slate-400 hover:text-white transition-colors">
+            <i class="fas fa-times text-lg"></i>
         </button>
 
-        <div class="w-full md:w-5/12 bg-gradient-to-br from-blue-950 to-slate-900 p-8 sm:p-10 flex flex-col justify-between text-white relative overflow-hidden">
-            <div>
-                <span class="px-3 py-1 bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded-full text-[10px] font-bold uppercase tracking-wider">Únete a SGET</span>
-                <h4 class="text-xl font-bold mt-4">Empieza a viajar seguro</h4>
-                <p class="text-xs text-slate-300 leading-relaxed mt-2">Crea tu cuenta para acceder a la reserva de tickets, consulta de rutas en vivo y seguimiento de flota.</p>
+        <div class="text-center space-y-2 mb-6">
+            <div class="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-400 flex items-center justify-center mx-auto text-xl font-extrabold">
+                <i class="fas fa-user-plus"></i>
             </div>
-            
-            <div class="text-[11px] text-slate-400 border-t border-white/10 pt-4 mt-6">
-                ¿Ya tienes una cuenta registrada? <br>
-                <button type="button" onclick="cambiarAPanel('panelLogin')" class="text-sky-400 font-bold hover:underline cursor-pointer mt-1 inline-block">Inicia sesión aquí</button>
-            </div>
+            <h3 class="text-2xl font-black text-white">Crear Cuenta</h3>
+            <p class="text-xs text-slate-400 font-medium">Regístrate como pasajero en SGET</p>
         </div>
 
-        <div class="w-full md:w-7/12 p-6 sm:p-8 flex flex-col justify-center space-y-4 overflow-y-auto max-h-[85vh]">
-            <div class="border-b border-slate-200 dark:border-white/10 pb-3">
-                <h3 class="text-xl font-extrabold text-slate-900 dark:text-white">Crear Cuenta de Usuario</h3>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Diligencia tus datos personales para habilitar tu perfil.</p>
+        <form action="controllers/registro.php" method="POST" class="space-y-4">
+            <div>
+                <label class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-300 mb-1">Nombre Completo</label>
+                <input type="text" name="nombre" placeholder="Tu nombre completo" required
+                       class="w-full px-4 py-2.5 bg-[#1f293d] border border-white/10 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
             </div>
 
-            <!-- MENSAJE DE ERROR REGISTRO (ROJO) -->
-            <?php if (isset($_SESSION['msg_registro'])): ?>
-                <div class="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold flex items-center gap-2">
-                    <i class="fas fa-exclamation-circle text-sm shrink-0"></i>
-                    <span>
-                        <?php 
-                            echo htmlspecialchars($_SESSION['msg_registro']); 
-                            unset($_SESSION['msg_registro']); 
-                        ?>
-                    </span>
-                </div>
-            <?php endif; ?>
+            <div>
+                <label class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-300 mb-1">Número de Documento</label>
+                <input type="text" name="documento" placeholder="Número de documento" required
+                       class="w-full px-4 py-2.5 bg-[#1f293d] border border-white/10 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
 
-            <form action="nuevo_usuario.php" method="POST" class="space-y-3">
-                
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div class="space-y-1">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Tipo Doc.</label>
-                        <select name="tipo_doc" required class="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-300 dark:border-white/10 rounded-xl p-2.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-sky-500">
-                            <option value="CC">C.C.</option>
-                            <option value="TI">T.I.</option>
-                            <option value="CE">C.E.</option>
-                        </select>
-                    </div>
-                    <div class="sm:col-span-2 space-y-1">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">N° Documento</label>
-                        <input type="text" name="documento" required placeholder="Ej: 1012345678" class="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-300 dark:border-white/10 rounded-xl p-2.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-sky-500">
-                    </div>
-                </div>
+            <div>
+                <label class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-300 mb-1">Correo Electrónico</label>
+                <input type="email" name="correo" placeholder="correo@ejemplo.com" required
+                       class="w-full px-4 py-2.5 bg-[#1f293d] border border-white/10 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
 
-                <div class="space-y-1">
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Nombre Completo</label>
-                    <input type="text" name="nom_usu" required placeholder="Nombres y Apellidos" class="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-300 dark:border-white/10 rounded-xl p-2.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-sky-500">
-                </div>
+            <div>
+                <label class="block text-[10px] font-extrabold uppercase tracking-wider text-slate-300 mb-1">Contraseña</label>
+                <input type="password" name="clave" placeholder="••••••••" required
+                       class="w-full px-4 py-2.5 bg-[#1f293d] border border-white/10 rounded-xl text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div class="space-y-1">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Correo Electrónico</label>
-                        <input type="email" name="corre_usu" required placeholder="correo@ejemplo.com" class="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-300 dark:border-white/10 rounded-xl p-2.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-sky-500">
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Teléfono / Celular</label>
-                        <input type="tel" name="tel_usu" placeholder="300 000 0000" class="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-300 dark:border-white/10 rounded-xl p-2.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-sky-500">
-                    </div>
-                </div>
+            <button type="submit" class="w-full py-3 rounded-xl bg-purple-600 text-white font-black text-xs hover:bg-purple-500 transition-all shadow-lg shadow-purple-500/20 cursor-pointer mt-2 uppercase tracking-wider">
+                REGISTRARSE
+            </button>
+        </form>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div class="space-y-1">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Contraseña</label>
-                        <input type="password" name="clave_usu" required placeholder="••••••••" class="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-300 dark:border-white/10 rounded-xl p-2.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-sky-500">
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Confirmar Contraseña</label>
-                        <input type="password" name="confirmar_clave" required placeholder="••••••••" class="w-full bg-slate-50 dark:bg-white/[0.03] border border-slate-300 dark:border-white/10 rounded-xl p-2.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-sky-500">
-                    </div>
-                </div>
-
-                <input type="hidden" name="id_rol_usu" value="3">
-
-                <button type="submit" class="w-full py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-slate-950 font-extrabold rounded-xl shadow-lg hover:opacity-90 transition-all text-xs tracking-wider uppercase cursor-pointer mt-2">
-                    Registrarme en SGET
-                </button>
-            </form>
+        <div class="mt-6 text-center text-xs font-medium text-slate-400">
+            ¿Ya tienes cuenta? 
+            <button onclick="cambiarAPanel('panelLogin')" class="text-purple-400 font-extrabold hover:underline ml-1">Inicia sesión</button>
         </div>
     </div>
 </div>

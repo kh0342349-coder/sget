@@ -147,3 +147,5 @@ CREATE TABLE `reportes_pasajeros` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 ALTER TABLE rutas ADD COLUMN img_rut VARCHAR(255) NULL;
+
+ALTER TABLE usuario ADD COLUMN google_id VARCHAR(255) NULL AFTER pass_usu;
