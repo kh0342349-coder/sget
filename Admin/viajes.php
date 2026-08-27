@@ -11,7 +11,7 @@ if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
 
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
 
-// Consulta de viajes activos
+// Consulta de viajes activos (Asegurando la carga de datos)
 $query = "SELECT 
             v.id_via, 
             v.id_rut_via,
@@ -34,17 +34,20 @@ $query = "SELECT
 
 $resultado = $conexion->query($query);
 
-// Consultas secundarias para selects
+// Consultas secundarias para selects del formulario
 $rutas_select = $conexion->query("SELECT id_rut, nom_rut, val_rut FROM rutas ORDER BY nom_rut ASC");
 
+// Selección de conductores ajustada (permite enteros y estados en texto)
 $conductores_select = $conexion->query("SELECT id_usu, nom_usu, est_con_usu 
                                         FROM usuario 
-                                        WHERE id_rol_usu = 2 AND (est_con_usu = 1 OR id_usu IN (SELECT id_usu_via FROM viaje WHERE est_via = 'Activo')) 
+                                        WHERE id_rol_usu = 2 
+                                        AND (est_con_usu = 1 OR est_con_usu = 'Disponible' OR id_usu IN (SELECT id_usu_via FROM viaje WHERE est_via = 'Activo')) 
                                         ORDER BY nom_usu ASC");
 
+// Selección de vehículos ajustada
 $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh 
                                       FROM vehiculo 
-                                      WHERE est_veh = 1 OR id_veh IN (SELECT id_veh FROM viaje WHERE est_via = 'Activo') 
+                                      WHERE est_veh = 1 OR est_veh = 'Activo' OR id_veh IN (SELECT id_veh FROM viaje WHERE est_via = 'Activo') 
                                       ORDER BY pla_veh ASC");
 ?>
 
@@ -96,14 +99,13 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
     <?php include 'sidebar.php'; ?>
 
     <!-- CONTENEDOR PRINCIPAL -->
-    <!-- Se mantiene el ID main-container para que el JS del header.php pueda interactuar con él -->
-    <div id="main-container" class="flex-1 ml-64 flex flex-col min-h-screen transition-all duration-300 w-full">
+    <div id="main-container" class="flex-1 ml-64 flex flex-col min-h-screen transition-all duration-300 w-full min-w-0">
         
         <!-- HEADER DINÁMICO -->
         <?php include 'header.php'; ?>
 
         <!-- ÁREA DE TRABAJO -->
-        <main class="p-6 md:p-8 flex-1 space-y-6">
+        <main class="p-6 md:p-8 flex-1 space-y-6 min-w-0">
             
             <!-- MENSAJES DE ALERTA -->
             <?php if (isset($_GET['status'])): ?>
@@ -126,10 +128,40 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                 <?php endif; ?>
             <?php endif; ?>
 
-            <!-- TÍTULO Y BOTONES DE ACCIÓN -->
+            <!-- TÍTULO, BOTÓN DE AYUDA Y BOTÓN DE ACCIÓN -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
                 <div>
-                    <h1 class="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Despacho de Viajes</h1>
+                    <div class="flex items-center gap-2.5">
+                        <h1 class="text-xl md:text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Despacho de Viajes</h1>
+                        
+                        <!-- 1. MODAL GUÍA GENERAL EN BOTÓN DE AYUDA -->
+                        <div class="relative group">
+                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
+                                <i class="fas fa-question text-[10px]"></i>
+                            </button>
+
+                            <!-- TARJETA FLOTANTE DE AYUDA -->
+                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
+                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
+                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía del Módulo de Despachos
+                                </p>
+                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-plus-circle text-blue-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Asignar Viaje:</b> Programa una nueva orden de despacho indicando ruta, vehículo, conductor y horario.</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-eye text-amber-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Ver Ficha:</b> Abre la ficha técnica en pop-up para revisar conductor, placa y datos de salida.</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-flag-checkered text-red-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Terminar Viaje:</b> Finaliza el trayecto y libera al vehículo y conductor asignados.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                     <p class="text-slate-500 dark:text-slate-400 text-xs mt-0.5">Monitoreo y control de bitácoras en SGET.</p>
                 </div>
                 
@@ -138,7 +170,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                 </button>
             </div>
 
-            <!-- CONTENEDOR GRID EN TARJETAS (4 Columnas y Más Compactas) -->
+            <!-- CONTENEDOR GRID EN TARJETAS -->
             <?php if($resultado && $resultado->num_rows > 0): ?>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                     <?php while($v = $resultado->fetch_assoc()): ?>
@@ -150,18 +182,17 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                         <!-- Tarjeta Compacta -->
                         <div class="relative overflow-hidden rounded-2xl h-52 border border-slate-200 dark:border-white/10 shadow-md group transition-all duration-300 hover:shadow-xl flex flex-col justify-between p-4 bg-slate-950">
                             
-                            <!-- Capa 1: Imagen de fondo -->
-                            <?php if (!empty($nombreImagen)): ?>
+                            <!-- Imagen de fondo -->
+                            <?php if (!empty($nombreImagen) && file_exists("../img/rutas/" . $nombreImagen)): ?>
                                 <img src="<?php echo htmlspecialchars($rutaImagen); ?>" 
                                     alt="<?php echo htmlspecialchars($v['nom_rut']); ?>" 
-                                    onerror="this.style.display='none';"
                                     class="absolute inset-0 w-full h-full object-cover object-center z-0 opacity-70 transition-transform duration-500 group-hover:scale-110">
                             <?php endif; ?>
                             
-                            <!-- Capa 2: Degradado suave -->
+                            <!-- Degradado suave -->
                             <div class="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/60 z-0"></div>
 
-                            <!-- Capa 3: Header ID y Estado -->
+                            <!-- Header ID y Estado -->
                             <div class="relative z-10 flex items-center justify-between mb-2">
                                 <span class="text-[10px] font-mono font-bold text-white/90 bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-md border border-white/10">
                                     #<?php echo $v['id_via']; ?>
@@ -171,7 +202,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                                 </span>
                             </div>
 
-                            <!-- Capa 4: Información de la Ruta -->
+                            <!-- Información de la Ruta -->
                             <div class="relative z-10 space-y-0.5 mt-auto mb-3">
                                 <span class="text-[10px] font-black uppercase tracking-widest text-amber-300 drop-shadow-md">
                                     $<?php echo number_format($v['val_via'], 0, ',', '.'); ?> COP
@@ -182,7 +213,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                                 <p class="text-[10px] text-slate-300 truncate"><i class="fas fa-steering-wheel mr-1 text-slate-400"></i> <?php echo htmlspecialchars($v['nom_usu']); ?></p>
                             </div>
 
-                            <!-- Capa 5: Botones de Acción -->
+                            <!-- Botones de Acción -->
                             <div class="relative z-10 flex items-center gap-2 pt-2 border-t border-white/20">
                                 <a href="terminar_viaje.php?id_via=<?php echo $v['id_via']; ?>&id_usu=<?php echo $v['id_usu_via']; ?>&id_veh=<?php echo $v['id_veh']; ?>" 
                                 onclick="return confirm('¿Confirma que el vehículo llegó a su destino y desea terminar el viaje?')"
@@ -231,7 +262,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
     <!-- OVERLAY GENERAL -->
     <div id="overlayViaje" onclick="cerrarTodosModales()" class="fixed inset-0 bg-slate-900/60 dark:bg-black/70 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-    <!-- MODAL POPUP VER INFORMACIÓN -->
+    <!-- 2. MODAL POPUP VER INFORMACIÓN / FICHA TÉCNICA -->
     <div id="modalDetalleViaje" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300" id="modalDetalleBox">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
@@ -278,7 +309,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
         </div>
     </div>
 
-    <!-- PANEL LATERAL DESLIZANTE (CREAR / EDITAR) -->
+    <!-- 3. PANEL LATERAL DESLIZANTE (CREAR / EDITAR) -->
     <aside id="drawerViaje" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
         
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
@@ -325,7 +356,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                         if($conductores_select) {
                             $conductores_select->data_seek(0);
                             while($c = $conductores_select->fetch_assoc()) {
-                                $indicador = ($c['est_con_usu'] == 0) ? ' [Asignado / En Ruta]' : '';
+                                $indicador = ($c['est_con_usu'] == 0 || $c['est_con_usu'] == 'Ocupado') ? ' [Asignado / En Ruta]' : '';
                                 echo '<option value="'.$c['id_usu'].'">'.htmlspecialchars($c['nom_usu']).$indicador.'</option>';
                             }
                         }
@@ -341,7 +372,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                         if($vehiculos_select) {
                             $vehiculos_select->data_seek(0);
                             while($v = $vehiculos_select->fetch_assoc()) {
-                                $indicador = ($v['est_veh'] == 0) ? ' [Asignado / En Ruta]' : '';
+                                $indicador = ($v['est_veh'] == 0 || $v['est_veh'] == 'Inactivo') ? ' [Asignado / En Ruta]' : '';
                                 echo '<option value="'.$v['id_veh'].'">Placa: '.htmlspecialchars($v['pla_veh']).$indicador.'</option>';
                             }
                         }

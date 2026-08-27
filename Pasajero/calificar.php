@@ -39,9 +39,7 @@ if ($parametros_validos) {
     $stmt_cond->close();
 }
 
-// ------------------------------------------------------------------
 // HISTORIAL DE RESEÑAS REALIZADAS POR ESTE PASAJERO
-// ------------------------------------------------------------------
 $historial_resenas = [];
 
 if ($id_pasajero > 0) {
@@ -62,6 +60,9 @@ if ($id_pasajero > 0) {
         $stmt_hist->close();
     }
 }
+
+// Consulta de rutas para el Drawer (+)
+$rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER BY nom_rut ASC");
 ?>
 
 <!DOCTYPE html>
@@ -98,21 +99,75 @@ if ($id_pasajero > 0) {
         }
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.5);
+        }
+    </style>
 </head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300">
+<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300 relative overflow-x-hidden">
 
     <!-- INCLUSIÓN DIRECTA DEL SIDEBAR -->
     <?php include 'sidebar.php'; ?>
 
     <!-- MAIN CON MARGEN IZQUIERDO PARA ALINEARSE AL SIDEBAR FIJO -->
-    <main class="flex-1 ml-64 flex flex-col min-h-screen">
+    <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
         
         <!-- HEADER ESTANDARIZADO MODULAR -->
         <?php include 'header.php'; ?>
 
         <!-- CONTENIDO PRINCIPAL -->
-        <div class="flex-1 max-w-5xl w-full mx-auto p-6 md:p-8 space-y-10">
+        <div class="flex-1 max-w-5xl w-full mx-auto p-6 md:p-8 space-y-8 min-w-0">
             
+            <!-- ENCABEZADO CON TITULO, AYUDA (?) Y PROGRAMACIÓN (+) -->
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-[#1e293b]/50 p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
+                <div>
+                    <div class="flex items-center gap-2.5">
+                        <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Calificación de Servicio</h1>
+                        
+                        <!-- 1. BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
+                        <div class="relative group">
+                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
+                                <i class="fas fa-question text-[10px]"></i>
+                            </button>
+
+                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
+                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
+                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía de Calificaciones
+                                </p>
+                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-star text-amber-400 mt-0.5 shrink-0"></i>
+                                        <span><b>Evaluación:</b> Tu puntuación directa ayuda a calificar la puntualidad y atención del conductor.</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-eye text-blue-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Ficha de Opinión:</b> Revisa las opiniones enviadas con el botón de lectura rápida.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Registra tu opinión del trayecto y consulta el historial enviado.</p>
+                </div>
+
+                <!-- BOTÓN PRINCIPAL ACCIÓN CON MODAL DRAWER (+) -->
+                <button onclick="abrirModalReservaCalificacion()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto">
+                    <i class="fas fa-plus-circle text-sm"></i> Buscar Rutas
+                </button>
+            </div>
+
             <!-- FORMULARIO DE CALIFICACIÓN / AVISO -->
             <div class="flex flex-col items-center justify-center">
                 <?php if ($parametros_validos): ?>
@@ -168,7 +223,7 @@ if ($id_pasajero > 0) {
                             Para calificar un servicio, dirígete a la sección de tu <strong class="text-slate-700 dark:text-slate-200">Historial de Viajes</strong> y haz clic en el botón <span class="text-yellow-600 dark:text-yellow-400 font-bold">"Calificar"</span> en los viajes completados.
                         </p>
                         <div class="mt-6">
-                            <a href="pasajero.php" class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition duration-200">
+                            <a href="historial_pasajero.php" class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition duration-200">
                                 Ir a mis viajes
                             </a>
                         </div>
@@ -201,36 +256,48 @@ if ($id_pasajero > 0) {
                 <?php else: ?>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <?php foreach ($historial_resenas as $resena): ?>
+                            <?php $jsonRes = htmlspecialchars(json_encode($resena, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8'); ?>
                             <div class="p-5 rounded-2xl bg-slate-50 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 flex flex-col justify-between gap-3">
-                                <div class="flex items-start justify-between">
-                                    <div>
-                                        <p class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                                            <i class="fas fa-user-circle text-blue-500"></i>
-                                            Conductor: <?php echo htmlspecialchars($resena['nombre_conductor'] ?? 'Por asignar', ENT_QUOTES, 'UTF-8'); ?>
-                                        </p>
-                                        <span class="text-[10px] text-slate-400 mt-0.5 block">
+                                <div>
+                                    <div class="flex items-start justify-between mb-2">
+                                        <div>
+                                            <p class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                                <i class="fas fa-user-circle text-blue-500"></i>
+                                                Conductor: <?php echo htmlspecialchars($resena['nombre_conductor'] ?? 'Por asignar', ENT_QUOTES, 'UTF-8'); ?>
+                                            </p>
+                                            <span class="text-[10px] text-slate-400 mt-0.5 block">
+                                                <?php 
+                                                    $fecha = !empty($resena['fech_cal']) ? date('d/m/Y - h:i A', strtotime($resena['fech_cal'])) : 'Registrado';
+                                                    echo $fecha;
+                                                ?>
+                                            </span>
+                                        </div>
+                                        <div class="flex text-yellow-400 text-xs">
                                             <?php 
-                                                $fecha = !empty($resena['fech_cal']) ? date('d/m/Y - h:i A', strtotime($resena['fech_cal'])) : 'Registrado';
-                                                echo $fecha;
-                                            ?>
-                                        </span>
-                                    </div>
-                                    <div class="flex text-yellow-400 text-xs">
-                                        <?php 
-                                            $pts = (int)($resena['puntos_cal'] ?? 5);
-                                            for ($i = 1; $i <= 5; $i++) {
-                                                if ($i <= $pts) {
-                                                    echo '<i class="fas fa-star"></i>';
-                                                } else {
-                                                    echo '<i class="far fa-star text-slate-300 dark:text-slate-700"></i>';
+                                                $pts = (int)($resena['puntos_cal'] ?? 5);
+                                                for ($i = 1; $i <= 5; $i++) {
+                                                    if ($i <= $pts) {
+                                                        echo '<i class="fas fa-star"></i>';
+                                                    } else {
+                                                        echo '<i class="far fa-star text-slate-300 dark:text-slate-700"></i>';
+                                                    }
                                                 }
-                                            }
-                                        ?>
+                                            ?>
+                                        </div>
                                     </div>
+                                    <p class="text-xs text-slate-600 dark:text-slate-300 italic bg-white dark:bg-[#1e293b] p-3 rounded-xl border border-slate-100 dark:border-slate-800/50 line-clamp-2">
+                                        "<?php echo htmlspecialchars(!empty($resena['coment_cal']) ? $resena['coment_cal'] : 'Sin comentario escrito.', ENT_QUOTES, 'UTF-8'); ?>"
+                                    </p>
                                 </div>
-                                <p class="text-xs text-slate-600 dark:text-slate-300 italic bg-white dark:bg-[#1e293b] p-3 rounded-xl border border-slate-100 dark:border-slate-800/50">
-                                    "<?php echo htmlspecialchars(!empty($resena['coment_cal']) ? $resena['coment_cal'] : 'Sin comentario escrito.', ENT_QUOTES, 'UTF-8'); ?>"
-                                </p>
+
+                                <div class="flex justify-end pt-1">
+                                    <button type="button" 
+                                            data-opinion='<?php echo $jsonRes; ?>'
+                                            onclick="verDetalleOpinionCalificacion(this)"
+                                            class="text-[10px] font-bold text-blue-600 dark:text-neon-azul hover:underline flex items-center gap-1 cursor-pointer">
+                                        <i class="fas fa-eye text-[9px]"></i> Leer Completa
+                                    </button>
+                                </div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -240,8 +307,165 @@ if ($id_pasajero > 0) {
         </div>
     </main>
 
-    <!-- SCRIPT TEMA GLOBAL -->
+    <!-- OVERLAY GENERAL PARA MODALES -->
+    <div id="overlayCalificacion" onclick="cerrarTodosModalesCalificacion()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+    <!-- 2. MODAL POP-UP DE LECTURA COMPLETA DE OPINIÓN -->
+    <div id="modalLecturaOpinion" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
+        <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300" id="modalOpinionBox">
+            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center text-xs">
+                        <i class="fas fa-comment-alt"></i>
+                    </div>
+                    <h3 id="detConductorOpinion" class="font-extrabold text-slate-900 dark:text-white text-base capitalize"></h3>
+                </div>
+                <button onclick="cerrarModalOpinion()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-all">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3.5 text-xs">
+                <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5">
+                    <i class="far fa-calendar-alt text-blue-500 text-base w-5 text-center"></i>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Fecha de Envío</p>
+                        <p id="detFechaOpinion" class="font-medium text-slate-800 dark:text-slate-100 mt-0.5"></p>
+                    </div>
+                </div>
+
+                <div class="p-4 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 space-y-2">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Comentario Registrado</p>
+                    <p id="detComentarioOpinion" class="italic text-slate-700 dark:text-slate-200 text-xs leading-relaxed"></p>
+                </div>
+            </div>
+
+            <button onclick="cerrarModalOpinion()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer">
+                Cerrar Opinión
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. PANEL LATERAL DESLIZANTE (DRAWER (+)) DE BÚSQUEDA Y RESERVA -->
+    <aside id="drawerReservaCalificacion" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
+        <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-neon-morado"></div>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-500/10 text-blue-500 dark:text-neon-azul rounded-xl flex items-center justify-center border border-slate-100 dark:border-white/5">
+                    <i class="fas fa-ticket-alt text-base"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Buscar Viaje</h3>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Solicitar cupo en ruta disponible</p>
+                </div>
+            </div>
+            <button onclick="cerrarModalDrawerCalificacion()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-all">
+                <i class="fas fa-times text-sm"></i>
+            </button>
+        </div>
+
+        <div class="p-6 flex-1 overflow-y-auto space-y-5">
+            <form id="formReservaCalificacion" action="viajes_pasajero.php" method="GET" class="space-y-4">
+                <div class="space-y-1.5">
+                    <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Destino Deseado</label>
+                    <select name="ruta" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
+                        <option value="">Selecciona tu ruta...</option>
+                        <?php 
+                        if($rutas_disponibles) {
+                            $rutas_disponibles->data_seek(0);
+                            while($r = $rutas_disponibles->fetch_assoc()) {
+                                echo '<option value="'.$r['id_rut'].'">'.htmlspecialchars($r['nom_rut']).'</option>';
+                            }
+                        }
+                        ?>
+                    </select>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Fecha Preferida</label>
+                    <input type="date" name="fecha" id="input_fecha_calificacion" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
+                </div>
+            </form>
+        </div>
+
+        <div class="p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-black/10 flex gap-3">
+            <button type="button" onclick="cerrarModalDrawerCalificacion()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer">
+                Cancelar
+            </button>
+            <button type="submit" form="formReservaCalificacion" class="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-500/20 hover:opacity-95 transition-all cursor-pointer">
+                Buscar Disponibilidad
+            </button>
+        </div>
+    </aside>
+
+    <!-- CONTROLADORES JAVASCRIPT -->
     <script>
+        function verDetalleOpinionCalificacion(btn) {
+            const res = JSON.parse(btn.getAttribute('data-opinion'));
+            document.getElementById('detConductorOpinion').innerText = res.nombre_conductor || 'Conductor';
+            document.getElementById('detFechaOpinion').innerText = res.fech_cal || 'Fecha no registrada';
+            document.getElementById('detComentarioOpinion').innerText = res.coment_cal || 'Sin comentario escrito.';
+
+            const overlay = document.getElementById('overlayCalificacion');
+            const modal = document.getElementById('modalLecturaOpinion');
+            const box = document.getElementById('modalOpinionBox');
+
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100', 'pointer-events-auto');
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100', 'pointer-events-auto');
+
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function cerrarModalOpinion() {
+            const overlay = document.getElementById('overlayCalificacion');
+            const modal = document.getElementById('modalLecturaOpinion');
+            const box = document.getElementById('modalOpinionBox');
+
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+
+            modal.classList.remove('opacity-100', 'pointer-events-auto');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+
+            overlay.classList.remove('opacity-100', 'pointer-events-auto');
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function abrirModalReservaCalificacion() {
+            const drawer = document.getElementById('drawerReservaCalificacion');
+            const overlay = document.getElementById('overlayCalificacion');
+
+            const hoy = new Date().toISOString().split('T')[0];
+            document.getElementById('input_fecha_calificacion').value = hoy;
+            document.getElementById('input_fecha_calificacion').min = hoy;
+
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100', 'pointer-events-auto');
+
+            drawer.classList.remove('translate-x-full');
+            drawer.classList.add('translate-x-0');
+        }
+
+        function cerrarModalDrawerCalificacion() {
+            const drawer = document.getElementById('drawerReservaCalificacion');
+            const overlay = document.getElementById('overlayCalificacion');
+
+            drawer.classList.remove('translate-x-0');
+            drawer.classList.add('translate-x-full');
+
+            overlay.classList.remove('opacity-100', 'pointer-events-auto');
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function cerrarTodosModalesCalificacion() {
+            cerrarModalOpinion();
+            cerrarModalDrawerCalificacion();
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const themeToggleBtn = document.getElementById('theme-toggle');
             const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');

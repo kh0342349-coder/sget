@@ -13,24 +13,111 @@ else if ($pagina_titulo === 'viajes') $submodulo = "Control de Viajes";
 else if ($pagina_titulo === 'vehiculos') $submodulo = "Inventario de Vehículos";
 else if ($pagina_titulo === 'ranking_conductores') $submodulo = "Calificaciones";
 else if ($pagina_titulo === 'reportes') $submodulo = "Módulo de Reportes";
+
+// Opciones del sistema para el buscador
+$opcionesSGET = [
+    [
+        "titulo"      => "Inicio / Dashboard",
+        "categoria"   => "Principal",
+        "descripcion" => "Vista general del sistema y métricas",
+        "url"         => "admin.php",
+        "icono"       => "fa-chart-pie"
+    ],
+    [
+        "titulo"      => "Gestión de Usuarios",
+        "categoria"   => "Administración",
+        "descripcion" => "Administrar usuarios, roles y accesos",
+        "url"         => "usuarios.php",
+        "icono"       => "fa-users"
+    ],
+    [
+        "titulo"      => "Asignaciones",
+        "categoria"   => "Operaciones",
+        "descripcion" => "Asignar vehículos, rutas y conductores",
+        "url"         => "asignaciones.php",
+        "icono"       => "fa-tasks"
+    ],
+    [
+        "titulo"      => "Rutas de Transporte",
+        "categoria"   => "Rutas",
+        "descripcion" => "Crear, editar y gestionar trayectos",
+        "url"         => "rutas.php",
+        "icono"       => "fa-route"
+    ],
+    [
+        "titulo"      => "Control de Viajes",
+        "categoria"   => "Operaciones",
+        "descripcion" => "Monitoreo y registro de viajes en curso",
+        "url"         => "viajes.php",
+        "icono"       => "fa-bus-alt"
+    ],
+    [
+        "titulo"      => "Inventario de Vehículos",
+        "categoria"   => "Flota",
+        "descripcion" => "Estado de la flota, mantenimiento y fichas",
+        "url"         => "vehiculos.php",
+        "icono"       => "fa-bus"
+    ],
+    [
+        "titulo"      => "Ranking y Calificaciones",
+        "categoria"   => "Calidad",
+        "descripcion" => "Evaluación y puntajes de conductores",
+        "url"         => "ranking_conductores.php",
+        "icono"       => "fa-star"
+    ],
+    [
+        "titulo"      => "Módulo de Reportes",
+        "categoria"   => "Informes",
+        "descripcion" => "Exportar estadísticas e informes generales",
+        "url"         => "reportes.php",
+        "icono"       => "fa-file-invoice"
+    ]
+];
 ?>
 
-<header class="h-16 bg-white/80 dark:bg-[#1e293b]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-6 sticky top-0 z-10 transition-colors duration-300">
+<!-- Inyección de opciones a JavaScript -->
+<script>
+    const OPCIONES_SGET = <?php echo json_encode($opcionesSGET); ?>;
+</script>
+
+<header class="h-16 bg-white/80 dark:bg-[#1e293b]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-6 sticky top-0 z-20 transition-colors duration-300">
     
-    <!-- LADO IZQUIERDO: Botón Toggle y Breadcrumb -->
-    <div class="flex items-center gap-4">
-        <!-- BOTÓN TOGGLE (Label que activa el checkbox del sidebar) -->
-        <label for="sidebar-toggle-checkbox" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm cursor-pointer" title="Ocultar/Mostrar Menú">
+    <!-- LADO IZQUIERDO: Botón Toggle, Breadcrumb y BUSCADOR -->
+    <div class="flex items-center gap-4 flex-1 max-w-xl">
+        <!-- BOTÓN TOGGLE -->
+        <label for="sidebar-toggle-checkbox" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm cursor-pointer shrink-0" title="Ocultar/Mostrar Menú">
             <i class="fas fa-bars text-lg"></i>
         </label>
 
-        <div class="text-slate-400 dark:text-slate-500 font-medium text-sm tracking-wide hidden sm:block">
+        <!-- Breadcrumb -->
+        <div class="text-slate-400 dark:text-slate-500 font-medium text-sm tracking-wide hidden lg:block shrink-0">
             Dashboard &nbsp;/&nbsp; <span class="text-slate-800 dark:text-white font-semibold"><?php echo $submodulo; ?></span>
+        </div>
+
+        <!-- BUSCADOR GLOBAL (HEADER) -->
+        <div class="relative w-full max-w-xs md:max-w-sm ml-2">
+            <div class="relative flex items-center">
+                <i class="fas fa-search absolute left-3.5 text-slate-400 dark:text-slate-500 text-sm pointer-events-none"></i>
+                <input 
+                    type="text" 
+                    id="inputBuscadorHeader" 
+                    placeholder="Buscar función... (Ctrl + K)"
+                    autocomplete="off"
+                    class="w-full pl-9 pr-8 py-2 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl text-xs sm:text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 dark:focus:border-blue-500 transition-all shadow-inner"
+                >
+                <span id="btnLimpiarBuscador" class="absolute right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs cursor-pointer hidden">
+                    <i class="fas fa-times"></i>
+                </span>
+            </div>
+
+            <!-- RESULTADOS DE BÚSQUEDA -->
+            <div id="resultadosBusquedaHeader" class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden hidden z-50 max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/50">
+            </div>
         </div>
     </div>
 
     <!-- LADO DERECHO: Acciones y Perfil -->
-    <div class="flex items-center space-x-4 sm:space-x-6">
+    <div class="flex items-center space-x-3 sm:space-x-6 shrink-0">
         <button id="themeToggle" class="text-slate-400 hover:text-amber-400 p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-all duration-200 text-sm" title="Cambiar Tema">
             <i id="themeIcon" class="fas fa-moon text-base"></i>
         </button>
@@ -52,36 +139,31 @@ else if ($pagina_titulo === 'reportes') $submodulo = "Módulo de Reportes";
     </div>
 </header>
 
-<!-- MODAL DE ADVERTENCIA POR INACTIVIDAD (Oculto por defecto) -->
-<div id="inactivityModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl text-center space-y-4">
-        <div class="w-14 h-14 bg-amber-100 dark:bg-amber-900/30 text-amber-500 rounded-full flex items-center justify-center mx-auto text-2xl">
-            <i class="fas fa-user-clock"></i>
+<!-- MODAL DE ADVERTENCIA POR INACTIVIDAD -->
+<div id="inactivityModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl max-w-xs w-full p-4 shadow-xl text-center space-y-3">
+        <h4 class="text-base font-bold text-slate-800 dark:text-white">
+            ¿Estás ahí?
+        </h4>
+
+        <div class="text-xs font-semibold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/40 py-1.5 px-3 rounded-lg border border-red-200 dark:border-red-900/50">
+            Cierre en: <span id="countdownTimer" class="font-bold">30</span> seg
         </div>
-        <h3 class="text-lg font-bold text-slate-800 dark:text-white">¡Inactividad Detectada!</h3>
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-            Tu sesión está a punto de cerrarse por falta de actividad en el sistema.
-        </p>
-        <div class="text-2xl font-black text-red-500 dark:text-red-400 bg-slate-100 dark:bg-slate-900 py-3 rounded-xl">
-            Cierre en: <span id="countdownTimer">30</span> segundos
-        </div>
-        <button id="btnContinuar" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-blue-600/20">
-            Continuar en la sesión
+
+        <button id="btnContinuar" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm rounded-lg transition-colors shadow-md shadow-blue-600/20 cursor-pointer">
+            Continuar sesión
         </button>
     </div>
 </div>
 
 <script>
+    // --- LÓGICA DE TEMA (MODO OSCURO/CLARO) ---
     const themeToggleBtn = document.getElementById('themeToggle');
     const themeIcon = document.getElementById('themeIcon');
 
     function actualizarIcono(isDark) {
         if (themeIcon) {
-            if (isDark) {
-                themeIcon.className = "fas fa-sun text-base text-amber-400";
-            } else {
-                themeIcon.className = "fas fa-moon text-base text-slate-600";
-            }
+            themeIcon.className = isDark ? "fas fa-sun text-base text-amber-400" : "fas fa-moon text-base text-slate-600";
         }
     }
 
@@ -100,9 +182,103 @@ else if ($pagina_titulo === 'reportes') $submodulo = "Módulo de Reportes";
         });
     }
 
+    // --- LÓGICA DEL BUSCADOR DE FUNCIONES ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const inputBuscador = document.getElementById('inputBuscadorHeader');
+        const contenedorResultados = document.getElementById('resultadosBusquedaHeader');
+        const btnLimpiar = document.getElementById('btnLimpiarBuscador');
+
+        if (inputBuscador && contenedorResultados) {
+            // Atajo de teclado: Ctrl + K
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    inputBuscador.focus();
+                }
+            });
+
+            // Filtrado interactivo
+            inputBuscador.addEventListener('input', function () {
+                const query = this.value.trim().toLowerCase();
+
+                if (btnLimpiar) {
+                    if (query.length > 0) btnLimpiar.classList.remove('hidden');
+                    else btnLimpiar.classList.add('hidden');
+                }
+
+                if (query.length === 0) {
+                    contenedorResultados.innerHTML = '';
+                    contenedorResultados.classList.add('hidden');
+                    return;
+                }
+
+                const coincidencias = OPCIONES_SGET.filter(item =>
+                    item.titulo.toLowerCase().includes(query) ||
+                    item.categoria.toLowerCase().includes(query) ||
+                    item.descripcion.toLowerCase().includes(query)
+                );
+
+                renderizarResultadosBuscador(coincidencias);
+            });
+
+            function renderizarResultadosBuscador(lista) {
+                contenedorResultados.innerHTML = '';
+
+                if (lista.length === 0) {
+                    contenedorResultados.innerHTML = `
+                        <div class="p-4 text-center text-xs text-slate-400 dark:text-slate-500">
+                            No se encontraron funciones asociadas.
+                        </div>`;
+                    contenedorResultados.classList.remove('hidden');
+                    return;
+                }
+
+                lista.forEach(item => {
+                    const enlace = document.createElement('a');
+                    enlace.href = item.url;
+                    enlace.className = 'flex items-center gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group';
+
+                    enlace.innerHTML = `
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <i class="fas ${item.icono} text-sm"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-2">
+                                <p class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">${item.titulo}</p>
+                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wider">${item.categoria}</span>
+                            </div>
+                            <p class="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">${item.descripcion}</p>
+                        </div>
+                    `;
+                    contenedorResultados.appendChild(enlace);
+                });
+
+                contenedorResultados.classList.remove('hidden');
+            }
+
+            // Ocultar desplegable al hacer clic fuera
+            document.addEventListener('click', (e) => {
+                if (!inputBuscador.contains(e.target) && !contenedorResultados.contains(e.target)) {
+                    contenedorResultados.classList.add('hidden');
+                }
+            });
+
+            // Botón de limpiar input
+            if (btnLimpiar) {
+                btnLimpiar.addEventListener('click', () => {
+                    inputBuscador.value = '';
+                    contenedorResultados.innerHTML = '';
+                    contenedorResultados.classList.add('hidden');
+                    btnLimpiar.classList.add('hidden');
+                    inputBuscador.focus();
+                });
+            }
+        }
+    });
+
     // --- LÓGICA DE INACTIVIDAD Y CUENTA REGRESIVA ---
-    const TOTAL_INACTIVITY_TIME = 3 * 60 * 1000; // 3 minutos en total
-    const WARNING_TIME = 30 * 1000;              // Últimos 30 segundos
+    const TOTAL_INACTIVITY_TIME = 3 * 60 * 1000; // 3 minutos
+    const WARNING_TIME = 30 * 1000;              // 30 segundos
 
     let inactivityTimer;
     let countdownInterval;
@@ -116,10 +292,8 @@ else if ($pagina_titulo === 'reportes') $submodulo = "Módulo de Reportes";
         clearTimeout(inactivityTimer);
         clearInterval(countdownInterval);
         
-        // Ocultar modal si estaba visible
         if (modal) modal.classList.add('hidden');
         
-        // Programar la aparición de la advertencia a los 2 minutos y 30 segundos (3 min - 30 seg)
         inactivityTimer = setTimeout(() => {
             mostrarAdvertenciaCierre();
         }, TOTAL_INACTIVITY_TIME - WARNING_TIME);
@@ -136,31 +310,26 @@ else if ($pagina_titulo === 'reportes') $submodulo = "Módulo de Reportes";
 
             if (timeLeft <= 0) {
                 clearInterval(countdownInterval);
-                // Redirigir al archivo que destruye la sesión
                 window.location.href = "../assets/cerrar.php";
             }
         }, 1000);
     }
 
-    // Eventos que consideran que el usuario sigue activo
     const eventosUsuario = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
 
     eventosUsuario.forEach(evento => {
         document.addEventListener(evento, () => {
-            // Solo reiniciamos si el modal NO está visible (si está visible, debe hacer clic explícito en el botón o interactuar para salir)
             if (modal && modal.classList.contains('hidden')) {
                 iniciarTemporizadorInactividad();
             }
         }, true);
     });
 
-    // Botón de continuar sesión dentro del modal
     if (btnContinuar) {
         btnContinuar.addEventListener('click', () => {
             iniciarTemporizadorInactividad();
         });
     }
 
-    // Arrancar el conteo al cargar el header en cualquier página
     iniciarTemporizadorInactividad();
 </script>

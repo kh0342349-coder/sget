@@ -2,8 +2,10 @@
 session_start();
 header('Content-Type: application/json');
 
+// 1. Conexión a la base de datos
 require_once '../assets/conexion.php'; 
 
+// 2. Recibir token de Google
 $input = json_decode(file_get_contents('php://input'), true);
 $token = $input['token'] ?? null;
 
@@ -12,6 +14,7 @@ if (!$token) {
     exit;
 }
 
+// 3. Validar token con Google API
 $google_url = "https://oauth2.googleapis.com/tokeninfo?id_token=" . $token;
 $response = @file_get_contents($google_url);
 
@@ -27,12 +30,14 @@ if (isset($payload['email'])) {
     $nombre    = mysqli_real_escape_string($conexion, $payload['name'] ?? 'Usuario Google');
     $google_id = mysqli_real_escape_string($conexion, $payload['sub']);
 
+    // 4. Buscar usuario por correo o google_id
     $sql_check = "SELECT * FROM usuario WHERE corre_usu = '$email' OR google_id = '$google_id'";
     $res_check = mysqli_query($conexion, $sql_check);
 
     if ($res_check && mysqli_num_rows($res_check) > 0) {
-        $usuario = mysqli_fetch_assoc($res_check);
+        $usuario    = mysqli_fetch_assoc($res_check);
         $id_usuario = $usuario['id_usu'];
+        $num_doc    = $usuario['num_doc_usu'];
         $id_rol     = (int)$usuario['id_rol_usu'];
         $nombre_db  = $usuario['nom_usu'];
 
@@ -40,9 +45,12 @@ if (isset($payload['email'])) {
             mysqli_query($conexion, "UPDATE usuario SET google_id = '$google_id' WHERE id_usu = $id_usuario");
         }
     } else {
+        // Registrar nuevo usuario como Pasajero (Rol 3)
         $id_rol_defecto = 3;
-        $sql_insert = "INSERT INTO usuario (nom_usu, corre_usu, id_rol_usu, estado, google_id) 
-                       VALUES ('$nombre', '$email', $id_rol_defecto, 1, '$google_id')";
+        $num_doc = 'G-' . substr($google_id, -6); // Documento de referencia
+
+        $sql_insert = "INSERT INTO usuario (num_doc_usu, nom_usu, corre_usu, id_rol_usu, estado, google_id) 
+                       VALUES ('$num_doc', '$nombre', '$email', $id_rol_defecto, 1, '$google_id')";
         
         if (mysqli_query($conexion, $sql_insert)) {
             $id_usuario = mysqli_insert_id($conexion);
@@ -54,18 +62,32 @@ if (isset($payload['email'])) {
         }
     }
 
-    $_SESSION['id_usu']     = $id_usuario;
-    $_SESSION['nom_usu']    = $nombre_db;
-    $_SESSION['corre_usu']  = $email;
-    $_SESSION['id_rol_usu'] = $id_rol;
+    // 5. Variables de sesión idénticas a validar.php
+    $_SESSION['id_usu']         = $id_usuario;
+    $_SESSION['documento']      = $num_doc;
+    $_SESSION['nombre_usuario'] = $nombre_db;
+    $_SESSION['rol']            = $id_rol;
 
+    // 6. Asignar ruta de redirección según el rol
     switch ($id_rol) {
-        case 1: $redirect = 'Admin/admin.php'; break;
-        case 2: $redirect = 'Conductor/conductor.php'; break;
-        case 3: default: $redirect = 'Pasajero/pasajero.php'; break;
+        case 1:
+            $redirect = 'Admin/admin.php';
+            break;
+        case 2:
+            $redirect = 'Conductor/conductor.php';
+            break;
+        case 3:
+        default:
+            $redirect = 'Pasajero/pasajero.php';
+            break;
     }
 
-    echo json_encode(['success' => true, 'redirect' => $redirect, 'message' => 'Sesión iniciada correctamente']);
+    echo json_encode([
+        'success'  => true,
+        'redirect' => $redirect,
+        'message'  => 'Sesión iniciada correctamente'
+    ]);
+
 } else {
     echo json_encode(['success' => false, 'message' => 'Respuesta no válida de Google.']);
 }

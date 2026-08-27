@@ -58,6 +58,21 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.5);
+        }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-[#0b0f19] flex min-h-screen antialiased text-slate-800 dark:text-slate-100 transition-colors duration-300 relative overflow-x-hidden">
@@ -66,30 +81,61 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
     <?php include 'sidebar.php'; ?>
 
     <!-- CONTENEDOR PRINCIPAL -->
-    <div class="flex-1 ml-64 flex flex-col min-h-screen">
+    <div class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
         
         <!-- BARRA SUPERIOR -->
         <?php include 'header.php'; ?>
 
         <!-- ÁREA DE TRABAJO -->
-        <main class="p-8 flex-1">
+        <main class="p-8 flex-1 min-w-0">
             
-            <!-- ENCABEZADO Y BOTÓN DE ACCIÓN -->
+            <!-- ENCABEZADO CON BOTÓN DE AYUDA Y BOTÓN DE NUEVA RUTA -->
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
                 <div>
-                    <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Gestión de Rutas</h1>
+                    <div class="flex items-center gap-2.5">
+                        <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Gestión de Rutas</h1>
+                        
+                        <!-- BOTÓN CON TARJETA DE AYUDA FLOTANTE -->
+                        <div class="relative group">
+                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
+                                <i class="fas fa-question text-[10px]"></i>
+                            </button>
+
+                            <!-- 1. MODAL GUÍA GENERAL -->
+                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
+                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
+                                    <i class="fas fa-info-circle text-neon-azul"></i> Modulo de Rutas
+                                </p>
+                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-plus-circle text-emerald-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Crear Ruta:</b> Permite definir el origen, destino, kilometraje, tarifa sugerida e imagen de despacho.</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-image text-neon-azul mt-0.5 shrink-0"></i>
+                                        <span><b>Foto Despacho:</b> Haz clic sobre la miniatura para ver el mapa o lugar de salida ampliado.</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-edit text-purple-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Editar/Eliminar:</b> Modifica tarifas o la foto mediante los botones de acción.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                     <p class="text-xs text-slate-500 dark:text-color-mutado mt-1">Administre los trayectos, origen, destino, tarifas base y fotos de despacho.</p>
                 </div>
+
                 <button onclick="abrirModalRuta()" class="px-5 py-2.5 bg-gradient-to-r from-neon-azul to-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-neon-azul/20 hover:opacity-95 transition-all flex items-center gap-2">
                     <i class="fas fa-plus text-sm"></i>
                     <span>Nueva Ruta</span>
                 </button>
             </div>
 
-            <!-- TABLA DE RUTAS -->
+            <!-- TABLA DE RUTAS CON DESPLAZAMIENTO HORIZONTAL -->
             <div class="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200 dark:border-white/5 shadow-xl overflow-hidden backdrop-blur-sm transition-colors duration-300">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse text-sm">
+                <div class="overflow-x-auto custom-scrollbar w-full">
+                    <table class="w-full text-left border-collapse text-sm min-w-[850px]">
                         <thead>
                             <tr class="border-b border-slate-200 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02] text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-color-mutado">
                                 <th class="p-4 pl-6">ID</th>
@@ -108,8 +154,11 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                                     <tr class="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors">
                                         <td class="p-4 pl-6 font-mono text-xs text-slate-400">#<?php echo $ruta['id_rut']; ?></td>
                                         <td class="p-4">
-                                            <?php if (!empty($ruta['img_rut']) && file_exists("../uploads/rutas/" . $ruta['img_rut'])): ?>
-                                                <img src="../uploads/rutas/<?php echo htmlspecialchars($ruta['img_rut']); ?>" alt="Despacho" class="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
+                                            <?php if (!empty($ruta['img_rut']) && file_exists("../img/rutas/" . $ruta['img_rut'])): ?>
+                                                <button type="button" onclick="verDetallesRuta(<?php echo htmlspecialchars(json_encode($ruta)); ?>)" class="group/img relative">
+                                                    <img src="../img/rutas/<?php echo htmlspecialchars($ruta['img_rut']); ?>" alt="Despacho" class="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-white/10 shadow-sm group-hover/img:scale-105 transition-transform cursor-pointer">
+                                                    <span class="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px]"><i class="fas fa-search-plus"></i></span>
+                                                </button>
                                             <?php else: ?>
                                                 <div class="w-12 h-12 bg-slate-100 dark:bg-white/5 rounded-xl border border-dashed border-slate-300 dark:border-white/10 flex items-center justify-center text-slate-400 text-xs">
                                                     <i class="fas fa-image"></i>
@@ -123,6 +172,9 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                                         <td class="p-4 font-bold text-blue-600 dark:text-neon-azul font-mono">$<?php echo number_format($ruta['val_rut'], 0, ',', '.'); ?></td>
                                         <td class="p-4 pr-6 text-center">
                                             <div class="flex items-center justify-center gap-2">
+                                                <button onclick="verDetallesRuta(<?php echo htmlspecialchars(json_encode($ruta)); ?>)" class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center transition-all" title="Ver Detalles/Imagen">
+                                                    <i class="fas fa-eye text-xs"></i>
+                                                </button>
                                                 <button onclick="editarRuta(<?php echo htmlspecialchars(json_encode($ruta)); ?>)" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all" title="Editar">
                                                     <i class="fas fa-pen text-xs"></i>
                                                 </button>
@@ -152,10 +204,52 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
         </footer>
     </div>
 
-    <!-- OVERLAY -->
-    <div id="overlayRuta" onclick="cerrarModalRuta()" class="fixed inset-0 bg-slate-900/60 dark:bg-black/70 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    <!-- OVERLAY GENERAL -->
+    <div id="overlayRuta" onclick="cerrarTodosLosModales()" class="fixed inset-0 bg-slate-900/60 dark:bg-black/70 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-    <!-- PANEL LATERAL -->
+    <!-- 2. MODAL DE PREVISUALIZACIÓN DE IMAGEN Y DETALLES -->
+    <div id="modalVerDetalles" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-300">
+        <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform scale-95 transition-transform duration-300" id="cajaDetalles">
+            <div class="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-xl bg-neon-azul/10 text-neon-azul flex items-center justify-center text-xs font-bold"><i class="fas fa-route"></i></span>
+                    <h3 id="detallesTitulo" class="font-bold text-slate-900 dark:text-white text-sm">Detalles de la Ruta</h3>
+                </div>
+                <button onclick="cerrarModalDetalles()" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold">&times;</button>
+            </div>
+            
+            <div class="p-6 space-y-4">
+                <div id="contenedorImagenAmpliada" class="w-full h-56 bg-slate-100 dark:bg-black/20 rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 flex items-center justify-center">
+                    <img id="imgDetalleAmpliada" src="" alt="Despacho Ampliado" class="w-full h-full object-cover">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="p-3 bg-slate-50 dark:bg-black/20 rounded-xl border border-slate-100 dark:border-white/5">
+                        <span class="block text-[10px] uppercase font-bold text-slate-400">Punto de Origen</span>
+                        <span id="detOrigen" class="font-bold text-slate-800 dark:text-white"></span>
+                    </div>
+                    <div class="p-3 bg-slate-50 dark:bg-black/20 rounded-xl border border-slate-100 dark:border-white/5">
+                        <span class="block text-[10px] uppercase font-bold text-slate-400">Punto de Destino</span>
+                        <span id="detDestino" class="font-bold text-slate-800 dark:text-white"></span>
+                    </div>
+                    <div class="p-3 bg-slate-50 dark:bg-black/20 rounded-xl border border-slate-100 dark:border-white/5">
+                        <span class="block text-[10px] uppercase font-bold text-slate-400">Distancia</span>
+                        <span id="detDistancia" class="font-bold text-purple-500 font-mono"></span>
+                    </div>
+                    <div class="p-3 bg-slate-50 dark:bg-black/20 rounded-xl border border-slate-100 dark:border-white/5">
+                        <span class="block text-[10px] uppercase font-bold text-slate-400">Tarifa Sugerida</span>
+                        <span id="detPrecio" class="font-bold text-neon-azul font-mono"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-black/10 flex justify-end">
+                <button type="button" onclick="cerrarModalDetalles()" class="px-4 py-2 bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-200 rounded-xl font-bold text-xs">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. PANEL LATERAL (DRAWER CREACIÓN/EDICIÓN) -->
     <aside id="drawerRuta" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-neon-azul to-blue-600"></div>
@@ -299,7 +393,6 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
             contenedorImagen.classList.add('hidden');
             contenedorImagen.classList.remove('flex');
             
-            // Mostrar Zona de Carga
             const contenedorDropzone = document.getElementById('contenedorDropzone');
             contenedorDropzone.classList.remove('hidden');
             document.getElementById('img_rut').disabled = false;
@@ -332,23 +425,20 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
             const textoEstado = document.getElementById('textoEstadoImagen');
             const subtextoEstado = document.getElementById('subtextoEstadoImagen');
 
-            // Si la ruta ya tiene una imagen guardada
             if (ruta.img_rut && ruta.img_rut.trim() !== '') {
-                imgPrevia.src = '../uploads/rutas/' + ruta.img_rut;
+                imgPrevia.src = '../img/rutas/' + ruta.img_rut;
                 textoEstado.innerText = "Imagen Actual de la Ruta";
                 subtextoEstado.innerText = "Para cambiarla, primero elimine la actual.";
                 
                 contenedorImagen.classList.remove('hidden');
                 contenedorImagen.classList.add('flex');
                 
-                // Ocultar zona de carga para no permitir subir otra
                 contenedorDropzone.classList.add('hidden');
                 document.getElementById('img_rut').disabled = true;
             } else {
                 contenedorImagen.classList.add('hidden');
                 contenedorImagen.classList.remove('flex');
                 
-                // Mostrar zona de carga
                 contenedorDropzone.classList.remove('hidden');
                 document.getElementById('img_rut').disabled = false;
             }
@@ -361,34 +451,80 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
             drawer.classList.add('translate-x-0');
         }
 
-        function eliminarImagenActual() {
-            // Marcar flag para que el backend borre la imagen
-            document.getElementById('eliminar_imagen').value = '1';
+        function verDetallesRuta(ruta) {
+            document.getElementById('detallesTitulo').innerText = "Ruta: " + ruta.nom_rut;
+            document.getElementById('detOrigen').innerText = ruta.ori_rut;
+            document.getElementById('detDestino').innerText = ruta.des_rut;
+            document.getElementById('detDistancia').innerText = ruta.dis_rut + " km";
+            document.getElementById('detPrecio').innerText = "$" + strFormatNumber(ruta.val_rut);
+
+            const imgAmpliada = document.getElementById('imgDetalleAmpliada');
+            if (ruta.img_rut && ruta.img_rut.trim() !== '') {
+                imgAmpliada.src = '../img/rutas/' + ruta.img_rut;
+            } else {
+                imgAmpliada.src = 'https://via.placeholder.com/600x300?text=Sin+Imagen+de+Despacho';
+            }
+
+            const modal = document.getElementById('modalVerDetalles');
+            const caja = document.getElementById('cajaDetalles');
+            const overlay = document.getElementById('overlayRuta');
+
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100', 'pointer-events-auto');
+
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                caja.classList.remove('scale-95');
+            }, 10);
+        }
+
+        function cerrarModalDetalles() {
+            const modal = document.getElementById('modalVerDetalles');
+            const caja = document.getElementById('cajaDetalles');
             
-            // Ocultar previsualización
-            const contenedorImagen = document.getElementById('contenedorImagenActual');
-            contenedorImagen.classList.add('hidden');
-            contenedorImagen.classList.remove('flex');
-
-            // Limpiar archivo seleccionado previo si lo había
-            const fileInput = document.getElementById('img_rut');
-            fileInput.value = '';
-            fileInput.disabled = false;
-
-            // Habilitar y mostrar la zona de carga para subir una nueva
-            const contenedorDropzone = document.getElementById('contenedorDropzone');
-            contenedorDropzone.classList.remove('hidden');
-
-            document.getElementById('nombreArchivoSeleccionado').innerText = '';
+            caja.classList.add('scale-95');
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                cerrarTodosLosModales();
+            }, 200);
         }
 
         function cerrarModalRuta() {
             const drawer = document.getElementById('drawerRuta');
-            const overlay = document.getElementById('overlayRuta');
             drawer.classList.remove('translate-x-0');
             drawer.classList.add('translate-x-full');
+            cerrarTodosLosModales();
+        }
+
+        function cerrarTodosLosModales() {
+            const overlay = document.getElementById('overlayRuta');
             overlay.classList.remove('opacity-100', 'pointer-events-auto');
             overlay.classList.add('opacity-0', 'pointer-events-none');
+            
+            const drawer = document.getElementById('drawerRuta');
+            drawer.classList.add('translate-x-full');
+
+            const modal = document.getElementById('modalVerDetalles');
+            modal.classList.add('hidden', 'opacity-0');
+        }
+
+        function eliminarImagenActual() {
+            document.getElementById('eliminar_imagen').value = '1';
+            
+            const contenedorImagen = document.getElementById('contenedorImagenActual');
+            contenedorImagen.classList.add('hidden');
+            contenedorImagen.classList.remove('flex');
+
+            const fileInput = document.getElementById('img_rut');
+            fileInput.value = '';
+            fileInput.disabled = false;
+
+            const contenedorDropzone = document.getElementById('contenedorDropzone');
+            contenedorDropzone.classList.remove('hidden');
+
+            document.getElementById('nombreArchivoSeleccionado').innerText = '';
         }
 
         function mostrarNombreArchivo(input) {
@@ -402,7 +538,6 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                 const file = input.files[0];
                 label.innerText = "Archivo seleccionado: " + file.name;
 
-                // Previsualizar la nueva imagen mediante FileReader
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     imgPrevia.src = e.target.result;
@@ -417,8 +552,11 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
             }
         }
 
+        function strFormatNumber(num) {
+            return new Intl.NumberFormat('es-CO').format(num);
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
-            // Drag and Drop funcional en el recuadro
             const dropArea = document.getElementById('labelDropArea');
             const fileInput = document.getElementById('img_rut');
 
@@ -448,56 +586,6 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                     fileInput.files = files;
                     mostrarNombreArchivo(fileInput);
                 }
-            });
-
-            // Control de temas
-            const themeToggleBtn = document.getElementById('theme-toggle');
-            const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
-            const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
-
-            function obtenerTemaActual() {
-                const temaGuardado = localStorage.getItem('theme') || localStorage.getItem('color-theme');
-                if (temaGuardado) return temaGuardado;
-                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            }
-
-            function aplicarTema(esOscuro) {
-                if (esOscuro) {
-                    document.documentElement.classList.add('dark');
-                    if (themeToggleLightIcon) themeToggleLightIcon.classList.remove('hidden');
-                    if (themeToggleDarkIcon) themeToggleDarkIcon.classList.add('hidden');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                    if (themeToggleDarkIcon) themeToggleDarkIcon.classList.remove('hidden');
-                    if (themeToggleLightIcon) themeToggleLightIcon.classList.add('hidden');
-                }
-            }
-
-            function guardarYNotificar(modo) {
-                localStorage.setItem('theme', modo);
-                localStorage.setItem('color-theme', modo);
-                aplicarTema(modo === 'dark');
-                window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: modo } }));
-            }
-
-            aplicarTema(obtenerTemaActual() === 'dark');
-
-            if (themeToggleBtn) {
-                themeToggleBtn.addEventListener('click', function() {
-                    const esActualmenteOscuro = document.documentElement.classList.contains('dark');
-                    const nuevoTema = esActualmenteOscuro ? 'light' : 'dark';
-                    guardarYNotificar(nuevoTema);
-                });
-            }
-
-            window.addEventListener('storage', function(e) {
-                if (e.key === 'theme' || e.key === 'color-theme') {
-                    aplicarTema(e.newValue === 'dark');
-                }
-            });
-
-            window.addEventListener('themeChanged', function(e) {
-                aplicarTema(e.detail.theme === 'dark');
             });
         });
     </script>

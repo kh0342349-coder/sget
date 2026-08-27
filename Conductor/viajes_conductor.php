@@ -12,7 +12,7 @@ include '../assets/conexion.php';
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Conductor";
 $documento  = $_SESSION['documento'];
 
-// Lógica para finalizar viaje (sigue disponible si hay un viaje activo)
+// Lógica para finalizar viaje
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finalizar_viaje'])) {
     $id_viaje_fin = (int)$_POST['id_viaje'];
     
@@ -38,7 +38,7 @@ if ($result_user && $result_user->num_rows > 0) {
     $id_conductor = $user_data['id_usu'];
 
     // Consulta para obtener TODO el historial de viajes
-    $sql_viajes = "SELECT v.*, r.des_rut, ve.pla_veh, ve.mode_veh,
+    $sql_viajes = "SELECT v.*, r.des_rut, r.nom_rut, ve.pla_veh, ve.mode_veh,
                           (SELECT COUNT(*) FROM reserva WHERE id_via_res = v.id_via) AS num_pasajeros
                    FROM viaje v 
                    JOIN rutas r ON v.id_rut_via = r.id_rut 
@@ -57,6 +57,11 @@ if ($result_user && $result_user->num_rows > 0) {
 
     $stmt_viajes->close();
 }
+
+// Consultas secundarias para el Drawer (+)
+$rutas_select = $conexion->query("SELECT id_rut, nom_rut, val_rut FROM rutas ORDER BY nom_rut ASC");
+$vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = 1 OR est_veh = 'Activo' ORDER BY pla_veh ASC");
+
 $stmt_user->close();
 ?>
 <!DOCTYPE html>
@@ -89,30 +94,83 @@ $stmt_user->close();
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.5);
+        }
+    </style>
 </head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300">
+<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300 relative overflow-x-hidden">
 
     <!-- Carga Sidebar -->
     <?php include 'sidebar.php'; ?>
 
-    <!-- Contenedor Principal (ml-64 para respetar sidebar fixed) -->
-    <main class="flex-1 ml-64 flex flex-col min-h-screen">
+    <!-- Contenedor Principal -->
+    <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
         
        <!-- INCLUSIÓN DEL HEADER DEL CONDUCTOR -->
         <?php include 'header_conductor.php'; ?>
 
         <!-- Cuerpo principal -->
-        <div class="p-8 space-y-6 flex-1">
+        <div class="p-8 space-y-6 flex-1 min-w-0">
             
-            <div>
-                <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Historial de Viajes</h1>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Consulta el registro completo de todos tus viajes realizados y en proceso.</p>
+            <!-- ENCABEZADO CON TITULO, AYUDA (?) Y BOTÓN (+) -->
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-[#1e293b]/50 p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
+                <div>
+                    <div class="flex items-center gap-2.5">
+                        <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Historial de Viajes</h1>
+                        
+                        <!-- BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
+                        <div class="relative group">
+                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
+                                <i class="fas fa-question text-[10px]"></i>
+                            </button>
+
+                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
+                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
+                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía Panel de Conductor
+                                </p>
+                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-plus-circle text-blue-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Solicitar / Programar Viaje (+):</b> Despacha una nueva ruta asignando vehículo y horario.</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-flag-checkered text-rose-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Finalizar Viaje:</b> Marca la llegada a destino del vehículo y libera los cupos.</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-eye text-blue-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Ficha Técnica:</b> Presiona el ojo para revisar los datos técnicos del viaje.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Consulta el registro completo de todos tus viajes realizados y en proceso.</p>
+                </div>
+
+                <!-- BOTÓN PRINCIPAL ACCIÓN CON MODAL DRAWER (+) -->
+                <button onclick="abrirModalSolicitar()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto">
+                    <i class="fas fa-plus-circle text-sm"></i> Programar Viaje
+                </button>
             </div>
             
-            <!-- Tabla -->
+            <!-- Tabla con scrollbar horizontal -->
             <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/5 p-6 rounded-2xl shadow-xl max-w-6xl transition-colors duration-300">
-                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/5">
-                    <table class="w-full text-sm text-left border-collapse">
+                <div class="overflow-x-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-white/5 w-full">
+                    <table class="w-full text-sm text-left border-collapse min-w-[700px]">
                         <thead class="text-slate-500 dark:text-slate-400 uppercase text-[10px] font-black tracking-widest bg-slate-100/70 dark:bg-[#0b0f19]/50 border-b border-slate-200 dark:border-white/5">
                             <tr>
                                 <th class="px-5 py-3.5">Destino / Ruta</th>
@@ -120,12 +178,15 @@ $stmt_user->close();
                                 <th class="px-5 py-3.5">Vehículo</th>
                                 <th class="px-5 py-3.5 text-center">Pasajeros</th>
                                 <th class="px-5 py-3.5 text-center">Estado</th>
-                                <th class="px-5 py-3.5 text-center">Acción</th>
+                                <th class="px-5 py-3.5 text-center">Acciones</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-200 dark:divide-white/5 text-slate-700 dark:text-slate-200">
                             <?php if (!empty($viajes_data)): ?>
                                 <?php foreach ($viajes_data as $v): ?>
+                                <?php 
+                                    $jsonViaje = htmlspecialchars(json_encode($v, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
+                                ?>
                                 <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                                     <td class="px-5 py-4 font-bold text-slate-900 dark:text-white capitalize">
                                         <?php echo htmlspecialchars($v['des_rut'] ?? 'N/A', ENT_QUOTES, 'UTF-8'); ?>
@@ -152,7 +213,6 @@ $stmt_user->close();
                                         </div>
                                     </td>
 
-                                    <!-- ESTADO DEL VIAJE -->
                                     <td class="px-5 py-4 text-center">
                                         <?php 
                                             $estado = strtolower(trim($v['est_via'] ?? ''));
@@ -172,18 +232,24 @@ $stmt_user->close();
                                         <?php endif; ?>
                                     </td>
 
-                                    <!-- ACCIÓN DE FINALIZAR -->
                                     <td class="px-5 py-4 text-center">
-                                        <?php if (!in_array(strtolower(trim($v['est_via'] ?? '')), ['finalizado', 'terminado', 'completado', 'cancelado', '0', '2', '3'])): ?>
-                                            <form method="POST" action="" onsubmit="return confirm('¿Deseas dar por finalizado este viaje?');" class="inline-block">
-                                                <input type="hidden" name="id_viaje" value="<?php echo $v['id_via']; ?>">
-                                                <button type="submit" name="finalizar_viaje" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition duration-150 flex items-center gap-1.5 mx-auto">
+                                        <div class="flex items-center justify-center gap-2">
+                                            <button type="button" 
+                                                    data-viaje='<?php echo $jsonViaje; ?>'
+                                                    onclick="verFichaViaje(this)" 
+                                                    class="p-2 bg-blue-500/10 text-blue-600 dark:text-neon-azul hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm cursor-pointer" 
+                                                    title="Ver Ficha Completa">
+                                                <i class="fas fa-eye text-xs"></i>
+                                            </button>
+
+                                            <?php if (!in_array(strtolower(trim($v['est_via'] ?? '')), ['finalizado', 'terminado', 'completado', 'cancelado', '0', '2', '3'])): ?>
+                                                <button type="button" 
+                                                        onclick="confirmarFinalizarViaje(<?php echo $v['id_via']; ?>, '<?php echo htmlspecialchars($v['des_rut'] ?? 'Ruta', ENT_QUOTES, 'UTF-8'); ?>')"
+                                                        class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition duration-150 flex items-center gap-1.5">
                                                     <i class="fas fa-flag-checkered text-xs"></i> Finalizar
                                                 </button>
-                                            </form>
-                                        <?php else: ?>
-                                            <span class="text-slate-400 dark:text-slate-600 text-xs italic">-</span>
-                                        <?php endif; ?>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -202,8 +268,266 @@ $stmt_user->close();
         </div>
     </main>
 
-    <!-- JavaScript para Toggle de Modo Oscuro / Claro Sincronizado -->
+    <!-- OVERLAY GENERAL PARA MODALES Y PANEL LATERAL -->
+    <div id="overlayConductor" onclick="cerrarTodosModales()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+
+    <!-- MODAL POP-UP DE FICHA DE INFORMACIÓN -->
+    <div id="modalFichaViaje" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
+        <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300" id="modalFichaBox">
+            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 dark:text-neon-azul flex items-center justify-center text-xs">
+                        <i class="fas fa-bus"></i>
+                    </div>
+                    <h3 id="detRuta" class="font-extrabold text-slate-900 dark:text-white text-base capitalize"></h3>
+                </div>
+                <button onclick="cerrarModalFicha()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-all">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3.5 text-xs">
+                <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5">
+                    <i class="fas fa-shuttle-van text-blue-500 text-base w-5 text-center"></i>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Vehículo & Placa</p>
+                        <p id="detVehiculo" class="font-mono font-bold text-slate-800 dark:text-slate-100 mt-0.5"></p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5">
+                    <i class="far fa-calendar-alt text-blue-500 text-base w-5 text-center"></i>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Fecha y Hora</p>
+                        <p id="detFecha" class="font-medium text-slate-800 dark:text-slate-100 mt-0.5"></p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5">
+                    <i class="fas fa-users text-emerald-500 text-base w-5 text-center"></i>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Pasajeros Reservados</p>
+                        <p id="detPasajeros" class="font-bold text-emerald-600 dark:text-emerald-400 mt-0.5"></p>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="cerrarModalFicha()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer">
+                Cerrar Ficha
+            </button>
+        </div>
+    </div>
+
+    <!-- PANEL LATERAL DESLIZANTE (DRAWER (+)) DE PROGRAMACIÓN -->
+    <aside id="drawerProgramar" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
+        <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
+            <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-neon-morado"></div>
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-blue-500/10 text-blue-500 dark:text-neon-azul rounded-xl flex items-center justify-center border border-slate-100 dark:border-white/5">
+                    <i class="fas fa-bus text-base"></i>
+                </div>
+                <div>
+                    <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Programar Nuevo Viaje</h3>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Despachar ruta para tu vehículo</p>
+                </div>
+            </div>
+            <button onclick="cerrarModalDrawer()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-all">
+                <i class="fas fa-times text-sm"></i>
+            </button>
+        </div>
+
+        <div class="p-6 flex-1 overflow-y-auto space-y-5">
+            <form id="formProgramarConductor" action="guardar_viaje.php" method="POST" class="space-y-4">
+                <input type="hidden" name="id_usu_via" value="<?php echo $id_conductor ?? ''; ?>">
+
+                <div class="space-y-1.5">
+                    <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Seleccionar Ruta</label>
+                    <select name="id_rut_via" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
+                        <option value="">Selecciona tu ruta...</option>
+                        <?php 
+                        if($rutas_select) {
+                            $rutas_select->data_seek(0);
+                            while($r = $rutas_select->fetch_assoc()) {
+                                echo '<option value="'.$r['id_rut'].'">'.htmlspecialchars($r['nom_rut']).'</option>';
+                            }
+                        }
+                        ?>
+                    </select>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Vehículo Asignado</label>
+                    <select name="id_veh_via" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
+                        <option value="">Selecciona tu vehículo...</option>
+                        <?php 
+                        if($vehiculos_select) {
+                            $vehiculos_select->data_seek(0);
+                            while($v = $vehiculos_select->fetch_assoc()) {
+                                echo '<option value="'.$v['id_veh'].'">Placa: '.htmlspecialchars($v['pla_veh']).'</option>';
+                            }
+                        }
+                        ?>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1.5">
+                        <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Fecha Salida</label>
+                        <input type="date" name="fec_via" id="input_fec_conductor" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hora Salida</label>
+                        <input type="time" name="hor_sal_via" id="input_hor_conductor" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-black/10 flex gap-3">
+            <button type="button" onclick="cerrarModalDrawer()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 rounded-xl font-bold text-xs uppercase tracking-wider transition-all">
+                Cancelar
+            </button>
+            <button type="submit" form="formProgramarConductor" class="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-500/20 hover:opacity-95 transition-all">
+                Iniciar Despacho
+            </button>
+        </div>
+    </aside>
+
+    <!-- MODAL POP-UP CONFIRMACIÓN FINALIZAR VIAJE -->
+    <div id="modalConfirmarFin" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
+        <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300 text-center" id="modalConfirmBox">
+            <div class="w-12 h-12 bg-rose-500/10 text-rose-500 rounded-2xl flex items-center justify-center text-xl mx-auto border border-rose-500/20">
+                <i class="fas fa-flag-checkered"></i>
+            </div>
+
+            <div>
+                <h3 class="font-extrabold text-slate-900 dark:text-white text-base">¿Finalizar Viaje?</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" id="txtConfirmDestino"></p>
+            </div>
+
+            <form method="POST" action="" id="formFinalizarViajeModal">
+                <input type="hidden" name="id_viaje" id="inputFinalizarId">
+                <input type="hidden" name="finalizar_viaje" value="1">
+
+                <div class="flex gap-3">
+                    <button type="button" onclick="cerrarModalConfirmar()" class="flex-1 py-2.5 bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl uppercase tracking-wider">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl uppercase tracking-wider shadow-lg shadow-rose-600/20">
+                        Sí, Finalizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- CONTROLADORES JAVASCRIPT -->
     <script>
+        function abrirModalSolicitar() {
+            const drawer = document.getElementById('drawerProgramar');
+            const overlay = document.getElementById('overlayConductor');
+
+            const hoy = new Date();
+            const fechaHoy = hoy.toISOString().split('T')[0];
+            const horaHoy = hoy.toTimeString().split(' ')[0].substring(0, 5);
+
+            document.getElementById('input_fec_conductor').value = fechaHoy;
+            document.getElementById('input_fec_conductor').min = fechaHoy;
+            document.getElementById('input_hor_conductor').value = horaHoy;
+
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100', 'pointer-events-auto');
+
+            drawer.classList.remove('translate-x-full');
+            drawer.classList.add('translate-x-0');
+        }
+
+        function cerrarModalDrawer() {
+            const drawer = document.getElementById('drawerProgramar');
+            const overlay = document.getElementById('overlayConductor');
+
+            drawer.classList.remove('translate-x-0');
+            drawer.classList.add('translate-x-full');
+
+            overlay.classList.remove('opacity-100', 'pointer-events-auto');
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function verFichaViaje(btn) {
+            const v = JSON.parse(btn.getAttribute('data-viaje'));
+            document.getElementById('detRuta').innerText = v.des_rut || 'Sin Destino';
+            document.getElementById('detVehiculo').innerText = (v.pla_veh || 'N/A') + ' - ' + (v.mode_veh || '');
+            document.getElementById('detFecha').innerText = v.fec_via + ' ' + (v.hor_sal_via || '');
+            document.getElementById('detPasajeros').innerText = (v.num_pasajeros || 0) + ' pasajeros a bordo';
+
+            const overlay = document.getElementById('overlayConductor');
+            const modal = document.getElementById('modalFichaViaje');
+            const box = document.getElementById('modalFichaBox');
+
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100', 'pointer-events-auto');
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100', 'pointer-events-auto');
+
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function cerrarModalFicha() {
+            const overlay = document.getElementById('overlayConductor');
+            const modal = document.getElementById('modalFichaViaje');
+            const box = document.getElementById('modalFichaBox');
+
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+
+            modal.classList.remove('opacity-100', 'pointer-events-auto');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+
+            overlay.classList.remove('opacity-100', 'pointer-events-auto');
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function confirmarFinalizarViaje(idViaje, nombreRuta) {
+            document.getElementById('inputFinalizarId').value = idViaje;
+            document.getElementById('txtConfirmDestino').innerText = 'Confirma que el vehículo llegó a su destino (' + nombreRuta + ') para liberar la unidad.';
+
+            const overlay = document.getElementById('overlayConductor');
+            const modal = document.getElementById('modalConfirmarFin');
+            const box = document.getElementById('modalConfirmBox');
+
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100', 'pointer-events-auto');
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100', 'pointer-events-auto');
+
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function cerrarModalConfirmar() {
+            const overlay = document.getElementById('overlayConductor');
+            const modal = document.getElementById('modalConfirmarFin');
+            const box = document.getElementById('modalConfirmBox');
+
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+
+            modal.classList.remove('opacity-100', 'pointer-events-auto');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+
+            overlay.classList.remove('opacity-100', 'pointer-events-auto');
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function cerrarTodosModales() {
+            cerrarModalDrawer();
+            cerrarModalFicha();
+            cerrarModalConfirmar();
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const themeToggleBtn = document.getElementById('theme-toggle');
             const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');

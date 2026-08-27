@@ -63,6 +63,23 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
         }
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.5);
+        }
+    </style>
 </head>
 <body class="bg-slate-100 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen flex antialiased transition-colors duration-300">
 
@@ -70,20 +87,28 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
     <?php include 'sidebar.php'; ?>
 
     <!-- Contenedor Principal -->
-    <main class="flex-1 ml-64 flex flex-col min-h-screen">
+    <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
         
         <!-- 2. HEADER REUTILIZABLE -->
         <?php include 'header.php'; ?>
 
         <!-- 3. CONTENIDO PRINCIPAL DE LA VISTA -->
-        <div class="p-8 max-w-[1600px] w-full mx-auto space-y-6 flex-grow">
+        <div class="p-8 max-w-[1600px] w-full mx-auto space-y-6 flex-grow min-w-0 overflow-x-hidden">
             
             <div class="flex flex-col md:flex-row justify-between md:items-center gap-4">
                 <div>
-                    <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                        Administración de Usuarios
-                    </h1>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">
+                    <div class="flex items-center gap-2.5">
+                        <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                            Administración de Usuarios
+                        </h1>
+
+                        <!-- BOTÓN DE AYUDA PRINCIPAL DE LA CABECERA -->
+                        <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
+                            <i class="fas fa-question text-[10px]"></i>
+                        </button>
+                    </div>
+                    
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
                         Visualice, registre, filtre y edite la información del personal en SGET.
                     </p>
                 </div>
@@ -133,7 +158,7 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
                 </div>
             </div>
 
-            <!-- TARJETAS METRICAS RESUMEN (MEJORA DEL SISTEMA) -->
+            <!-- TARJETAS MÉTRICAS RESUMEN -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="bg-white dark:bg-[#1e293b] p-4 rounded-2xl border border-slate-200 dark:border-white/10 shadow-sm flex items-center gap-3">
                     <div class="w-10 h-10 bg-red-500/10 text-red-500 rounded-xl flex items-center justify-center font-bold text-lg"><i class="fas fa-user-shield"></i></div>
@@ -165,18 +190,18 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
                 </div>
             </div>
 
-            <!-- SISTEMA DE PESTAÑAS (TABS) -->
-            <div class="border-b border-slate-200 dark:border-white/10 flex flex-wrap gap-2">
-                <button onclick="cambiarPestana('tab-admins')" id="btn-tab-admins" class="pestana-btn flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all duration-200 text-neon-azul border-neon-azul">
+            <!-- SISTEMA DE PESTAÑAS (TABS) CON DESPLAZAMIENTO HORIZONTAL EN MÓVIL -->
+            <div class="border-b border-slate-200 dark:border-white/10 flex overflow-x-auto custom-scrollbar gap-2 pb-1">
+                <button onclick="cambiarPestana('tab-admins')" id="btn-tab-admins" class="pestana-btn flex items-center gap-2 px-5 py-3 text-sm font-bold border-b-2 transition-all duration-200 text-neon-azul border-neon-azul shrink-0">
                     <i class="fas fa-user-shield"></i> Administradores (<?php echo count($admins); ?>)
                 </button>
-                <button onclick="cambiarPestana('tab-conductores')" id="btn-tab-conductores" class="pestana-btn flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all duration-200">
+                <button onclick="cambiarPestana('tab-conductores')" id="btn-tab-conductores" class="pestana-btn flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all duration-200 shrink-0">
                     <i class="fas fa-id-card"></i> Conductores (<?php echo count($conductores); ?>)
                 </button>
-                <button onclick="cambiarPestana('tab-pasajeros')" id="btn-tab-pasajeros" class="pestana-btn flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all duration-200">
+                <button onclick="cambiarPestana('tab-pasajeros')" id="btn-tab-pasajeros" class="pestana-btn flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all duration-200 shrink-0">
                     <i class="fas fa-walking"></i> Pasajeros (<?php echo count($pasajeros); ?>)
                 </button>
-                <button onclick="cambiarPestana('tab-desactivados')" id="btn-tab-desactivados" class="pestana-btn flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-red-500 transition-all duration-200">
+                <button onclick="cambiarPestana('tab-desactivados')" id="btn-tab-desactivados" class="pestana-btn flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 border-transparent text-slate-500 dark:text-slate-400 hover:text-red-500 transition-all duration-200 shrink-0">
                     <i class="fas fa-user-slash"></i> Desactivados (<?php echo count($desactivados); ?>)
                 </button>
             </div>
@@ -195,16 +220,48 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
                 ?>
                 <!-- Pestaña Rol Activo -->
                 <section id="<?php echo $idTab; ?>" class="seccion-tab <?php echo $s['visible'] ? '' : 'hidden'; ?> space-y-4">
-                    <div class="flex justify-end items-center px-2">
+                    
+                    <!-- BOTÓN AGREGAR Y BOTÓN DE AYUDA EXPLICATIVO DE LA TABLA Y MÓDULO -->
+                    <div class="flex justify-end items-center gap-2 px-2">
+                        
+                        <!-- SEGUNDO BOTÓN (?) CON TARJETA DE AYUDA SOBRE TODO EL MÓDULO Y LA TABLA -->
+                        <div class="relative group">
+                            <button type="button" class="w-8 h-8 rounded-xl bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-neon-azul dark:hover:text-neon-azul border border-slate-300 dark:border-slate-700 transition-all flex items-center justify-center text-xs font-bold cursor-pointer shadow-sm">
+                                <i class="fas fa-question"></i>
+                            </button>
+
+                            <!-- TARJETA FLOTANTE CON LA GUÍA DE LA TABLA Y EL MÓDULO -->
+                            <div class="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
+                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
+                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía general del módulo
+                                </p>
+                                <p class="text-slate-500 dark:text-slate-300 leading-relaxed mb-2">
+                                    Este módulo centraliza la gestión del personal en <b>SGET</b> junto con sus registros en la tabla inferior:
+                                </p>
+                                <ul class="space-y-1.5 text-slate-600 dark:text-slate-300 leading-normal">
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-user-plus text-emerald-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Agregar:</b> Despliega el panel lateral para registrar un nuevo usuario con su rol.</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-edit text-neon-azul mt-0.5 shrink-0"></i>
+                                        <span><b>Tabla & Acciones:</b> Permite editar datos personales o alternar el estado (Activo/Inactivo) de cada cuenta.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- BOTÓN DE ACCIÓN PRINCIPAL -->
                         <button onclick="abrirModalCrear(<?php echo $s['id_rol']; ?>)" 
                                class="text-xs font-bold bg-gradient-to-r <?php echo $s['color']; ?> text-white px-4 py-2.5 rounded-xl transition-all duration-300 shadow-md hover:opacity-90 flex items-center gap-2 tracking-wide uppercase">
                             <i class="fas fa-plus"></i> Agregar <?php echo $s['label']; ?>
                         </button>
                     </div>
 
+                    <!-- CONTENEDOR CON DESPLAZAMIENTO HORIZONTAL (OVERFLOW-X-AUTO) -->
                     <div class="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl overflow-hidden transition-colors duration-300">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse whitespace-nowrap tabla-datos">
+                        <div class="overflow-x-auto custom-scrollbar w-full">
+                            <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px] tabla-datos">
                                 <thead>
                                     <tr class="bg-slate-50 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/10">
                                         <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Documento</th>
@@ -235,9 +292,7 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
                                         <td class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 italic dato-buscar"><?php echo $u['corre_usu']; ?></td>
                                         <td class="px-6 py-4 text-center">
                                             <div class="flex items-center justify-center gap-4">
-                                                <!-- BOTÓN CAMBIAR ESTADO / SUSPENDER CON VALIDACIÓN DE AUTOSUSPENSIÓN -->
                                                 <?php if($u['num_doc_usu'] == $documento): ?>
-                                                    <!-- Si es el propio Administrador Logueado -->
                                                     <button onclick="bloquearAutoSuspension()" 
                                                             class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-slate-400 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 cursor-not-allowed opacity-60" 
                                                             title="No puedes suspender tu propio perfil de administrador">
@@ -272,8 +327,8 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
                 <!-- Pestaña Desactivados -->
                 <section id="tab-desactivados" class="seccion-tab hidden space-y-4">
                     <div class="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl overflow-hidden transition-colors duration-300">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse whitespace-nowrap tabla-datos">
+                        <div class="overflow-x-auto custom-scrollbar w-full">
+                            <table class="w-full text-left border-collapse whitespace-nowrap min-w-[700px] tabla-datos">
                                 <thead>
                                     <tr class="bg-slate-50 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/10">
                                         <th class="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Documento</th>
@@ -320,7 +375,7 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
         </footer>
     </main>
 
-    <!-- ==================== PANEL LATERAL DERECHO: CREACIÓN ==================== -->
+    <!-- PANEL LATERAL DERECHO: CREACIÓN -->
     <div id="modalCrear" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end hidden opacity-0 transition-opacity duration-300">
         <div class="bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 w-full max-w-md h-full p-6 shadow-2xl space-y-6 overflow-y-auto transform translate-x-full transition-transform duration-300" id="panelCrearContenido">
             <div class="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-4">
@@ -384,7 +439,7 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
         </div>
     </div>
 
-    <!-- ==================== PANEL LATERAL DERECHO: EDICIÓN ==================== -->
+    <!-- PANEL LATERAL DERECHO: EDICIÓN -->
     <div id="modalEditar" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end hidden opacity-0 transition-opacity duration-300">
         <div class="bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 w-full max-w-md h-full p-6 shadow-2xl space-y-6 overflow-y-auto transform translate-x-full transition-transform duration-300" id="panelEditarContenido">
             <div class="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-4">
@@ -430,7 +485,6 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
                         <option value="2">Conductor</option>
                         <option value="3">Pasajero</option>
                     </select>
-                    <!-- MENSAJE INFORMATIVO EN CASO DE EDITAR UN ADMIN -->
                     <p id="msg_bloqueo_rol" class="hidden text-[11px] text-amber-500 dark:text-amber-400 font-medium mt-1 flex items-center gap-1">
                         <i class="fas fa-exclamation-circle"></i> Los administradores no pueden modificar su propio rol desde esta vista.
                     </p>
@@ -459,7 +513,6 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
         cerrarAlerta('alertaError');
     }, 5000);
 
-    // FUNCIÓN DE AUTO-SUSPENSIÓN BLOQUEADA
     function bloquearAutoSuspension() {
         alert("⚠️ Operación Denegada:\n\nNo puedes suspender tu propia cuenta de administrador mientras mantienes una sesión activa en el sistema.");
     }
@@ -496,12 +549,10 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
         btnActivo.classList.add('text-neon-azul', 'border-neon-azul', 'font-bold');
         btnActivo.classList.remove('border-transparent', 'text-slate-500', 'dark:text-slate-400', 'font-medium');
         
-        // Limpiar búsqueda al cambiar pestaña
         document.getElementById('inputBuscadorLive').value = '';
         filtrarTablaLocal();
     }
 
-    // BUSCADOR DINÁMICO EN TIEMPO REAL
     function filtrarTablaLocal() {
         const query = document.getElementById('inputBuscadorLive').value.toLowerCase();
         const filas = document.querySelectorAll('.seccion-tab:not(.hidden) .fila-usuario');
@@ -516,7 +567,6 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
         });
     }
 
-    // FUNCIONES PANELES LATERALES (MODALES)
     function abrirModalCrear(idRol) {
         document.getElementById('crear_id_rol').value = idRol;
         const modal = document.getElementById('modalCrear');
@@ -542,7 +592,6 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
         selectRol.value = usuario.id_rol_usu;
         inputHiddenRol.value = usuario.id_rol_usu;
 
-        // Si el usuario a editar es ADMINISTRADOR (ID 1), bloquear la alteración del ROL
         if (parseInt(usuario.id_rol_usu) === 1) {
             selectRol.disabled = true;
             selectRol.classList.add('opacity-50', 'cursor-not-allowed');

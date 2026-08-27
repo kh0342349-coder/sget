@@ -1,84 +1,467 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Archivo: header.php
+$nombreRealHeader = isset($_SESSION['nombre_usuario']) ? htmlspecialchars($_SESSION['nombre_usuario']) : "Administrador";
 
-$nombreRealHeader = htmlspecialchars($_SESSION['nombre_usuario'] ?? 'Conductor', ENT_QUOTES, 'UTF-8');
-$inicialUsuario = !empty($nombreRealHeader) ? strtoupper(substr($nombreRealHeader, 0, 1)) : 'C';
+$pagina_titulo = basename($_SERVER['PHP_SELF'], '.php');
+$submodulo = "Inicio";
+
+if ($pagina_titulo === 'admin') $submodulo = "Inicio";
+else if ($pagina_titulo === 'usuarios') $submodulo = "Gestión de Usuarios";
+else if ($pagina_titulo === 'asignaciones') $submodulo = "Asignaciones";
+else if ($pagina_titulo === 'rutas') $submodulo = "Rutas de Transporte";
+else if ($pagina_titulo === 'viajes') $submodulo = "Control de Viajes";
+else if ($pagina_titulo === 'vehiculos') $submodulo = "Inventario de Vehículos";
+else if ($pagina_titulo === 'ranking_conductores') $submodulo = "Calificaciones";
+else if ($pagina_titulo === 'reportes') $submodulo = "Módulo de Reportes";
+
+// Opciones del sistema para el buscador
+$opcionesSGET = [
+    [
+        "titulo"      => "Inicio / Dashboard",
+        "categoria"   => "Principal",
+        "descripcion" => "Vista general del sistema y métricas",
+        "url"         => "admin.php",
+        "icono"       => "fa-chart-pie"
+    ],
+    [
+        "titulo"      => "Gestión de Usuarios",
+        "categoria"   => "Administración",
+        "descripcion" => "Administrar usuarios, roles y accesos",
+        "url"         => "usuarios.php",
+        "icono"       => "fa-users"
+    ],
+    [
+        "titulo"      => "Asignaciones",
+        "categoria"   => "Operaciones",
+        "descripcion" => "Asignar vehículos, rutas y conductores",
+        "url"         => "asignaciones.php",
+        "icono"       => "fa-tasks"
+    ],
+    [
+        "titulo"      => "Rutas de Transporte",
+        "categoria"   => "Rutas",
+        "descripcion" => "Crear, editar y gestionar trayectos",
+        "url"         => "rutas.php",
+        "icono"       => "fa-route"
+    ],
+    [
+        "titulo"      => "Control de Viajes",
+        "categoria"   => "Operaciones",
+        "descripcion" => "Monitoreo y registro de viajes en curso",
+        "url"         => "viajes.php",
+        "icono"       => "fa-bus-alt"
+    ],
+    [
+        "titulo"      => "Inventario de Vehículos",
+        "categoria"   => "Flota",
+        "descripcion" => "Estado de la flota, mantenimiento y fichas",
+        "url"         => "vehiculos.php",
+        "icono"       => "fa-bus"
+    ],
+    [
+        "titulo"      => "Ranking y Calificaciones",
+        "categoria"   => "Calidad",
+        "descripcion" => "Evaluación y puntajes de conductores",
+        "url"         => "ranking_conductores.php",
+        "icono"       => "fa-star"
+    ],
+    [
+        "titulo"      => "Módulo de Reportes",
+        "categoria"   => "Informes",
+        "descripcion" => "Exportar estadísticas e informes generales",
+        "url"         => "reportes.php",
+        "icono"       => "fa-file-invoice"
+    ]
+];
 ?>
 
-<!-- HEADER CONDUCTOR -->
-<header class="h-20 bg-white/80 dark:bg-[#0b0f19]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-8 sticky top-0 z-40 transition-colors duration-300">
+<!-- Inyección de opciones a JavaScript -->
+<script>
+    const OPCIONES_SGET = <?php echo json_encode($opcionesSGET); ?>;
+</script>
+
+<header class="h-16 bg-white/80 dark:bg-[#1e293b]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-6 sticky top-0 z-20 transition-colors duration-300">
     
-    <div class="flex items-center gap-3">
-        <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span class="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase font-mono">Panel de Operaciones</span>
+    <!-- LADO IZQUIERDO: Botón Toggle, Breadcrumb y BUSCADOR -->
+    <div class="flex items-center gap-4 flex-1 max-w-xl">
+        <!-- BOTÓN TOGGLE -->
+        <label for="sidebar-toggle-checkbox" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm cursor-pointer shrink-0" title="Ocultar/Mostrar Menú">
+            <i class="fas fa-bars text-lg"></i>
+        </label>
+
+        <!-- Breadcrumb -->
+        <div class="text-slate-400 dark:text-slate-500 font-medium text-sm tracking-wide hidden lg:block shrink-0">
+            Dashboard &nbsp;/&nbsp; <span class="text-slate-800 dark:text-white font-semibold"><?php echo $submodulo; ?></span>
+        </div>
+
+        <!-- BUSCADOR GLOBAL (HEADER) -->
+        <div class="relative w-full max-w-xs md:max-w-sm ml-2">
+            <div class="relative flex items-center">
+                <i class="fas fa-search absolute left-3.5 text-slate-400 dark:text-slate-500 text-sm pointer-events-none"></i>
+                <input 
+                    type="text" 
+                    id="inputBuscadorHeader" 
+                    placeholder="Buscar función... (Ctrl + K)"
+                    autocomplete="off"
+                    class="w-full pl-9 pr-8 py-2 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 rounded-xl text-xs sm:text-sm text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 dark:focus:border-blue-500 transition-all shadow-inner"
+                >
+                <span id="btnLimpiarBuscador" class="absolute right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs cursor-pointer hidden">
+                    <i class="fas fa-times"></i>
+                </span>
+            </div>
+
+            <!-- RESULTADOS DE BÚSQUEDA -->
+            <div id="resultadosBusquedaHeader" class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden hidden z-50 max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/50">
+            </div>
+        </div>
     </div>
 
-    <div class="flex items-center space-x-5">
-        <!-- Botón de Tema Integrado -->
-        <button type="button" id="themeToggle" class="btn-theme-toggle w-10 h-10 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/10 rounded-xl transition-all duration-200 flex items-center justify-center cursor-pointer shadow-sm" title="Cambiar Tema">
-            <i id="themeIcon" class="fas fa-moon text-base pointer-events-none"></i>
+    <!-- LADO DERECHO: Acciones y Perfil -->
+    <div class="flex items-center space-x-2 sm:space-x-4 shrink-0">
+        
+        <!-- BOTÓN DE AYUDA (SIGNO DE INTERROGACIÓN) -->
+        <div class="relative group shrink-0">
+            <button type="button" onclick="abrirModalAyuda()" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 border border-blue-200 dark:border-blue-800/50 transition-all flex items-center justify-center text-sm shadow-sm cursor-pointer" title="Ayuda de esta sección (F1)">
+                <i class="fas fa-question text-base"></i>
+            </button>
+
+            <!-- TOOLTIP FLOTANTE DE AYUDA -->
+            <div class="absolute right-0 top-full mt-2 w-64 sm:w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
+                <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 dark:border-slate-700">
+                    <span class="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                        <i class="fas fa-info-circle text-blue-500"></i> Ayuda Rápida
+                    </span>
+                    <span class="text-[9px] bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 px-1.5 py-0.5 rounded font-mono font-bold">F1</span>
+                </div>
+                <div id="tooltipResumenAyuda" class="text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Haz clic o presiona <b>F1</b> para ver la guía interactiva del módulo actual.
+                </div>
+            </div>
+        </div>
+
+        <button id="themeToggle" class="text-slate-400 hover:text-amber-400 p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-all duration-200 text-sm" title="Cambiar Tema">
+            <i id="themeIcon" class="fas fa-moon text-base"></i>
         </button>
 
-        <div class="h-8 w-[1px] bg-slate-200 dark:bg-white/10"></div>
-
         <div class="hidden md:block text-right">
-            <p class="text-xs font-bold text-slate-900 dark:text-white leading-tight"><?php echo $nombreRealHeader; ?></p>
-            <p class="text-[10px] text-emerald-500 dark:text-emerald-400 font-extrabold uppercase tracking-widest flex items-center justify-end gap-1 mt-0.5">
+            <p class="text-sm font-bold text-slate-800 dark:text-white"><?php echo $nombreRealHeader; ?></p>
+            <p class="text-[10px] text-emerald-500 dark:text-emerald-400 font-extrabold uppercase tracking-widest flex items-center justify-end gap-1">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 inline-block animate-pulse"></span> Online
             </p>
         </div>
         
-        <!-- Avatar -->
-        <div class="w-9 h-9 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-xl flex items-center justify-center text-white font-black text-sm shadow-md shadow-blue-500/20 shrink-0">
-            <?php echo $inicialUsuario; ?>
+        <div class="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-full flex items-center justify-center text-white font-bold text-base shadow-md shadow-blue-500/20 shrink-0">
+            <?php echo strtoupper(substr($nombreRealHeader, 0, 1)); ?>
         </div>
 
-        <!-- Cerrar Sesión -->
-        <a href="../assets/cerrar.php" class="w-10 h-10 bg-slate-100 dark:bg-white/5 hover:bg-red-500/10 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 border border-slate-200 dark:border-white/10 rounded-xl transition-all duration-200 flex items-center justify-center" title="Cerrar Sesión">
-            <i class="fas fa-sign-out-alt text-base pointer-events-none"></i> 
+        <a href="../assets/cerrar.php" class="flex items-center space-x-1 text-slate-400 hover:text-red-400 p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-xl transition-all duration-200 text-sm" title="Cerrar Sesión">
+            <i class="fas fa-sign-out-alt text-base"></i> 
         </a>
     </div>
 </header>
 
-<!-- SCRIPT AUTOCONTENIDO Y SYNCRONIZADO -->
+<!-- MODAL DE AYUDA CONTEXTUAL -->
+<div id="modalAyudaSGET" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700/60">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                    <i class="fas fa-question text-sm"></i>
+                </div>
+                <h3 class="font-bold text-slate-800 dark:text-white text-base">Guía del Módulo: <span id="tituloModuloAyuda" class="text-blue-600 dark:text-blue-400"><?php echo $submodulo; ?></span></h3>
+            </div>
+            <button onclick="cerrarModalAyuda()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div id="contenidoAyudaModulo" class="text-xs text-slate-600 dark:text-slate-300 space-y-2.5 leading-relaxed">
+        </div>
+
+        <div class="pt-2">
+            <button onclick="cerrarModalAyuda()" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-colors shadow-md shadow-blue-600/20 cursor-pointer">
+                Entendido
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE ADVERTENCIA POR INACTIVIDAD -->
+<div id="inactivityModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl max-w-xs w-full p-4 shadow-xl text-center space-y-3">
+        <h4 class="text-base font-bold text-slate-800 dark:text-white">
+            ¿Estás ahí?
+        </h4>
+
+        <div class="text-xs font-semibold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/40 py-1.5 px-3 rounded-lg border border-red-200 dark:border-red-900/50">
+            Cierre en: <span id="countdownTimer" class="font-bold">30</span> seg
+        </div>
+
+        <button id="btnContinuar" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-sm rounded-lg transition-colors shadow-md shadow-blue-600/20 cursor-pointer">
+            Continuar sesión
+        </button>
+    </div>
+</div>
+
 <script>
-(function() {
-    function actualizarIcono(esOscuro) {
-        const iconos = document.querySelectorAll('#themeIcon, .theme-icon');
-        iconos.forEach(icon => {
-            if (esOscuro) {
-                icon.className = 'fas fa-sun text-amber-400 text-base pointer-events-none';
-            } else {
-                icon.className = 'fas fa-moon text-slate-600 text-base pointer-events-none';
+    // GUÍAS DE CADA MÓDULO DE SGET
+    const GUIA_MODULOS = {
+        'admin': `
+            <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
+            <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
+                <li>Visualizar el estado general y métricas de viajes en tiempo real.</li>
+                <li>Ver resumen de flota activa y alertas del sistema.</li>
+            </ul>`,
+        'usuarios': `
+            <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
+            <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
+                <li>Crear y gestionar cuentas de administradores, conductores y pasajeros.</li>
+                <li>Cambiar permisos, contraseñas y desactivar accesos.</li>
+            </ul>`,
+        'asignaciones': `
+            <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
+            <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
+                <li>Asignar un bus y un conductor a una ruta programada.</li>
+                <li>Verificar horarios y evitar cruce de turnos operacionales.</li>
+            </ul>`,
+        'rutas': `
+            <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
+            <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
+                <li>Crear, editar o desactivar trayectos y líneas de transporte.</li>
+                <li>Definir paradas autorizadas y tiempos estimados.</li>
+            </ul>`,
+        'viajes': `
+            <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
+            <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
+                <li>Monitorear la salida, curso y llegada de los buses.</li>
+                <li>Registrar demoras, desvíos o novedades de tráfico.</li>
+            </ul>`,
+        'vehiculos': `
+            <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
+            <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
+                <li>Administrar las fichas técnicas de los buses y capacidad.</li>
+                <li>Revisar qué vehículos están en mantenimiento técnico.</li>
+            </ul>`,
+        'ranking_conductores': `
+            <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
+            <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
+                <li>Revisar puntuaciones y opiniones dejadas por los pasajeros.</li>
+                <li>Identificar a los conductores mejor calificados.</li>
+            </ul>`,
+        'reportes': `
+            <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
+            <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
+                <li>Generar e imprimir informes operativos por rangos de fecha.</li>
+                <li>Exportar datos sobre flujo de pasajeros y rutas.</li>
+            </ul>`
+    };
+
+    function abrirModalAyuda() {
+        const paginaActual = '<?php echo $pagina_titulo; ?>';
+        const modalAyuda = document.getElementById('modalAyudaSGET');
+        const contenedorTexto = document.getElementById('contenidoAyudaModulo');
+
+        if (modalAyuda && contenedorTexto) {
+            contenedorTexto.innerHTML = GUIA_MODULOS[paginaActual] || '<p>Selecciona un módulo para consultar su guía interactiva.</p>';
+            modalAyuda.classList.remove('hidden');
+        }
+    }
+
+    function cerrarModalAyuda() {
+        const modalAyuda = document.getElementById('modalAyudaSGET');
+        if (modalAyuda) modalAyuda.classList.add('hidden');
+    }
+
+    // Abrir con tecla F1
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'F1') {
+            e.preventDefault();
+            abrirModalAyuda();
+        }
+    });
+
+    // Cargar contenido en tooltip
+    document.addEventListener('DOMContentLoaded', () => {
+        const tooltipBox = document.getElementById('tooltipResumenAyuda');
+        const paginaActual = '<?php echo $pagina_titulo; ?>';
+        if (tooltipBox && GUIA_MODULOS[paginaActual]) {
+            tooltipBox.innerHTML = GUIA_MODULOS[paginaActual];
+        }
+    });
+
+    // --- LÓGICA DE TEMA (MODO OSCURO/CLARO) ---
+    const themeToggleBtn = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+
+    function actualizarIcono(isDark) {
+        if (themeIcon) {
+            themeIcon.className = isDark ? "fas fa-sun text-base text-amber-400" : "fas fa-moon text-base text-slate-600";
+        }
+    }
+
+    actualizarIcono(document.documentElement.classList.contains('dark'));
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            const esOscuro = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', esOscuro ? 'dark' : 'light');
+            actualizarIcono(esOscuro);
+            
+            if (typeof chartInstance !== 'undefined') {
+                chartInstance.options.datasets[0].borderColor = esOscuro ? '#1e293b' : '#ffffff';
+                chartInstance.update();
             }
         });
     }
 
-    document.addEventListener('click', function(e) {
-        const btn = e.target.closest('#themeToggle, #theme-toggle, .btn-theme-toggle');
-        if (!btn) return;
-        
-        e.preventDefault();
-        const esOscuroActualmente = document.documentElement.classList.contains('dark');
-        const nuevoEstado = !esOscuroActualmente;
+    // --- LÓGICA DEL BUSCADOR DE FUNCIONES ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const inputBuscador = document.getElementById('inputBuscadorHeader');
+        const contenedorResultados = document.getElementById('resultadosBusquedaHeader');
+        const btnLimpiar = document.getElementById('btnLimpiarBuscador');
 
-        if (nuevoEstado) {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-            localStorage.setItem('color-theme', 'dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-            localStorage.setItem('color-theme', 'light');
+        if (inputBuscador && contenedorResultados) {
+            // Atajo de teclado: Ctrl + K
+            document.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    inputBuscador.focus();
+                }
+            });
+
+            // Filtrado interactivo
+            inputBuscador.addEventListener('input', function () {
+                const query = this.value.trim().toLowerCase();
+
+                if (btnLimpiar) {
+                    if (query.length > 0) btnLimpiar.classList.remove('hidden');
+                    else btnLimpiar.classList.add('hidden');
+                }
+
+                if (query.length === 0) {
+                    contenedorResultados.innerHTML = '';
+                    contenedorResultados.classList.add('hidden');
+                    return;
+                }
+
+                const coincidencias = OPCIONES_SGET.filter(item =>
+                    item.titulo.toLowerCase().includes(query) ||
+                    item.categoria.toLowerCase().includes(query) ||
+                    item.descripcion.toLowerCase().includes(query)
+                );
+
+                renderizarResultadosBuscador(coincidencias);
+            });
+
+            function renderizarResultadosBuscador(lista) {
+                contenedorResultados.innerHTML = '';
+
+                if (lista.length === 0) {
+                    contenedorResultados.innerHTML = `
+                        <div class="p-4 text-center text-xs text-slate-400 dark:text-slate-500">
+                            No se encontraron funciones asociadas.
+                        </div>`;
+                    contenedorResultados.classList.remove('hidden');
+                    return;
+                }
+
+                lista.forEach(item => {
+                    const enlace = document.createElement('a');
+                    enlace.href = item.url;
+                    enlace.className = 'flex items-center gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors group';
+
+                    enlace.innerHTML = `
+                        <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                            <i class="fas ${item.icono} text-sm"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center justify-between gap-2">
+                                <p class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">${item.titulo}</p>
+                                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 uppercase tracking-wider">${item.categoria}</span>
+                            </div>
+                            <p class="text-[11px] text-slate-400 dark:text-slate-500 truncate mt-0.5">${item.descripcion}</p>
+                        </div>
+                    `;
+                    contenedorResultados.appendChild(enlace);
+                });
+
+                contenedorResultados.classList.remove('hidden');
+            }
+
+            // Ocultar desplegable al hacer clic fuera
+            document.addEventListener('click', (e) => {
+                if (!inputBuscador.contains(e.target) && !contenedorResultados.contains(e.target)) {
+                    contenedorResultados.classList.add('hidden');
+                }
+            });
+
+            // Botón de limpiar input
+            if (btnLimpiar) {
+                btnLimpiar.addEventListener('click', () => {
+                    inputBuscador.value = '';
+                    contenedorResultados.innerHTML = '';
+                    contenedorResultados.classList.add('hidden');
+                    btnLimpiar.classList.add('hidden');
+                    inputBuscador.focus();
+                });
+            }
         }
-
-        actualizarIcono(nuevoEstado);
     });
 
-    document.addEventListener('DOMContentLoaded', function() {
-        actualizarIcono(document.documentElement.classList.contains('dark'));
+    // --- LÓGICA DE INACTIVIDAD Y CUENTA REGRESIVA ---
+    const TOTAL_INACTIVITY_TIME = 3 * 60 * 1000; // 3 minutos
+    const WARNING_TIME = 30 * 1000;              // 30 segundos
+
+    let inactivityTimer;
+    let countdownInterval;
+    let timeLeft = 30;
+
+    const modal = document.getElementById('inactivityModal');
+    const countdownSpan = document.getElementById('countdownTimer');
+    const btnContinuar = document.getElementById('btnContinuar');
+
+    function iniciarTemporizadorInactividad() {
+        clearTimeout(inactivityTimer);
+        clearInterval(countdownInterval);
+        
+        if (modal) modal.classList.add('hidden');
+        
+        inactivityTimer = setTimeout(() => {
+            mostrarAdvertenciaCierre();
+        }, TOTAL_INACTIVITY_TIME - WARNING_TIME);
+    }
+
+    function mostrarAdvertenciaCierre() {
+        timeLeft = 30;
+        if (countdownSpan) countdownSpan.textContent = timeLeft;
+        if (modal) modal.classList.remove('hidden');
+
+        countdownInterval = setInterval(() => {
+            timeLeft--;
+            if (countdownSpan) countdownSpan.textContent = timeLeft;
+
+            if (timeLeft <= 0) {
+                clearInterval(countdownInterval);
+                window.location.href = "../assets/cerrar.php";
+            }
+        }, 1000);
+    }
+
+    const eventosUsuario = ['mousemove', 'mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
+
+    eventosUsuario.forEach(evento => {
+        document.addEventListener(evento, () => {
+            if (modal && modal.classList.contains('hidden')) {
+                iniciarTemporizadorInactividad();
+            }
+        }, true);
     });
-})();
+
+    if (btnContinuar) {
+        btnContinuar.addEventListener('click', () => {
+            iniciarTemporizadorInactividad();
+        });
+    }
+
+    iniciarTemporizadorInactividad();
 </script>

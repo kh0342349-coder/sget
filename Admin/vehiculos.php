@@ -40,7 +40,6 @@ $resultado = $conexion->query($query);
             }
         }
 
-        // Script Anti-Parpadeo de Tema (Idéntico a index.php)
         if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.classList.add('dark');
         } else {
@@ -49,6 +48,21 @@ $resultado = $conexion->query($query);
     </script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.3);
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.5);
+        }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-[#0b0f19] flex min-h-screen antialiased text-slate-800 dark:text-slate-100 transition-colors duration-300 relative overflow-x-hidden">
@@ -57,13 +71,13 @@ $resultado = $conexion->query($query);
     <?php include 'sidebar.php'; ?>
 
     <!-- CONTENEDOR PRINCIPAL -->
-    <div class="flex-1 ml-64 flex flex-col min-h-screen">
+    <div class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
         
         <!-- HEADER ESTANDARIZADO -->
         <?php include 'header.php'; ?>
 
         <!-- ÁREA DE TRABAJO -->
-        <main class="p-8 flex-1 space-y-6 pt-24">
+        <main class="p-8 flex-1 space-y-6 pt-24 min-w-0">
             
             <!-- MENSAJES DE ALERTA -->
             <?php if (isset($_GET['status'])): ?>
@@ -80,21 +94,51 @@ $resultado = $conexion->query($query);
                 <?php endif; ?>
             <?php endif; ?>
 
-            <!-- TÍTULO Y BOTÓN DE ACCIÓN -->
+            <!-- TÍTULO CON BOTÓN DE AYUDA Y BOTÓN DE ACCIÓN -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Control de Flota Móvil</h1>
+                    <div class="flex items-center gap-2.5">
+                        <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">Control de Flota Móvil</h1>
+                        
+                        <!-- 1. MODAL DE AYUDA / TARJETA FLOTANTE -->
+                        <div class="relative group">
+                            <button type="button" class="w-6 h-6 rounded-full bg-sky-500/10 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800/50 hover:bg-sky-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
+                                <i class="fas fa-question text-[10px]"></i>
+                            </button>
+
+                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#121826] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
+                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
+                                    <i class="fas fa-info-circle text-sky-500"></i> Control de Flota Móvil
+                                </p>
+                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-bus text-sky-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Agregar Vehículo:</b> Registra la placa, modelo y cantidad de puestos del microbús o buseta.</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-eye text-amber-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Ficha Técnica:</b> Visualiza los detalles operativos completos mediante la ventana emergente.</span>
+                                    </li>
+                                    <li class="flex items-start gap-1.5">
+                                        <i class="fas fa-toggle-on text-emerald-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Estado Operativo:</b> Habilita o inactiva un vehículo para las asignaciones de viajes.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                     <p class="text-slate-500 dark:text-slate-400 text-xs mt-1">Gestión de unidades de transporte, capacidad de pasajeros y estado operativo del parque automotor.</p>
                 </div>
+
                 <button onclick="abrirModalCrear()" class="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:opacity-95 text-slate-950 font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-sky-500/10 transition-all self-start sm:self-auto cursor-pointer">
                     <i class="fas fa-plus text-sm"></i> Agregar Vehículo
                 </button>
             </div>
 
-            <!-- TABLA DE VEHÍCULOS -->
+            <!-- TABLA DE VEHÍCULOS CON BARRA HORIZONTAL -->
             <div class="bg-white dark:bg-[#121826] rounded-2xl border border-slate-200 dark:border-white/10 shadow-xl overflow-hidden backdrop-blur-sm transition-colors duration-300">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
+                <div class="overflow-x-auto custom-scrollbar w-full">
+                    <table class="w-full text-left border-collapse min-w-[750px]">
                         <thead class="bg-slate-100/70 dark:bg-[#0b0f19]/50 border-b border-slate-200 dark:border-white/10 transition-colors">
                             <tr>
                                 <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ID</th>
@@ -138,6 +182,15 @@ $resultado = $conexion->query($query);
                                     
                                     <td class="px-6 py-4 text-center">
                                         <div class="flex justify-center items-center gap-1.5">
+                                            <!-- Botón Ver Ficha -->
+                                            <button type="button" 
+                                                    onclick="verDetallesVehiculo(<?php echo htmlspecialchars(json_encode($v)); ?>)"
+                                                    class="w-8 h-8 bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 rounded-xl flex items-center justify-center hover:bg-sky-500 hover:text-white transition-all shadow-md cursor-pointer" 
+                                                    title="Ver Ficha Técnica">
+                                                <i class="fas fa-eye text-xs"></i>
+                                            </button>
+
+                                            <!-- Botón Editar -->
                                             <button type="button" 
                                                     onclick="abrirModalEditar(<?php echo htmlspecialchars(json_encode($v)); ?>)"
                                                     class="w-8 h-8 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded-xl flex items-center justify-center hover:bg-amber-500 hover:text-white transition-all shadow-md cursor-pointer" 
@@ -145,6 +198,7 @@ $resultado = $conexion->query($query);
                                                 <i class="fas fa-edit text-xs"></i>
                                             </button>
                                             
+                                            <!-- Botón Cambiar Estado -->
                                             <a href="cambiar_estado_veh.php?id=<?php echo $v['id_veh']; ?>&estado=<?php echo $v['est_veh'] == 1 ? 0 : 1; ?>" 
                                                class="w-8 h-8 flex items-center justify-center rounded-xl border transition-all shadow-md <?php echo $v['est_veh'] == 1 ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 hover:bg-red-500 hover:text-white' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500 hover:text-white'; ?>" 
                                                title="<?php echo $v['est_veh'] == 1 ? 'Retirar de disponibilidad' : 'Habilitar para operaciones'; ?>">
@@ -174,10 +228,57 @@ $resultado = $conexion->query($query);
         </footer>
     </div>
 
-    <!-- OVERLAY PARA EL PANEL LATERAL -->
-    <div id="overlayVehiculo" onclick="cerrarModalVehiculo()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    <!-- OVERLAY PARA MODALES -->
+    <div id="overlayVehiculo" onclick="cerrarTodosModales()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-    <!-- PANEL LATERAL DESLIZANTE -->
+    <!-- 2. MODAL POP-UP DETALLES / FICHA TÉCNICA -->
+    <div id="modalDetalleVehiculo" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
+        <div class="bg-white dark:bg-[#121826] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300" id="modalDetalleBox">
+            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 flex items-center justify-center text-xs">
+                        <i class="fas fa-bus"></i>
+                    </div>
+                    <h3 id="detPlaca" class="font-extrabold text-slate-900 dark:text-white text-base font-mono"></h3>
+                </div>
+                <button onclick="cerrarModalDetalles()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-all">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-3.5 text-xs">
+                <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5">
+                    <i class="fas fa-car text-sky-500 text-base w-5 text-center"></i>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Línea / Modelo</p>
+                        <p id="detModelo" class="font-semibold text-slate-800 dark:text-slate-100 mt-0.5"></p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5">
+                    <i class="fas fa-users text-sky-500 text-base w-5 text-center"></i>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Capacidad Autorizada</p>
+                        <p id="detCapacidad" class="font-mono font-bold text-slate-800 dark:text-slate-100 mt-0.5"></p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5">
+                    <i class="fas fa-signal text-sky-500 text-base w-5 text-center"></i>
+                    <div>
+                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Estado Operativo</p>
+                        <p id="detEstado" class="font-bold mt-0.5"></p>
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="cerrarModalDetalles()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer">
+                Cerrar Ficha
+            </button>
+        </div>
+    </div>
+
+    <!-- 3. PANEL LATERAL DESLIZANTE (DRAWER) -->
     <aside id="drawerVehiculo" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#121826] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
         
         <div class="p-6 border-b border-slate-200 dark:border-white/10 flex items-center justify-between relative">
@@ -237,7 +338,7 @@ $resultado = $conexion->query($query);
         </div>
     </aside>
 
-    <!-- CONTROLADORES JAVASCRIPT Y SINCRONIZADOR DE TEMA -->
+    <!-- CONTROLADORES JAVASCRIPT -->
     <script>
         function abrirDrawer() {
             const drawer = document.getElementById('drawerVehiculo');
@@ -259,6 +360,54 @@ $resultado = $conexion->query($query);
 
             overlay.classList.remove('opacity-100', 'pointer-events-auto');
             overlay.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function verDetallesVehiculo(v) {
+            document.getElementById('detPlaca').innerText = 'Placa: ' + v.pla_veh;
+            document.getElementById('detModelo').innerText = v.mode_veh;
+            document.getElementById('detCapacidad').innerText = v.cap_veh + ' Pasajeros';
+            
+            const elEstado = document.getElementById('detEstado');
+            if (v.est_veh == 1) {
+                elEstado.innerText = 'Disponible';
+                elEstado.className = 'font-bold text-emerald-500 mt-0.5';
+            } else {
+                elEstado.innerText = 'Fuera de Servicio';
+                elEstado.className = 'font-bold text-red-500 mt-0.5';
+            }
+
+            const overlay = document.getElementById('overlayVehiculo');
+            const modal = document.getElementById('modalDetalleVehiculo');
+            const box = document.getElementById('modalDetalleBox');
+
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.classList.add('opacity-100', 'pointer-events-auto');
+
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100', 'pointer-events-auto');
+
+            box.classList.remove('scale-95');
+            box.classList.add('scale-100');
+        }
+
+        function cerrarModalDetalles() {
+            const overlay = document.getElementById('overlayVehiculo');
+            const modal = document.getElementById('modalDetalleVehiculo');
+            const box = document.getElementById('modalDetalleBox');
+
+            box.classList.remove('scale-100');
+            box.classList.add('scale-95');
+
+            modal.classList.remove('opacity-100', 'pointer-events-auto');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+
+            overlay.classList.remove('opacity-100', 'pointer-events-auto');
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+        }
+
+        function cerrarTodosModales() {
+            cerrarModalVehiculo();
+            cerrarModalDetalles();
         }
 
         function abrirModalCrear() {
@@ -291,7 +440,6 @@ $resultado = $conexion->query($query);
             abrirDrawer();
         }
 
-        // Observador que actualiza el localStorage si el botón de header/sidebar conmuta la clase 'dark'
         const observer = new MutationObserver(() => {
             if (document.documentElement.classList.contains('dark')) {
                 localStorage.setItem('theme', 'dark');
