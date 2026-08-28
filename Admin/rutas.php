@@ -268,7 +268,7 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
         </div>
 
         <div class="p-6 flex-1 overflow-y-auto space-y-5">
-            <form id="formNuevaRuta" action="guardar_ruta.php" method="POST" enctype="multipart/form-data" class="space-y-5">
+            <form id="formNuevaRuta" action="procesar_guardado.php" method="POST" enctype="multipart/form-data" class="space-y-5">
                 
                 <!-- ID Oculto para Edición -->
                 <input type="hidden" name="id_rut" id="id_rut" value="">

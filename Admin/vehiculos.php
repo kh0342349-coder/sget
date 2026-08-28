@@ -298,7 +298,7 @@ $resultado = $conexion->query($query);
         </div>
 
         <div class="p-6 flex-1 overflow-y-auto space-y-5">
-            <form id="formVehiculo" action="guardar_vehiculo.php" method="POST" class="space-y-4">
+            <form id="formVehiculo" action="procesar_guardado.php" method="POST" class="space-y-4">
                 
                 <input type="hidden" name="id_veh" id="input_id_veh" value="">
 
@@ -425,7 +425,7 @@ $resultado = $conexion->query($query);
         }
 
         function abrirModalEditar(datos) {
-            document.getElementById('formVehiculo').action = 'actualizar_vehiculo.php';
+            document.getElementById('formVehiculo').action = 'procesar_actualizacion.php';
             document.getElementById('drawerTitulo').innerText = 'Editar Vehículo';
             document.getElementById('drawerSubtitulo').innerText = 'Modificar ID: #' + datos.id_veh;
             document.getElementById('drawerIcono').className = 'fas fa-edit text-base';

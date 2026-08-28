@@ -12,18 +12,21 @@ $documento_sesion = $_SESSION['documento'];
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Pasajero";
 
 // 1. OBTENER ID REAL DEL USUARIO (PASAJERO)
-$query_user = $conexion->query("SELECT id_usu FROM usuario WHERE num_doc_usu = '$documento_sesion'");
 $id_pasajero = 0;
-if ($query_user && $query_user->num_rows > 0) {
-    $user_data = $query_user->fetch_assoc();
-    $id_pasajero = $user_data['id_usu'];
+$stmt_user = $conexion->prepare("SELECT id_usu FROM usuario WHERE num_doc_usu = ?");
+$stmt_user->bind_param("s", $documento_sesion);
+$stmt_user->execute();
+$res_user = $stmt_user->get_result();
+if ($res_user && $res_user->num_rows > 0) {
+    $id_pasajero = $res_user->fetch_assoc()['id_usu'];
 }
+$stmt_user->close();
 
 // Capturamos los datos que vienen por la URL (GET)
 $id_via = $_GET['id_via'] ?? null;
 $id_cond = $_GET['id_cond'] ?? null;
 
-// Bandera para saber si los datos están listos
+// Bandera para saber si los datos vienen por parámetro
 $parametros_validos = ($id_via && $id_cond);
 $conductor = "Conductor";
 
@@ -39,9 +42,33 @@ if ($parametros_validos) {
     $stmt_cond->close();
 }
 
-// HISTORIAL DE RESEÑAS REALIZADAS POR ESTE PASAJERO
-$historial_resenas = [];
+// 2. VIAJES PENDIENTES POR CALIFICAR
+$viajes_pendientes = [];
+if ($id_pasajero > 0 && !$parametros_validos) {
+    // Consulta sin la columna v.fech_via para evitar errores SQL
+    $sql_pendientes = "SELECT v.id_via, v.id_usu_via AS id_cond, u.nom_usu AS nombre_conductor, r.nom_rut
+                       FROM reserva res
+                       INNER JOIN viaje v ON res.id_via_res = v.id_via
+                       INNER JOIN usuario u ON v.id_usu_via = u.id_usu
+                       LEFT JOIN rutas r ON v.id_rut_via = r.id_rut
+                       LEFT JOIN calificacion c ON (c.id_via_cal = v.id_via AND c.id_usu_rem = res.id_usu_res)
+                       WHERE res.id_usu_res = ? 
+                         AND c.id_cal IS NULL
+                       ORDER BY v.id_via DESC";
 
+    if ($stmt_pend = $conexion->prepare($sql_pendientes)) {
+        $stmt_pend->bind_param("i", $id_pasajero);
+        $stmt_pend->execute();
+        $res_pend = $stmt_pend->get_result();
+        while ($row = $res_pend->fetch_assoc()) {
+            $viajes_pendientes[] = $row;
+        }
+        $stmt_pend->close();
+    }
+}
+
+// 3. HISTORIAL DE RESEÑAS REALIZADAS POR ESTE PASAJERO
+$historial_resenas = [];
 if ($id_pasajero > 0) {
     $sql_historial = "SELECT c.*, u.nom_usu AS nombre_conductor 
                       FROM calificacion c 
@@ -90,7 +117,6 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             }
         }
     </script>
-    <!-- SCRIPT ANTI-FLASHEO -->
     <script>
         if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.classList.add('dark');
@@ -99,46 +125,24 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
         }
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        .custom-scrollbar::-webkit-scrollbar {
-            height: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background: rgba(148, 163, 184, 0.3);
-            border-radius: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background: rgba(56, 189, 248, 0.5);
-        }
-    </style>
 </head>
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300 relative overflow-x-hidden">
 
-    <!-- INCLUSIÓN DIRECTA DEL SIDEBAR -->
     <?php include 'sidebar.php'; ?>
 
-    <!-- MAIN CON MARGEN IZQUIERDO PARA ALINEARSE AL SIDEBAR FIJO -->
     <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
-        
-        <!-- HEADER ESTANDARIZADO MODULAR -->
         <?php include 'header.php'; ?>
 
-        <!-- CONTENIDO PRINCIPAL -->
         <div class="flex-1 max-w-5xl w-full mx-auto p-6 md:p-8 space-y-8 min-w-0">
             
-            <!-- ENCABEZADO CON TITULO, AYUDA (?) Y PROGRAMACIÓN (+) -->
+            <!-- ENCABEZADO DE LA SECCIÓN -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-[#1e293b]/50 p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
                 <div>
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Calificación de Servicio</h1>
                         
-                        <!-- 1. BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
                         <div class="relative group">
-                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
+                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold cursor-pointer">
                                 <i class="fas fa-question text-[10px]"></i>
                             </button>
 
@@ -149,11 +153,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                 <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
                                     <li class="flex items-start gap-1.5">
                                         <i class="fas fa-star text-amber-400 mt-0.5 shrink-0"></i>
-                                        <span><b>Evaluación:</b> Tu puntuación directa ayuda a calificar la puntualidad y atención del conductor.</span>
-                                    </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-eye text-blue-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Ficha de Opinión:</b> Revisa las opiniones enviadas con el botón de lectura rápida.</span>
+                                        <span><b>Evaluación:</b> Selecciona tus estrellas y deja un comentario del trayecto.</span>
                                     </li>
                                 </ul>
                             </div>
@@ -162,21 +162,21 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Registra tu opinión del trayecto y consulta el historial enviado.</p>
                 </div>
 
-                <!-- BOTÓN PRINCIPAL ACCIÓN CON MODAL DRAWER (+) -->
-                <button onclick="abrirModalReservaCalificacion()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto">
+                <button onclick="abrirModalReservaCalificacion()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap">
                     <i class="fas fa-plus-circle text-sm"></i> Buscar Rutas
                 </button>
             </div>
 
-            <!-- FORMULARIO DE CALIFICACIÓN / AVISO -->
-            <div class="flex flex-col items-center justify-center">
+            <!-- CONTENEDOR DE FORMULARIO O LISTA DE PENDIENTES -->
+            <div class="w-full">
                 <?php if ($parametros_validos): ?>
-                    <div class="max-w-md w-full bg-white dark:bg-[#1e293b] rounded-[2rem] shadow-xl p-8 border border-slate-200 dark:border-white/5 transition-colors duration-300">
+                    <!-- FORMULARIO DIRECTO CUANDO HAY PARAMETROS GET -->
+                    <div class="max-w-md w-full mx-auto bg-white dark:bg-[#1e293b] rounded-[2rem] shadow-xl p-8 border border-slate-200 dark:border-white/5 transition-colors duration-300">
                         <div class="text-center mb-6">
                             <div class="w-16 h-16 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4">
                                 <i class="fas fa-star"></i>
                             </div>
-                            <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Calificar Servicio</h1>
+                            <h2 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Calificar Servicio</h2>
                             <p class="text-slate-500 dark:text-slate-400 text-xs mt-1.5">Tu opinión sobre <strong class="text-blue-600 dark:text-blue-400"><?php echo htmlspecialchars($conductor, ENT_QUOTES, 'UTF-8'); ?></strong> es muy valiosa.</p>
                         </div>
 
@@ -187,7 +187,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                             <div>
                                 <label class="text-[10px] font-black uppercase text-slate-400 mb-2 ml-2 block tracking-widest">Puntuación</label>
                                 <div class="relative">
-                                    <select name="puntos" required class="w-full bg-slate-100 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3.5 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition appearance-none cursor-pointer">
+                                    <select name="puntos" required class="w-full bg-slate-100 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3.5 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:border-blue-500 transition appearance-none cursor-pointer">
                                         <option value="5">⭐⭐⭐⭐⭐ Excelente</option>
                                         <option value="4">⭐⭐⭐⭐ Muy Bueno</option>
                                         <option value="3">⭐⭐⭐ Regular</option>
@@ -202,31 +202,63 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
                             <div>
                                 <label class="text-[10px] font-black uppercase text-slate-400 mb-2 ml-2 block tracking-widest">¿Algo que destacar?</label>
-                                <textarea name="comentario" rows="3" placeholder="Ej: Muy puntual y amable..." class="w-full bg-slate-100 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3.5 text-xs font-medium text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition resize-none"></textarea>
+                                <textarea name="comentario" rows="3" placeholder="Ej: Muy puntual y amable..." class="w-full bg-slate-100 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3.5 text-xs font-medium text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-blue-500 transition resize-none"></textarea>
                             </div>
 
                             <div class="flex flex-col gap-2 pt-2">
-                                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-200 shadow-md">
+                                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition duration-200 shadow-md cursor-pointer">
                                     Enviar Calificación
                                 </button>
+                                <a href="calificar.php" class="w-full text-center text-xs text-slate-400 hover:underline mt-2">Volver al panel</a>
                             </div>
                         </form>
                     </div>
 
                 <?php else: ?>
-                    <div class="max-w-md w-full bg-white dark:bg-[#1e293b] rounded-[2rem] shadow-xl p-8 border border-slate-200 dark:border-white/5 text-center transition-colors duration-300">
-                        <div class="w-16 h-16 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4">
-                            <i class="fas fa-info-circle"></i>
+                    <!-- TARJETA DE VIAJES PENDIENTES POR CALIFICAR -->
+                    <div class="w-full bg-white dark:bg-[#1e293b] rounded-[2rem] shadow-xl p-8 border border-slate-200 dark:border-white/5 transition-colors duration-300">
+                        <div class="flex items-center justify-between mb-6 pb-4 border-b border-slate-200 dark:border-slate-800">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 bg-amber-500/10 text-amber-500 rounded-xl flex items-center justify-center text-lg">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div>
+                                    <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Viajes Pendientes por Calificar</h2>
+                                    <p class="text-slate-500 dark:text-slate-400 text-xs">Selecciona un viaje para calificar el servicio</p>
+                                </div>
+                            </div>
+                            <span class="text-xs font-bold px-3 py-1 bg-amber-500/10 text-amber-500 rounded-full">
+                                Pendientes: <?php echo count($viajes_pendientes); ?>
+                            </span>
                         </div>
-                        <h1 class="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Calificar un Servicio</h1>
-                        <p class="text-slate-500 dark:text-slate-400 text-xs mt-3 leading-relaxed">
-                            Para calificar un servicio, dirígete a la sección de tu <strong class="text-slate-700 dark:text-slate-200">Historial de Viajes</strong> y haz clic en el botón <span class="text-yellow-600 dark:text-yellow-400 font-bold">"Calificar"</span> en los viajes completados.
-                        </p>
-                        <div class="mt-6">
-                            <a href="historial_pasajero.php" class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition duration-200">
-                                Ir a mis viajes
-                            </a>
-                        </div>
+
+                        <?php if (empty($viajes_pendientes)): ?>
+                            <div class="text-center py-8 text-slate-400 dark:text-slate-500">
+                                <i class="fas fa-check-circle text-3xl mb-2 block text-emerald-500"></i>
+                                <p class="text-xs font-medium">¡Todo en orden! No tienes viajes pendientes por calificar.</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <?php foreach ($viajes_pendientes as $vp): ?>
+                                    <div class="p-5 rounded-2xl bg-slate-50 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
+                                        <div>
+                                            <p class="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                                                <?php echo htmlspecialchars($vp['nom_rut'] ?? 'Ruta General', ENT_QUOTES, 'UTF-8'); ?>
+                                            </p>
+                                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
+                                                <i class="fas fa-user-circle text-blue-500"></i> Conductor: <strong><?php echo htmlspecialchars($vp['nombre_conductor'], ENT_QUOTES, 'UTF-8'); ?></strong>
+                                            </p>
+                                            <span class="text-[10px] text-slate-400 mt-1 block">
+                                                <i class="fas fa-hashtag"></i> Viaje #<?php echo $vp['id_via']; ?>
+                                            </span>
+                                        </div>
+                                        <a href="calificar.php?id_via=<?php echo $vp['id_via']; ?>&id_cond=<?php echo $vp['id_cond']; ?>" class="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl shadow-md transition-all whitespace-nowrap">
+                                            Calificar
+                                        </a>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
             </div>
@@ -266,21 +298,14 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                                 Conductor: <?php echo htmlspecialchars($resena['nombre_conductor'] ?? 'Por asignar', ENT_QUOTES, 'UTF-8'); ?>
                                             </p>
                                             <span class="text-[10px] text-slate-400 mt-0.5 block">
-                                                <?php 
-                                                    $fecha = !empty($resena['fech_cal']) ? date('d/m/Y - h:i A', strtotime($resena['fech_cal'])) : 'Registrado';
-                                                    echo $fecha;
-                                                ?>
+                                                <?php echo !empty($resena['fech_cal']) ? date('d/m/Y - h:i A', strtotime($resena['fech_cal'])) : 'Registrado'; ?>
                                             </span>
                                         </div>
                                         <div class="flex text-yellow-400 text-xs">
                                             <?php 
                                                 $pts = (int)($resena['puntos_cal'] ?? 5);
                                                 for ($i = 1; $i <= 5; $i++) {
-                                                    if ($i <= $pts) {
-                                                        echo '<i class="fas fa-star"></i>';
-                                                    } else {
-                                                        echo '<i class="far fa-star text-slate-300 dark:text-slate-700"></i>';
-                                                    }
+                                                    echo ($i <= $pts) ? '<i class="fas fa-star"></i>' : '<i class="far fa-star text-slate-300 dark:text-slate-700"></i>';
                                                 }
                                             ?>
                                         </div>
@@ -310,7 +335,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
     <!-- OVERLAY GENERAL PARA MODALES -->
     <div id="overlayCalificacion" onclick="cerrarTodosModalesCalificacion()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-    <!-- 2. MODAL POP-UP DE LECTURA COMPLETA DE OPINIÓN -->
+    <!-- MODAL POP-UP DE LECTURA COMPLETA -->
     <div id="modalLecturaOpinion" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300" id="modalOpinionBox">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
@@ -346,7 +371,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
         </div>
     </div>
 
-    <!-- 3. PANEL LATERAL DESLIZANTE (DRAWER (+)) DE BÚSQUEDA Y RESERVA -->
+    <!-- PANEL LATERAL DESLIZANTE (DRAWER) DE BÚSQUEDA Y RESERVA -->
     <aside id="drawerReservaCalificacion" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-neon-morado"></div>

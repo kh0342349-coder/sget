@@ -329,7 +329,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
         </div>
 
         <div class="p-6 flex-1 overflow-y-auto space-y-5">
-            <form id="formViaje" action="guardar_viaje.php" method="POST" class="space-y-4">
+            <form id="formViaje" action="procesar_guardado.php" method="POST" class="space-y-4">
                 
                 <input type="hidden" name="id_via" id="input_id_via" value="">
 
@@ -509,7 +509,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
 
         function abrirModalEditarBtn(btn) {
             const datos = JSON.parse(btn.getAttribute('data-viaje'));
-            document.getElementById('formViaje').action = 'actualizar_viaje.php';
+            document.getElementById('formViaje').action = 'procesar_actualizacion.php';
             document.getElementById('drawerTitulo').innerText = 'Editar Parámetros de Viaje';
             document.getElementById('drawerSubtitulo').innerText = 'Modificar ID: #' + datos.id_via;
             document.getElementById('drawerIcono').className = 'fas fa-pen text-base';

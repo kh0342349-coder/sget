@@ -97,13 +97,4 @@ $paginaActual = basename($_SERVER['PHP_SELF']);
         </nav>
     </div>
 
-    <!-- Botón Inferior de Salida -->
-    <div class="p-4 border-t border-slate-200 dark:border-white/5">
-        <a href="../logout.php" 
-           class="flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-xs text-red-500 hover:bg-red-500/10 transition-all">
-            <i class="fas fa-sign-out-alt text-sm"></i>
-            <span>Cerrar Sesión</span>
-        </a>
-    </div>
-
 </aside>

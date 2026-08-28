@@ -385,7 +385,7 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
                 <button onclick="cerrarModal('modalCrear')" class="text-slate-400 hover:text-white p-2"><i class="fas fa-times text-base"></i></button>
             </div>
 
-            <form action="guardar_usuario.php" method="POST" class="space-y-4">
+            <form action="procesar_guardado.php" method="POST" class="space-y-4">
                 <input type="hidden" name="accion" value="crear">
                 
                 <div class="grid grid-cols-2 gap-4">
@@ -449,7 +449,7 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
                 <button onclick="cerrarModal('modalEditar')" class="text-slate-400 hover:text-white p-2"><i class="fas fa-times text-base"></i></button>
             </div>
 
-            <form action="actualizar_usuario.php" method="POST" class="space-y-4">
+            <form action="procesar_actualizacion.php" method="POST" class="space-y-4">
                 <input type="hidden" name="accion" value="editar">
                 <input type="hidden" name="id_rol_usu_real" id="edit_id_rol_usu_real">
                 
@@ -529,7 +529,7 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
         let mensajeAdvertencia = `⚠️ ADVERTENCIA: ¿Está completamente seguro de que desea ${accion} al usuario con documento ${documentoUsuario}?\n\nEsta acción modificará el acceso del usuario en el sistema SGET.`;
         
         if (confirm(mensajeAdvertencia)) {
-            window.location.href = `actualizar_estado.php?doc=${documentoUsuario}&nuevo_estado=${nuevoEstado}`;
+            window.location.href = `procesar_actualizacion.php?doc=${documentoUsuario}&nuevo_estado=${nuevoEstado}`;
         }
     }
 
