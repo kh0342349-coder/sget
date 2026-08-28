@@ -5,12 +5,13 @@ include 'assets/conexion.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Nombres alineados con los inputs del formulario en modal_auth.php
-    $tip_doc    = trim($_POST['tipo_doc'] ?? '');
-    $num_doc    = trim($_POST['documento'] ?? '');
-    $nombre     = trim($_POST['nom_usu'] ?? '');
-    $correo     = trim($_POST['corre_usu'] ?? '');
-    $clave      = $_POST['clave_usu'] ?? '';
-    $conf_clave = $_POST['confirmar_clave'] ?? '';
+    $tip_doc         = trim($_POST['tipo_doc'] ?? '');
+    $num_doc         = trim($_POST['documento'] ?? '');
+    $nombre          = trim($_POST['nom_usu'] ?? '');
+    $correo          = trim($_POST['corre_usu'] ?? '');
+    $clave           = $_POST['clave_usu'] ?? '';
+    $conf_clave      = $_POST['confirmar_clave'] ?? '';
+    $acepta_politica = isset($_POST['acepta_politica']) ? 1 : 0;
 
     // 1. Validar campos vacíos
     if (empty($tip_doc) || empty($num_doc) || empty($nombre) || empty($correo) || empty($clave) || empty($conf_clave)) {
@@ -20,7 +21,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    // 2. Validar coincidencia de contraseñas
+    // 2. Validar aceptación de la política de tratamiento de datos
+    if (!$acepta_politica) {
+        $_SESSION['msg_registro'] = "Debe aceptar la política de tratamiento de datos personales para registrarse.";
+        $_SESSION['msg_registro_abrir'] = true;
+        header('Location: index.php');
+        exit();
+    }
+
+    // 3. Validar coincidencia de contraseñas
     if ($clave !== $conf_clave) {
         $_SESSION['msg_registro'] = "Las contraseñas ingresadas no coinciden.";
         $_SESSION['msg_registro_abrir'] = true;
@@ -28,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    // 3. Verificar si el documento o correo ya existen
+    // 4. Verificar si el documento o correo ya existen
     $stmt_check = $conexion->prepare("SELECT id_usu FROM usuario WHERE num_doc_usu = ? OR corre_usu = ?");
     $stmt_check->bind_param("ss", $num_doc, $correo);
     $stmt_check->execute();
@@ -43,14 +52,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $stmt_check->close();
 
-    // 4. Hash de contraseña y valores por defecto
-    $hash_clave = password_hash($clave, PASSWORD_DEFAULT);
-    $id_rol     = 3; // 3 = Pasajero
-    $estado     = 1; // 1 = Activo
+    // 5. Hash de contraseña, fechas y valores por defecto
+    $hash_clave   = password_hash($clave, PASSWORD_DEFAULT);
+    $id_rol       = 3; // 3 = Pasajero
+    $estado       = 1; // 1 = Activo
+    $fecha_actual = date('Y-m-d H:i:s');
 
-    // 5. Insertar usuario
-    $stmt_insert = $conexion->prepare("INSERT INTO usuario (tip_doc_usu, num_doc_usu, nom_usu, corre_usu, pass_usu, id_rol_usu, estado) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt_insert->bind_param("sssssii", $tip_doc, $num_doc, $nombre, $correo, $hash_clave, $id_rol, $estado);
+    // 6. Insertar usuario registrando la aceptación de la política y fecha
+    $stmt_insert = $conexion->prepare("INSERT INTO usuario (tip_doc_usu, num_doc_usu, nom_usu, corre_usu, pass_usu, id_rol_usu, estado, acepta_politica, fecha_acepta_politica) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt_insert->bind_param("sssssiiis", $tip_doc, $num_doc, $nombre, $correo, $hash_clave, $id_rol, $estado, $acepta_politica, $fecha_actual);
 
     if ($stmt_insert->execute()) {
         // ÉXITO: envía mensaje exitoso y abre directamente el modal de LOGIN

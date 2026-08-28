@@ -1,12 +1,23 @@
 <?php
-// Archivo: header.php
-$nombreRealHeader = isset($_SESSION['nombre_usuario']) ? htmlspecialchars($_SESSION['nombre_usuario']) : "Administrador";
+// Archivo: header.php (Ubicado dentro de Admin/, Conductor/ o Pasajero/)
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// 1. Cargar conexión y helper usando __DIR__ para garantizar la ruta saliendo de la carpeta del rol
+require_once __DIR__ . '/../assets/conexion.php';
+require_once __DIR__ . '/../helpers/AuthHelper.php';
+
+$idUsuarioSesion = $_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 0;
+$nombreRealHeader = isset($_SESSION['nombre_usuario']) ? htmlspecialchars($_SESSION['nombre_usuario']) : "Usuario SGET";
 
 $pagina_titulo = basename($_SERVER['PHP_SELF'], '.php');
 $submodulo = "Inicio";
 
-if ($pagina_titulo === 'admin') $submodulo = "Inicio";
+if ($pagina_titulo === 'admin' || $pagina_titulo === 'conductor' || $pagina_titulo === 'pasajero') $submodulo = "Inicio";
 else if ($pagina_titulo === 'usuarios') $submodulo = "Gestión de Usuarios";
+else if ($pagina_titulo === 'gestion_permisos') $submodulo = "Gestión de Permisos";
 else if ($pagina_titulo === 'asignaciones') $submodulo = "Asignaciones";
 else if ($pagina_titulo === 'rutas') $submodulo = "Rutas de Transporte";
 else if ($pagina_titulo === 'viajes') $submodulo = "Control de Viajes";
@@ -14,87 +25,109 @@ else if ($pagina_titulo === 'vehiculos') $submodulo = "Inventario de Vehículos"
 else if ($pagina_titulo === 'ranking_conductores') $submodulo = "Calificaciones";
 else if ($pagina_titulo === 'reportes') $submodulo = "Módulo de Reportes";
 
-// Opciones del sistema para el buscador
-$opcionesSGET = [
+// 2. Catálogo global con restricción de permisos
+$catalogoOpcionesSGET = [
     [
         "titulo"      => "Inicio / Dashboard",
         "categoria"   => "Principal",
         "descripcion" => "Vista general del sistema y métricas",
         "url"         => "admin.php",
-        "icono"       => "fa-chart-pie"
+        "icono"       => "fa-chart-pie",
+        "permiso"     => null
     ],
     [
         "titulo"      => "Gestión de Usuarios",
         "categoria"   => "Administración",
         "descripcion" => "Administrar usuarios, roles y accesos",
         "url"         => "usuarios.php",
-        "icono"       => "fa-users"
+        "icono"       => "fa-users",
+        "permiso"     => "gestionar_permisos"
+    ],
+    [
+        "titulo"      => "Gestión de Permisos",
+        "categoria"   => "Administración",
+        "descripcion" => "Configurar switches y restricciones dinámicas",
+        "url"         => "gestion_permisos.php",
+        "icono"       => "fa-key",
+        "permiso"     => "gestionar_permisos"
     ],
     [
         "titulo"      => "Asignaciones",
         "categoria"   => "Operaciones",
         "descripcion" => "Asignar vehículos, rutas y conductores",
         "url"         => "asignaciones.php",
-        "icono"       => "fa-tasks"
+        "icono"       => "fa-tasks",
+        "permiso"     => "asignar_conductor"
     ],
     [
         "titulo"      => "Rutas de Transporte",
         "categoria"   => "Rutas",
         "descripcion" => "Crear, editar y gestionar trayectos",
         "url"         => "rutas.php",
-        "icono"       => "fa-route"
+        "icono"       => "fa-route",
+        "permiso"     => "crear_ruta"
     ],
     [
         "titulo"      => "Control de Viajes",
         "categoria"   => "Operaciones",
         "descripcion" => "Monitoreo y registro de viajes en curso",
         "url"         => "viajes.php",
-        "icono"       => "fa-bus-alt"
+        "icono"       => "fa-bus-alt",
+        "permiso"     => "crear_viaje"
     ],
     [
         "titulo"      => "Inventario de Vehículos",
         "categoria"   => "Flota",
         "descripcion" => "Estado de la flota, mantenimiento y fichas",
         "url"         => "vehiculos.php",
-        "icono"       => "fa-bus"
+        "icono"       => "fa-bus",
+        "permiso"     => "registrar_vehiculo"
     ],
     [
         "titulo"      => "Ranking y Calificaciones",
         "categoria"   => "Calidad",
         "descripcion" => "Evaluación y puntajes de conductores",
         "url"         => "ranking_conductores.php",
-        "icono"       => "fa-star"
+        "icono"       => "fa-star",
+        "permiso"     => null
     ],
     [
         "titulo"      => "Módulo de Reportes",
         "categoria"   => "Informes",
         "descripcion" => "Exportar estadísticas e informes generales",
         "url"         => "reportes.php",
-        "icono"       => "fa-file-invoice"
+        "icono"       => "fa-file-invoice",
+        "permiso"     => "ver_reportes"
     ]
 ];
+
+// 3. Filtrar según los permisos concedidos en la base de datos
+$opcionesSGET = [];
+foreach ($catalogoOpcionesSGET as $opcion) {
+    if ($opcion['permiso'] === null || AuthHelper::tienePermiso($conexion, $idUsuarioSesion, $opcion['permiso'])) {
+        $opcionesSGET[] = $opcion;
+    }
+}
 ?>
 
-<!-- Inyección de opciones a JavaScript -->
+<!-- Inyección JS -->
 <script>
     const OPCIONES_SGET = <?php echo json_encode($opcionesSGET); ?>;
 </script>
 
 <header class="h-16 bg-white/80 dark:bg-[#1e293b]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-6 sticky top-0 z-20 transition-colors duration-300">
     
-    <!-- LADO IZQUIERDO: Botón Toggle, Breadcrumb y BUSCADOR -->
+    <!-- BARRA IZQUIERDA -->
     <div class="flex items-center gap-4 flex-1 max-w-xl">
-        <!-- BOTÓN TOGGLE -->
         <label for="sidebar-toggle-checkbox" class="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors shadow-sm cursor-pointer shrink-0" title="Ocultar/Mostrar Menú">
             <i class="fas fa-bars text-lg"></i>
         </label>
 
-        <!-- Breadcrumb -->
         <div class="text-slate-400 dark:text-slate-500 font-medium text-sm tracking-wide hidden lg:block shrink-0">
             Dashboard &nbsp;/&nbsp; <span class="text-slate-800 dark:text-white font-semibold"><?php echo $submodulo; ?></span>
         </div>
 
-        <!-- BUSCADOR GLOBAL (HEADER) -->
+        <!-- BUSCADOR CON ATÁJO CTRL + K -->
         <div class="relative w-full max-w-xs md:max-w-sm ml-2">
             <div class="relative flex items-center">
                 <i class="fas fa-search absolute left-3.5 text-slate-400 dark:text-slate-500 text-sm pointer-events-none"></i>
@@ -110,22 +143,19 @@ $opcionesSGET = [
                 </span>
             </div>
 
-            <!-- RESULTADOS DE BÚSQUEDA -->
             <div id="resultadosBusquedaHeader" class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden hidden z-50 max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700/50">
             </div>
         </div>
     </div>
 
-    <!-- LADO DERECHO: Acciones y Perfil -->
+    <!-- ACCIONES Y PERFIL DERECHO -->
     <div class="flex items-center space-x-2 sm:space-x-4 shrink-0">
         
-        <!-- BOTÓN DE AYUDA (SIGNO DE INTERROGACIÓN) -->
         <div class="relative group shrink-0">
             <button type="button" onclick="abrirModalAyuda()" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 border border-blue-200 dark:border-blue-800/50 transition-all flex items-center justify-center text-sm shadow-sm cursor-pointer" title="Ayuda de esta sección (F1)">
                 <i class="fas fa-question text-base"></i>
             </button>
 
-            <!-- TOOLTIP FLOTANTE DE AYUDA -->
             <div class="absolute right-0 top-full mt-2 w-64 sm:w-72 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl p-3 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
                 <div class="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-100 dark:border-slate-700">
                     <span class="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
@@ -160,7 +190,7 @@ $opcionesSGET = [
     </div>
 </header>
 
-<!-- MODAL DE AYUDA CONTEXTUAL -->
+<!-- MODAL DE AYUDA -->
 <div id="modalAyudaSGET" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
         <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700/60">
@@ -204,7 +234,6 @@ $opcionesSGET = [
 </div>
 
 <script>
-    // GUÍAS DE CADA MÓDULO DE SGET
     const GUIA_MODULOS = {
         'admin': `
             <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
@@ -217,6 +246,12 @@ $opcionesSGET = [
             <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
                 <li>Crear y gestionar cuentas de administradores, conductores y pasajeros.</li>
                 <li>Cambiar permisos, contraseñas y desactivar accesos.</li>
+            </ul>`,
+        'gestion_permisos': `
+            <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
+            <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
+                <li>Activar o desactivar funciones específicas por usuario.</li>
+                <li>Habilitar o restringir accesos a módulos del sistema en tiempo real.</li>
             </ul>`,
         'asignaciones': `
             <p class="font-semibold text-slate-700 dark:text-slate-200">En esta sección puedes:</p>
@@ -272,7 +307,6 @@ $opcionesSGET = [
         if (modalAyuda) modalAyuda.classList.add('hidden');
     }
 
-    // Abrir con tecla F1
     document.addEventListener('keydown', (e) => {
         if (e.key === 'F1') {
             e.preventDefault();
@@ -280,7 +314,6 @@ $opcionesSGET = [
         }
     });
 
-    // Cargar contenido en tooltip
     document.addEventListener('DOMContentLoaded', () => {
         const tooltipBox = document.getElementById('tooltipResumenAyuda');
         const paginaActual = '<?php echo $pagina_titulo; ?>';
@@ -289,7 +322,7 @@ $opcionesSGET = [
         }
     });
 
-    // --- LÓGICA DE TEMA (MODO OSCURO/CLARO) ---
+    // SISTEMA DE CAMBIO DE TEMA
     const themeToggleBtn = document.getElementById('themeToggle');
     const themeIcon = document.getElementById('themeIcon');
 
@@ -314,14 +347,13 @@ $opcionesSGET = [
         });
     }
 
-    // --- LÓGICA DEL BUSCADOR DE FUNCIONES ---
+    // BUSCADOR EN TIEMPO REAL
     document.addEventListener('DOMContentLoaded', () => {
         const inputBuscador = document.getElementById('inputBuscadorHeader');
         const contenedorResultados = document.getElementById('resultadosBusquedaHeader');
         const btnLimpiar = document.getElementById('btnLimpiarBuscador');
 
         if (inputBuscador && contenedorResultados) {
-            // Atajo de teclado: Ctrl + K
             document.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
                     e.preventDefault();
@@ -329,7 +361,6 @@ $opcionesSGET = [
                 }
             });
 
-            // Filtrado interactivo
             inputBuscador.addEventListener('input', function () {
                 const query = this.value.trim().toLowerCase();
 
@@ -359,7 +390,7 @@ $opcionesSGET = [
                 if (lista.length === 0) {
                     contenedorResultados.innerHTML = `
                         <div class="p-4 text-center text-xs text-slate-400 dark:text-slate-500">
-                            No se encontraron funciones asociadas.
+                            No tienes permisos habilitados para esta función.
                         </div>`;
                     contenedorResultados.classList.remove('hidden');
                     return;
@@ -388,14 +419,12 @@ $opcionesSGET = [
                 contenedorResultados.classList.remove('hidden');
             }
 
-            // Ocultar desplegable al hacer clic fuera
             document.addEventListener('click', (e) => {
                 if (!inputBuscador.contains(e.target) && !contenedorResultados.contains(e.target)) {
                     contenedorResultados.classList.add('hidden');
                 }
             });
 
-            // Botón de limpiar input
             if (btnLimpiar) {
                 btnLimpiar.addEventListener('click', () => {
                     inputBuscador.value = '';
@@ -408,9 +437,9 @@ $opcionesSGET = [
         }
     });
 
-    // --- LÓGICA DE INACTIVIDAD Y CUENTA REGRESIVA ---
-    const TOTAL_INACTIVITY_TIME = 3 * 60 * 1000; // 3 minutos
-    const WARNING_TIME = 30 * 1000;              // 30 segundos
+    // TEMPORIZADOR DE INACTIVIDAD DE 3 MINUTOS
+    const TOTAL_INACTIVITY_TIME = 3 * 60 * 1000;
+    const WARNING_TIME = 30 * 1000;
 
     let inactivityTimer;
     let countdownInterval;

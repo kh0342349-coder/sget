@@ -264,12 +264,78 @@ if (!$resultado_viajes) {
 
     </main>
 
-    <footer class="p-6 text-center text-slate-500 dark:text-slate-400 text-xs font-semibold border-t border-slate-200 dark:border-white/10 bg-white/50 dark:bg-[#0b0f19]/50">
+    <!-- FOOTER CON ENLACE LEGAL -->
+    <footer class="p-6 text-center text-slate-500 dark:text-slate-400 text-xs font-semibold border-t border-slate-200 dark:border-white/10 bg-white/50 dark:bg-[#0b0f19]/50 flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto w-full gap-4">
         <p>&copy; 2026 SGET - Sistema de Gestión de Transporte. Todos los derechos reservados.</p>
+        <div>
+            <button onclick="abrirPanel('panelPolitica')" class="hover:text-sky-500 underline transition-colors cursor-pointer">
+                Tratamiento de Datos Personales (Ley 1581)
+            </button>
+        </div>
     </footer>
 
     <!-- INCLUSIÓN DEL MODAL AUTENTICACIÓN -->
     <?php include 'modal_auth.php'; ?>
+
+    <!-- MODAL POLÍTICA DE TRATAMIENTO DE DATOS -->
+    <div id="panelPolitica" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 modal-isla-container opacity-0 pointer-events-none hidden transition-opacity duration-300">
+        <div class="modal-isla-card bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[85vh] flex flex-col transform scale-95 transition-transform duration-300">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/10">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-lg">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Tratamiento de Datos Personales</h3>
+                        <p class="text-[11px] font-bold text-slate-400">Cumplimiento Ley 1581 de 2012</p>
+                    </div>
+                </div>
+                <button onclick="cerrarPanel('panelPolitica')" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+
+            <!-- CUERPO DE LA POLÍTICA -->
+            <div class="my-4 overflow-y-auto pr-2 space-y-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                <div>
+                    <h4 class="font-extrabold text-slate-900 dark:text-white text-sm mb-1">1. Responsable del Tratamiento</h4>
+                    <p>El sistema **SGET (Sistema de Gestión de Transporte)** actúa como responsable del tratamiento de sus datos personales recolectados a través de esta plataforma digital.</p>
+                </div>
+
+                <div>
+                    <h4 class="font-extrabold text-slate-900 dark:text-white text-sm mb-1">2. Finalidad de la Recolección</h4>
+                    <p>Los datos solicitados (nombre completo, documento de identidad, correo electrónico y número celular) serán tratados exclusivamente para:</p>
+                    <ul class="list-disc list-inside mt-1 space-y-0.5 ml-2">
+                        <li>Creación y validación de la cuenta de usuario.</li>
+                        <li>Gestión, reserva y control de cupos en viajes y rutas.</li>
+                        <li>Notificaciones operativas sobre itinerarios y novedades del servicio.</li>
+                        <li>Seguridad del sistema e identificación de perfiles de acceso.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4 class="font-extrabold text-slate-900 dark:text-white text-sm mb-1">3. Derechos del Titular (Habeas Data)</h4>
+                    <p>De conformidad con la normatividad vigente, como titular de los datos usted tiene derecho a:</p>
+                    <ul class="list-disc list-inside mt-1 space-y-0.5 ml-2">
+                        <li>Conocer, actualizar y rectificar sus datos personales.</li>
+                        <li>Solicitar prueba de la autorización otorgada.</li>
+                        <li>Revocar la autorización y/o solicitar la supresión de sus datos cuando sea procedente.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4 class="font-extrabold text-slate-900 dark:text-white text-sm mb-1">4. Seguridad y Confidencialidad</h4>
+                    <p>SGET implementa protocolos técnicos de cifrado y medidas de seguridad digital para prevenir el acceso no autorizado, la alteración o la filtración de la información de los usuarios.</p>
+                </div>
+            </div>
+
+            <div class="pt-4 border-t border-slate-100 dark:border-white/10 flex justify-end">
+                <button onclick="cerrarPanel('panelPolitica')" class="px-5 py-2.5 rounded-xl bg-slate-900 text-white dark:bg-sky-500 dark:text-slate-950 font-extrabold text-xs hover:opacity-90 transition-all cursor-pointer">
+                    Entendido
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- SCRIPTS DE CONTROL DEL MODAL Y GOOGLE SIGN-IN -->
     <script>
@@ -319,10 +385,13 @@ if (!$resultado_viajes) {
             const card = panel.querySelector('.modal-isla-card') || panel.querySelector('> div');
             
             panel.classList.remove('hidden');
+            panel.classList.remove('pointer-events-none');
 
-            setTimeout(() => {
-                inicializarBotonGoogle(panel);
-            }, 50);
+            if (idPanel === 'panelLogin' || idPanel === 'panelRegistro') {
+                setTimeout(() => {
+                    inicializarBotonGoogle(panel);
+                }, 50);
+            }
 
             setTimeout(() => {
                 panel.classList.remove('opacity-0');
@@ -342,12 +411,14 @@ if (!$resultado_viajes) {
                 card.classList.add('scale-95');
             }
             panel.classList.add('opacity-0');
+            panel.classList.add('pointer-events-none');
             setTimeout(() => { panel.classList.add('hidden'); }, 300);
         }
 
         function cambiarAPanel(idDestino) {
             cerrarPanel('panelLogin');
             cerrarPanel('panelRegistro');
+            cerrarPanel('panelPolitica');
             setTimeout(() => { abrirPanel(idDestino); }, 200);
         }
 

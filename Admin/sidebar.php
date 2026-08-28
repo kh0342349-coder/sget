@@ -80,6 +80,13 @@ function verificarIconoActivo($archivo, $pagina_actual, $clase_color = 'text-blu
                     <span>Vehículos</span>
                 </a>
             </li>
+
+            <li>
+                <a href="gestion_permisos.php" class="flex items-center space-x-3 p-3 rounded-xl transition-all duration-200 group <?php echo verificarClaseActiva('gestion_permisos.php', $pagina_actual); ?>">
+                    <i class="fas fa-key <?php echo verificarIconoActivo('gestion_permisos.php', $pagina_actual); ?>"></i>
+                    <span>Permisos</span>
+                </a>
+            </li>
             
             <!-- Calificaciones -->
             <li>

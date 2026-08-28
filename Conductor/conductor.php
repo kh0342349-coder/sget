@@ -16,9 +16,10 @@ $total_viajes = 0;
 $viajes_data = [];
 $promedio = 0;
 $total_votos = 0;
+$restricciones_actuales = '';
 
-// Consulta preparada para obtener el ID del usuario
-$stmt_user = $conexion->prepare("SELECT id_usu FROM usuario WHERE num_doc_usu = ?");
+// Consulta preparada para obtener el ID y las RESTRICCIONES en tiempo real
+$stmt_user = $conexion->prepare("SELECT id_usu, restricciones FROM usuario WHERE num_doc_usu = ?");
 $stmt_user->bind_param("s", $documento);
 $stmt_user->execute();
 $result_user = $stmt_user->get_result();
@@ -26,6 +27,7 @@ $result_user = $stmt_user->get_result();
 if ($result_user && $result_user->num_rows > 0) {
     $user_data = $result_user->fetch_assoc();
     $id_conductor = $user_data['id_usu'];
+    $restricciones_actuales = $user_data['restricciones'] ?? '';
 
     // 1. Contar total de viajes
     $stmt_count = $conexion->prepare("SELECT COUNT(*) as total FROM viaje WHERE id_usu_via = ?");
@@ -66,6 +68,15 @@ if ($result_user && $result_user->num_rows > 0) {
     $stmt_viajes->close();
 }
 $stmt_user->close();
+
+// FUNCIÓN DE VERIFICACIÓN EN TIEMPO REAL
+function tiene_acceso($permiso, $cadena_restricciones) {
+    if (empty($cadena_restricciones)) {
+        return true;
+    }
+    $denegados = explode(',', $cadena_restricciones);
+    return !in_array($permiso, $denegados);
+}
 
 $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
 ?>
@@ -108,10 +119,10 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
 </head>
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300">
 
-    <!-- 1. SIDEBAR FIJO (Ancho 64) -->
+    <!-- 1. SIDEBAR FIJO -->
     <?php include 'sidebar.php'; ?>
 
-    <!-- 2. CONTENEDOR DERECHO FLUIDO (Margin-Left de 64 para respetar la barra lateral) -->
+    <!-- 2. CONTENEDOR DERECHO FLUIDO -->
     <div class="flex-1 ml-64 flex flex-col min-h-screen">
         
         <!-- HEADER SUPERIOR -->
@@ -155,7 +166,8 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
                     </div>
                 </div>
 
-                <!-- Card 3: Reputación -->
+                <!-- Card 3: Reputación / Ranking (RESTRINGIBLE EN TIEMPO REAL) -->
+                <?php if (tiene_acceso('ver_ranking', $restricciones_actuales)): ?>
                 <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/5 p-6 rounded-2xl relative overflow-hidden flex items-center justify-between group hover:border-slate-300 dark:hover:border-white/10 transition-all duration-300 shadow-sm hover:shadow-md">
                     <div>
                         <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">Reputación</p>
@@ -181,9 +193,12 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
                         <i class="fas fa-star text-lg"></i>
                     </div>
                 </div>
+                <?php endif; ?>
+
             </div>
 
-            <!-- TABLA DE HISTORIAL DE VIAJES -->
+            <!-- TABLA DE HISTORIAL DE VIAJES (RESTRINGIBLE EN TIEMPO REAL) -->
+            <?php if (tiene_acceso('ver_rutas', $restricciones_actuales)): ?>
             <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/5 p-6 rounded-2xl shadow-xl max-w-6xl transition-colors duration-300">
                 <h3 class="font-bold text-slate-900 dark:text-white text-base mb-4 tracking-tight flex items-center gap-2">
                     <i class="fas fa-history text-slate-400 dark:text-slate-500 text-sm"></i> Últimos Viajes Registrados
@@ -227,6 +242,8 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
                     </table>
                 </div>
             </div>
+            <?php endif; ?>
+
         </main>
     </div>
 

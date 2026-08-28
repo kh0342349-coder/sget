@@ -37,7 +37,8 @@ if (empty($doc) || empty($pass)) {
     exit();
 }
 
-$stmt = $conexion->prepare("SELECT id_usu, num_doc_usu, nom_usu, pass_usu, id_rol_usu, estado FROM usuario WHERE num_doc_usu = ?");
+// SE AGREGA 'restricciones' EN EL SELECT
+$stmt = $conexion->prepare("SELECT id_usu, num_doc_usu, nom_usu, pass_usu, id_rol_usu, estado, restricciones FROM usuario WHERE num_doc_usu = ?");
 $stmt->bind_param("s", $doc);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -62,6 +63,9 @@ if ($result->num_rows > 0) {
         $_SESSION['documento'] = $data_user['num_doc_usu'];
         $_SESSION['nombre_usuario'] = $data_user['nom_usu'];
         $_SESSION['rol'] = $data_user['id_rol_usu'];
+
+        // GUARDAMOS LAS RESTRICCIONES EN LA SESIÓN
+        $_SESSION['restricciones'] = $data_user['restricciones'] ?? '';
 
         $rol = $data_user['id_rol_usu'];
         $stmt->close();
