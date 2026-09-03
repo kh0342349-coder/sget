@@ -1,7 +1,9 @@
 <?php
 date_default_timezone_set('America/Bogota');
 session_start();
+
 include '../assets/conexion.php';
+require_once '../helpers/AuthHelper.php';
 
 // Verificación de seguridad (Solo Admin)
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
@@ -78,13 +80,13 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
 <body class="bg-slate-50 dark:bg-[#0b0f19] flex min-h-screen antialiased text-slate-800 dark:text-slate-100 transition-colors duration-300 relative overflow-x-hidden">
 
     <!-- BARRA LATERAL -->
-    <?php include 'sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
     <!-- CONTENEDOR PRINCIPAL -->
     <div class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
         
         <!-- BARRA SUPERIOR -->
-        <?php include 'header.php'; ?>
+        <?php include '../includes/header.php'; ?>
 
         <!-- ÁREA DE TRABAJO -->
         <main class="p-8 flex-1 min-w-0">
@@ -178,7 +180,8 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                                                 <button onclick="editarRuta(<?php echo htmlspecialchars(json_encode($ruta)); ?>)" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-all" title="Editar">
                                                     <i class="fas fa-pen text-xs"></i>
                                                 </button>
-                                                <a href="eliminar_ruta.php?id=<?php echo $ruta['id_rut']; ?>" onclick="return confirm('¿Está seguro de eliminar esta ruta?')" class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center transition-all" title="Eliminar">
+                                                <!-- Enlace modificado para integrarse con eliminar.php -->
+                                                <a href="eliminar.php?tipo=ruta&id=<?php echo $ruta['id_rut']; ?>" onclick="return confirm('¿Está seguro de eliminar esta ruta?')" class="w-8 h-8 rounded-lg bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center transition-all" title="Eliminar">
                                                     <i class="fas fa-trash-alt text-xs"></i>
                                                 </a>
                                             </div>

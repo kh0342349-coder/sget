@@ -1,0 +1,56 @@
+/* ==========================================
+   assets/css/header.css - SGET Header
+   ========================================== */
+
+/* --- 1. VARIABLES MODO CLARO (POR DEFECTO) --- */
+.header-floating {
+    --bg-header: rgba(255, 255, 255, 0.9);
+    --border-header: rgba(226, 232, 240, 0.9);
+    --bg-input: #f1f5f9;
+    --text-header: #0f172a;
+    --text-muted-header: #64748b;
+    --shadow-header: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+
+    background-color: var(--bg-header) !important;
+    border: 1px solid var(--border-header) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: var(--shadow-header) !important;
+    transition: background-color 0.3s ease, border-color 0.3s ease !important;
+}
+
+/* --- 2. VARIABLES MODO OSCURO (html.dark) --- */
+html.dark .header-floating {
+    --bg-header: rgba(15, 23, 42, 0.75);
+    --border-header: rgba(255, 255, 255, 0.1);
+    --bg-input: rgba(15, 23, 42, 0.9);
+    --text-header: #f8fafc;
+    --text-muted-header: #94a3b8;
+    --shadow-header: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+}
+
+/* Input del Buscador Global */
+.header-input-busqueda {
+    background-color: var(--bg-input) !important;
+    color: var(--text-header) !important;
+    border: 1px solid var(--border-header) !important;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.header-input-busqueda:focus {
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+}
+
+/* Textos dinámicos dentro del Header */
+.header-text-main {
+    color: var(--text-header) !important;
+}
+
+.header-text-sub {
+    color: var(--text-muted-header) !important;
+}
+
+/* Resplandor del Avatar */
+.user-avatar-glow {
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}

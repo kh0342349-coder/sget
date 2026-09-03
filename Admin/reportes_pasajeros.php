@@ -1,6 +1,7 @@
 <?php
 session_start();
 include '../assets/conexion.php';
+require_once '../helpers/AuthHelper.php';
 
 // Seguridad
 if (!isset($_SESSION['rol']) || $_SESSION['rol'] != 1) {
@@ -29,7 +30,7 @@ $res = $conexion->query($sql);
 
 <body class="bg-gray-100 flex min-h-screen">
 
-    <?php include 'sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
 <!-- CONTENIDO -->
 <main class="flex-1 ml-64 p-8">

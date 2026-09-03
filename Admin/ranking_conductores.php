@@ -2,6 +2,7 @@
 date_default_timezone_set('America/Bogota');
 session_start();
 include '../assets/conexion.php'; 
+require_once '../helpers/AuthHelper.php';
 
 // Validación de seguridad para Admin (Rol 1)
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
@@ -88,13 +89,13 @@ $ranking = $conexion->query($sql_ranking);
 <body class="bg-slate-50 dark:bg-[#0b0f19] flex min-h-screen antialiased text-slate-800 dark:text-slate-100 transition-colors duration-300 relative overflow-x-hidden">
 
     <!-- BARRA LATERAL -->
-    <?php include 'sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
     <!-- CONTENEDOR PRINCIPAL -->
     <div class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
         
         <!-- HEADER MODULAR REUTILIZABLE -->
-        <?php include 'header.php'; ?>
+        <?php include '../includes/header.php'; ?>
 
         <!-- ÁREA DE TRABAJO -->
         <main class="p-8 flex-1 space-y-6 pt-24 min-w-0">

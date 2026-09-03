@@ -81,11 +81,11 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 </head>
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300 relative overflow-x-hidden">
 
-    <?php include 'sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
     <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
 
-        <?php include 'header.php'; ?>
+        <?php include '../includes/header.php'; ?>
 
         <div class="p-8 flex-1 min-w-0 space-y-6">
             

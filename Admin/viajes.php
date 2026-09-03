@@ -1,7 +1,9 @@
 <?php
 date_default_timezone_set('America/Bogota');
 session_start();
+
 include '../assets/conexion.php'; 
+require_once '../helpers/AuthHelper.php';
 
 // Verificación de seguridad (Solo Admin)
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
@@ -96,13 +98,13 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
 <body class="bg-slate-50 dark:bg-[#0b0f19] flex min-h-screen antialiased text-slate-800 dark:text-slate-100 transition-colors duration-300 relative overflow-x-hidden">
 
     <!-- BARRA LATERAL (Sidebar) -->
-    <?php include 'sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
     <!-- CONTENEDOR PRINCIPAL -->
     <div id="main-container" class="flex-1 ml-64 flex flex-col min-h-screen transition-all duration-300 w-full min-w-0">
         
         <!-- HEADER DINÁMICO -->
-        <?php include 'header.php'; ?>
+        <?php include '../includes/header.php'; ?>
 
         <!-- ÁREA DE TRABAJO -->
         <main class="p-6 md:p-8 flex-1 space-y-6 min-w-0">
@@ -215,8 +217,9 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
 
                             <!-- Botones de Acción -->
                             <div class="relative z-10 flex items-center gap-2 pt-2 border-t border-white/20">
-                                <a href="terminar_viaje.php?id_via=<?php echo $v['id_via']; ?>&id_usu=<?php echo $v['id_usu_via']; ?>&id_veh=<?php echo $v['id_veh']; ?>" 
-                                onclick="return confirm('¿Confirma que el vehículo llegó a su destino y desea terminar el viaje?')"
+                                <!-- Enlace modificado para integrarse con eliminar.php -->
+                                <a href="eliminar.php?tipo=viaje&id=<?php echo $v['id_via']; ?>" 
+                                onclick="return confirm('¿Confirma que el vehículo llegó a su destino y desea terminar/eliminar el viaje?')"
                                 class="flex-1 text-center py-1.5 px-2 bg-red-600/90 hover:bg-red-600 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 backdrop-blur-sm">
                                     <i class="fas fa-flag-checkered"></i> Terminar
                                 </a>
@@ -329,7 +332,8 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
         </div>
 
         <div class="p-6 flex-1 overflow-y-auto space-y-5">
-            <form id="formViaje" action="procesar_guardado.php" method="POST" class="space-y-4">
+            <!-- Acción apuntando a procesar_viaje.php -->
+            <form id="formViaje" action="procesar_viaje.php" method="POST" class="space-y-4">
                 
                 <input type="hidden" name="id_via" id="input_id_via" value="">
 
@@ -487,7 +491,8 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
         }
 
         function abrirModalCrear() {
-            document.getElementById('formViaje').action = 'guardar_viaje.php';
+            // Apunta al archivo unificado procesar_viaje.php
+            document.getElementById('formViaje').action = 'procesar_viaje.php';
             document.getElementById('drawerTitulo').innerText = 'Asignar Nuevo Viaje';
             document.getElementById('drawerSubtitulo').innerText = 'Programar orden de despachos';
             document.getElementById('drawerIcono').className = 'fas fa-bus text-base';
@@ -509,7 +514,8 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
 
         function abrirModalEditarBtn(btn) {
             const datos = JSON.parse(btn.getAttribute('data-viaje'));
-            document.getElementById('formViaje').action = 'procesar_actualizacion.php';
+            // Apunta al archivo unificado procesar_viaje.php
+            document.getElementById('formViaje').action = 'procesar_viaje.php';
             document.getElementById('drawerTitulo').innerText = 'Editar Parámetros de Viaje';
             document.getElementById('drawerSubtitulo').innerText = 'Modificar ID: #' + datos.id_via;
             document.getElementById('drawerIcono').className = 'fas fa-pen text-base';

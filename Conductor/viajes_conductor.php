@@ -114,13 +114,13 @@ $stmt_user->close();
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300 relative overflow-x-hidden">
 
     <!-- Carga Sidebar -->
-    <?php include 'sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
     <!-- Contenedor Principal -->
     <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
         
        <!-- INCLUSIÓN DEL HEADER DEL CONDUCTOR -->
-        <?php include 'header_conductor.php'; ?>
+        <?php include '../includes/header.php'; ?>
 
         <!-- Cuerpo principal -->
         <div class="p-8 space-y-6 flex-1 min-w-0">

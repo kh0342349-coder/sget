@@ -13,25 +13,7 @@ class AuthHelper {
             return false;
         }
 
-        // 1. Verificar si es Administrador principal (id_rol_usu = 1)
-        // Usamos ? en lugar de :id_usu para MySQLi
-        $sqlRol = "SELECT id_rol_usu FROM usuario WHERE id_usu = ?";
-        $stmtRol = mysqli_prepare($conexion, $sqlRol);
-        
-        if ($stmtRol) {
-            mysqli_stmt_bind_param($stmtRol, "i", $idUsuario);
-            mysqli_stmt_execute($stmtRol);
-            $resRol = mysqli_stmt_get_result($stmtRol);
-
-            if ($user = mysqli_fetch_assoc($resRol)) {
-                if ($user['id_rol_usu'] == 1) {
-                    return true; // Acceso total automático para administradores
-                }
-            }
-            mysqli_stmt_close($stmtRol);
-        }
-
-        // 2. Consultar permiso específico asignado en la BD
+        // Consultar permiso específico asignado en la BD para este usuario
         $sql = "SELECT up.permitido 
                 FROM usuario_permisos up
                 INNER JOIN permisos p ON up.id_permiso = p.id_permiso
@@ -56,15 +38,32 @@ class AuthHelper {
     }
 
     /**
-     * Bloquea la vista/endpoint si no cuenta con el permiso
+     * Muestra un modal elegante de acceso denegado y detiene la ejecución
      */
     public static function requerirPermiso($conexion, $idUsuario, $nombrePermiso) {
         if (!self::tienePermiso($conexion, $idUsuario, $nombrePermiso)) {
             http_response_code(403);
-            die("<div style='text-align:center; padding:50px; font-family:sans-serif;'>
-                    <h2>403 - Acceso Denegado</h2>
-                    <p>No tienes permiso para acceder a esta función.</p>
-                 </div>");
+            
+            // Renderizamos un modal flotante con Tailwind CSS acorde al diseño de SGET
+            echo '<script src="https://cdn.tailwindcss.com"></script>';
+            echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">';
+            echo '<body class="bg-[#0b0f19] text-slate-200 flex items-center justify-center min-h-screen m-0 font-sans">
+                    <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                        <div class="bg-[#1e293b] border border-white/10 w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden p-6 text-center space-y-4 transform transition-all">
+                            <div class="w-14 h-14 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center mx-auto text-2xl shadow-inner">
+                                <i class="fas fa-ban"></i>
+                            </div>
+                            <h3 class="text-base font-black text-white tracking-wide">Acceso Denegado</h3>
+                            <p class="text-xs text-slate-400 leading-relaxed px-2">No tienes los permisos necesarios para acceder a esta función o módulo del sistema SGET.</p>
+                            <div class="pt-2">
+                                <button onclick="history.back()" class="w-full py-3 bg-gradient-to-r from-sky-400 to-blue-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-lg hover:opacity-90 cursor-pointer">
+                                    Volver Atrás
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                  </body>';
+            exit();
         }
     }
 }

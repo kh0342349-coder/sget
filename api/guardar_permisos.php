@@ -22,8 +22,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    // Obtener catálogo entero de permisos
-    $resCat = mysqli_query($conexion, "SELECT id_permiso FROM permisos");
+    // 1. Obtener el rol del usuario target
+    $sqlRol = "SELECT id_rol_usu FROM usuario WHERE id_usu = ?";
+    $stmtRol = mysqli_prepare($conexion, $sqlRol);
+    mysqli_stmt_bind_param($stmtRol, "i", $idUsuarioTarget);
+    mysqli_stmt_execute($stmtRol);
+    $resRol = mysqli_stmt_get_result($stmtRol);
+    $userTarget = mysqli_fetch_assoc($resRol);
+    mysqli_stmt_close($stmtRol);
+
+    if (!$userTarget) {
+        echo json_encode(['status' => 'error', 'mensaje' => 'Usuario no encontrado']);
+        exit();
+    }
+
+    $idRolUsuario = intval($userTarget['id_rol_usu']);
+
+    // 2. Traer ÚNICAMENTE los permisos correspondientes a su rol (o generales si id_rol es NULL)
+    $sqlCat = "SELECT id_permiso FROM permisos WHERE id_rol = ? OR id_rol IS NULL";
+    $stmtCat = mysqli_prepare($conexion, $sqlCat);
+    mysqli_stmt_bind_param($stmtCat, "i", $idRolUsuario);
+    mysqli_stmt_execute($stmtCat);
+    $resCat = mysqli_stmt_get_result($stmtCat);
     
     if (!$resCat) {
         echo json_encode(['status' => 'error', 'mensaje' => 'Error al leer catálogo']);
@@ -34,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $idPermiso = $row['id_permiso'];
         $permitido = in_array($idPermiso, $permisosSeleccionados) ? 1 : 0;
 
-        // Insertar o actualizar
+        // Insertar o actualizar estado del permiso
         $sqlUpsert = "INSERT INTO usuario_permisos (id_usu, id_permiso, permitido) 
                       VALUES (?, ?, ?)
                       ON DUPLICATE KEY UPDATE permitido = VALUES(permitido)";
@@ -46,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mysqli_stmt_close($stmt);
         }
     }
+    mysqli_stmt_close($stmtCat);
 
     echo json_encode(['status' => 'success', 'mensaje' => 'Permisos actualizados correctamente.']);
 }

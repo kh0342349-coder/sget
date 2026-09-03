@@ -120,13 +120,13 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300">
 
     <!-- 1. SIDEBAR FIJO -->
-    <?php include 'sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
     <!-- 2. CONTENEDOR DERECHO FLUIDO -->
     <div class="flex-1 ml-64 flex flex-col min-h-screen">
         
         <!-- HEADER SUPERIOR -->
-        <?php include 'header_conductor.php'; ?>
+        <?php include '../includes/header.php'; ?>
 
         <!-- CONTENIDO DEL DASHBOARD -->
         <main class="p-8 space-y-8 flex-1">

@@ -6,6 +6,7 @@ session_start();
 require_once '../assets/conexion.php';
 require_once '../helpers/AuthHelper.php';
 
+// Validar sesión y rol de Administrador
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
     header("Location: ../index.php");
     exit();
@@ -29,9 +30,13 @@ $c_pasajeros = 0;
 if ($resultado) {
     while ($fila = mysqli_fetch_assoc($resultado)) {
         $usuarios[] = $fila;
-        if ($fila['id_rol_usu'] == 1) $c_admins++;
-        elseif ($fila['id_rol_usu'] == 2) $c_conductores++;
-        elseif ($fila['id_rol_usu'] == 3) $c_pasajeros++;
+        if ($fila['id_rol_usu'] == 1) {
+            $c_admins++;
+        } elseif ($fila['id_rol_usu'] == 2) {
+            $c_conductores++;
+        } elseif ($fila['id_rol_usu'] == 3) {
+            $c_pasajeros++;
+        }
     }
 }
 $total_usuarios = count($usuarios);
@@ -72,10 +77,11 @@ $total_usuarios = count($usuarios);
 
 <body class="bg-bg-principal dark:bg-bg-principal-dark flex min-h-screen text-texto-base dark:text-[#cbd5e1] transition-colors duration-300">
 
-    <?php include 'sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
     <main class="flex-1 ml-64 flex flex-col min-h-screen">
-        <?php include 'header.php'; ?>
+
+        <?php include '../includes/header.php'; ?>
 
         <div class="p-8 w-full mx-auto space-y-6 flex-grow">
             
@@ -145,7 +151,7 @@ $total_usuarios = count($usuarios);
                 </div>
             </div>
 
-            <!-- Navegación por Pestañas Idéntica a Usuarios -->
+            <!-- Navegación por Pestañas -->
             <div class="flex items-center space-x-6 border-b border-slate-200 dark:border-white/10 pb-1 text-xs font-extrabold">
                 <button onclick="cambiarTab('admins')" id="tab-admins" class="tab-btn pb-2 border-b-2 border-transparent text-color-mutado hover:text-white transition-all flex items-center gap-2">
                     <i class="fas fa-user-shield"></i> Administradores (<?= $c_admins; ?>)
@@ -188,7 +194,7 @@ $total_usuarios = count($usuarios);
         </footer>
     </main>
 
-    <!-- Modal de Permisos Integrado en Tailwind -->
+    <!-- Modal de Permisos -->
     <div id="modalGestionPermisos" class="fixed inset-0 z-[999] hidden flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
         <div class="bg-[#1e293b] border border-white/10 w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden transform transition-all">
             

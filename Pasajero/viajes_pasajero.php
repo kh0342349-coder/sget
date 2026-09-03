@@ -2,6 +2,7 @@
 date_default_timezone_set('America/Bogota');
 session_start();
 include '../assets/conexion.php'; 
+require_once '../helpers/AuthHelper.php';
 
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
     header("Location: ../index.php");
@@ -64,13 +65,13 @@ $res = $conexion->query($sql);
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300 relative overflow-x-hidden">
 
     <!-- INCLUSIÓN DIRECTA DEL SIDEBAR -->
-    <?php include 'sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
     <!-- MAIN CON MARGEN IZQUIERDO PARA ALINEARSE AL SIDEBAR FIJO -->
     <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
         
         <!-- HEADER ESTANDARIZADO MODULAR -->
-        <?php include 'header.php'; ?>
+        <?php include '../includes/header.php'; ?>
 
         <!-- CONTENIDO DE VIAJES DISPONIBLES -->
         <div class="p-8 space-y-8 flex-1 min-w-0">

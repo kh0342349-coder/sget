@@ -2,6 +2,7 @@
 date_default_timezone_set('America/Bogota');
 session_start();
 include '../assets/conexion.php';
+require_once '../helpers/AuthHelper.php';
 
 // 1. Seguridad
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
@@ -198,12 +199,12 @@ $queryListado = $conexion->query($sqlListado);
 <body class="bg-slate-100 dark:bg-[#0b0f19] flex min-h-screen antialiased text-slate-800 dark:text-slate-100 transition-colors duration-300">
 
     <!-- Sidebar lateral -->
-    <?php include 'sidebar.php'; ?>
+    <?php include '../includes/sidebar.php'; ?>
 
     <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
     
         <!-- Header superior -->
-        <?php include 'header.php'; ?>
+        <?php include '../includes/header.php'; ?>
             
         <div class="p-8 max-w-[1600px] w-full mx-auto space-y-8 flex-grow min-w-0 overflow-x-hidden">
             

@@ -3,9 +3,12 @@ session_start();
 // Ruta de conexión a la base de datos
 require_once 'assets/conexion.php';
 
-// Consulta SQL utilizando la relación directa entre viaje (v.id_veh) y vehiculo (veh.id_veh)
+// Consulta SQL ajustada para traer imagen de ruta (img_rut) y valor del viaje (val_via)
 $query_viajes = "SELECT 
                     v.id_via,
+                    v.val_via,
+                    r.nom_rut,
+                    r.img_rut,
                     r.ori_rut AS origen,
                     r.des_rut AS destino,
                     v.hor_sal_via AS hora_salida,
@@ -15,7 +18,7 @@ $query_viajes = "SELECT
                  INNER JOIN rutas r ON v.id_rut_via = r.id_rut
                  LEFT JOIN vehiculo veh ON v.id_veh = veh.id_veh
                  WHERE v.est_via = 'Activo'
-                 ORDER BY v.hor_sal_via ASC
+                 ORDER BY v.id_via DESC
                  LIMIT 6";
 
 $resultado_viajes = mysqli_query($conexion, $query_viajes);
@@ -36,6 +39,9 @@ if (!$resultado_viajes) {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
+    <!-- Hoja de Estilos del Index -->
+    <link rel="stylesheet" href="index.css">
+
     <!-- SDK de Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 
@@ -45,19 +51,29 @@ if (!$resultado_viajes) {
             theme: {
                 extend: {
                     colors: {
-                        'neon-azul': '#38bdf8',
-                        'neon-morado': '#a855f7'
+                        'neon-azul': 'var(--neon-azul)',
+                        'neon-morado': 'var(--neon-morado)'
                     }
                 }
             }
-        }
+        };
 
         // Script Anti-Parpadeo de Tema
-        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
+        (function() {
+            const theme = localStorage.getItem('theme') || 
+                (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            const html = document.documentElement;
+            
+            if (theme === 'dark') {
+                html.classList.add('dark');
+                html.classList.remove('light');
+                html.setAttribute('data-theme', 'dark');
+            } else {
+                html.classList.remove('dark');
+                html.classList.add('light');
+                html.setAttribute('data-theme', 'light');
+            }
+        })();
 
         // Manejador del Token devuelto por Google
         function handleGoogleResponse(response) {
@@ -79,51 +95,52 @@ if (!$resultado_viajes) {
             .catch(error => console.error('Error al comunicarse con el servidor:', error));
         }
     </script>
-
-    <!-- ESTILOS DE ISLA FLOTANTE -->
-    <style>
-        .modal-isla-container {
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-        }
-        
-        .modal-isla-card {
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
-        }
-    </style>
+    <script src="theme-toggle.js" defer></script>
 </head>
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen flex flex-col antialiased transition-colors duration-300">
 
     <!-- HEADER MODULAR -->
-    <?php include 'header.php'; ?>
+    <?php include 'includes/header_index.php'; ?>
 
-    <main class="flex-grow pt-24">
+    <main class="flex-grow pt-28">
         
         <!-- HERO SECTION -->
-        <section id="inicio" class="relative py-12 px-6 overflow-hidden">
+        <section id="inicio" class="hero-section py-16 px-6 relative overflow-hidden">
             <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-gradient-to-tr from-sky-500/20 to-blue-600/10 blur-[120px] rounded-full pointer-events-none"></div>
 
             <div class="max-w-5xl mx-auto text-center space-y-6 relative z-10">
-                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-600 dark:text-sky-400 text-xs font-extrabold tracking-wide uppercase shadow-sm">
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-sky-500/10 border border-sky-500/30 text-sky-600 dark:text-sky-400 text-xs font-extrabold tracking-wide uppercase shadow-sm">
                     <i class="fas fa-bus-alt text-sm"></i> Plataforma Líder en Transporte
                 </div>
 
-                <h1 class="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+                <h1 class="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-tight text-slate-900 dark:text-white">
                     Viaja Seguro y Monitorea tu Flota en <span class="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-600">Tiempo Real</span>
                 </h1>
 
-                <p class="text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto font-medium leading-relaxed">
-                    Consulta horarios, rutas disponibles y asegura tu desplazamiento con la tecnología integral de **SGET**.
+                <p class="text-base sm:text-lg max-w-2xl mx-auto font-medium leading-relaxed text-slate-600 dark:text-slate-300">
+                    Consulta horarios, rutas disponibles y asegura tu desplazamiento con la tecnología integral de SGET.
                 </p>
+
+                <!-- BOTONES DE ACCIÓN MEJORADOS -->
+                <div class="flex flex-wrap justify-center items-center gap-4 pt-4">
+                    <a href="#viajes-disponibles" class="px-8 py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-sm shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 hover:-translate-y-0.5 transition-all">
+                        <i class="fas fa-eye mr-2"></i>Ver Viajes
+                    </a>
+                    <button onclick="abrirPanel('panelLogin')" class="px-8 py-3.5 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 font-extrabold text-sm hover:border-sky-500 dark:hover:border-sky-500 hover:-translate-y-0.5 transition-all shadow-sm cursor-pointer">
+                        <i class="fas fa-sign-in-alt mr-2 text-sky-500"></i>Iniciar Sesión
+                    </button>
+                </div>
             </div>
         </section>
 
-        <!-- SECCIÓN 2: VIAJES EN VIVO -->
-        <section id="viajes-disponibles" class="py-16 px-6 max-w-7xl mx-auto space-y-8">
+        <div class="max-w-7xl mx-auto px-6"><div class="divider-glow"></div></div>
+
+        <!-- SECCIÓN 2: VIAJES EN VIVO (VISUAL Y MINIMALISTA) -->
+        <section id="viajes-disponibles" class="py-20 px-6 max-w-7xl mx-auto space-y-8">
             <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-200 dark:border-white/10 pb-6">
                 <div>
                     <span class="text-xs font-extrabold text-emerald-500 uppercase tracking-widest flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span> Salidas Programadas
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span> SALIDAS PROGRAMADAS
                     </span>
                     <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white mt-1">Viajes Disponibles Ahora</h2>
                 </div>
@@ -132,111 +149,84 @@ if (!$resultado_viajes) {
                 </p>
             </div>
 
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 <?php if ($resultado_viajes && mysqli_num_rows($resultado_viajes) > 0): ?>
                     <?php while ($viaje = mysqli_fetch_assoc($resultado_viajes)): ?>
-                        <div class="bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl p-6 shadow-xl hover:shadow-sky-500/10 border-t-4 border-t-sky-500 flex flex-col justify-between hover:-translate-y-1 transition-all duration-300 group">
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <span class="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-extrabold uppercase">
-                                        <?= htmlspecialchars($viaje['estado_viaje']); ?>
-                                    </span>
-                                    <span class="text-xs font-bold text-slate-400">
-                                        <i class="far fa-clock mr-1 text-sky-500"></i>
-                                        <?= !empty($viaje['hora_salida']) ? date('h:i A', strtotime($viaje['hora_salida'])) : 'Por definir'; ?>
-                                    </span>
-                                </div>
-                                
-                                <div class="flex items-center justify-between gap-2 pt-2 bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-2xl border border-slate-100 dark:border-white/5">
-                                    <div class="text-left">
-                                        <p class="text-[10px] font-extrabold uppercase text-slate-400">Origen</p>
-                                        <p class="font-black text-slate-800 dark:text-white text-sm sm:text-base">
-                                            <?= htmlspecialchars($viaje['origen']); ?>
-                                        </p>
-                                    </div>
-                                    <div class="w-8 h-8 rounded-full bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0">
-                                        <i class="fas fa-arrow-right text-xs"></i>
-                                    </div>
-                                    <div class="text-right">
-                                        <p class="text-[10px] font-extrabold uppercase text-slate-400">Destino</p>
-                                        <p class="font-black text-slate-800 dark:text-white text-sm sm:text-base">
-                                            <?= htmlspecialchars($viaje['destino']); ?>
-                                        </p>
-                                    </div>
-                                </div>
+                        <?php 
+                            $nombreImagen = trim($viaje['img_rut'] ?? '');
+                            $rutaImagen = !empty($nombreImagen) ? "img/rutas/" . $nombreImagen : "";
+                        ?>
+                        <!-- Tarjeta Limpia Enfocada en la Imagen de Destino -->
+                        <div class="relative overflow-hidden rounded-3xl h-64 border border-slate-200 dark:border-white/10 shadow-xl group transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl flex flex-col justify-between p-5 bg-slate-950">
+                            
+                            <!-- Imagen de la ruta a pantalla completa con zoom suave al pasar el mouse -->
+                            <?php if (!empty($nombreImagen) && file_exists("img/rutas/" . $nombreImagen)): ?>
+                                <img src="<?php echo htmlspecialchars($rutaImagen); ?>" 
+                                     alt="<?php echo htmlspecialchars($viaje['nom_rut'] ?? 'Ruta'); ?>" 
+                                     class="absolute inset-0 w-full h-full object-cover object-center z-0 transition-transform duration-700 group-hover:scale-110">
+                            <?php endif; ?>
+                            
+                            <!-- Degradado suave en los extremos para legibilidad -->
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/60 z-0"></div>
+
+                            <!-- Header: Hora y Estado Activo -->
+                            <div class="relative z-10 flex items-center justify-between">
+                                <span class="text-[11px] font-mono font-bold text-white bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 shadow-sm">
+                                    <i class="far fa-clock text-sky-400 mr-1"></i>
+                                    <?= !empty($viaje['hora_salida']) ? date('h:i A', strtotime($viaje['hora_salida'])) : 'En Breve'; ?>
+                                </span>
+                                <span class="text-[10px] font-black uppercase tracking-wider text-emerald-300 bg-emerald-900/60 backdrop-blur-md px-3 py-1 rounded-full border border-emerald-500/40 flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    ACTIVO
+                                </span>
                             </div>
 
-                            <div class="mt-6 pt-4 border-t border-slate-100 dark:border-white/5 flex items-center justify-between">
-                                <div class="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-                                    <i class="fas fa-bus-alt text-sky-500"></i>
-                                    <span>Vehículo: <strong class="text-slate-900 dark:text-white"><?= htmlspecialchars($viaje['placa_veh'] ?? 'Sin Asignar'); ?></strong></span>
+                            <!-- Bloque Inferior: Precio, Ruta y Botón Reservar -->
+                            <div class="relative z-10 space-y-3 pt-4 border-t border-white/15">
+                                <div>
+                                    <?php if (!empty($viaje['val_via'])): ?>
+                                        <p class="text-xs font-black uppercase tracking-wider text-amber-300 drop-shadow-md">
+                                            $<?= number_format($viaje['val_via'], 0, ',', '.'); ?> COP
+                                        </p>
+                                    <?php endif; ?>
+
+                                    <h3 class="font-black text-white text-xl sm:text-2xl tracking-tight leading-tight truncate drop-shadow-lg" title="<?= htmlspecialchars($viaje['nom_rut'] ?? ($viaje['origen'] . ' - ' . $viaje['destino'])); ?>">
+                                        <?= htmlspecialchars($viaje['nom_rut'] ?? ($viaje['origen'] . ' - ' . $viaje['destino'])); ?>
+                                    </h3>
+                                    <p class="text-[11px] font-semibold text-slate-300 flex items-center gap-1 mt-0.5">
+                                        <i class="fas fa-bus-alt text-sky-400"></i> Placa: <span class="font-mono text-white"><?= htmlspecialchars($viaje['placa_veh'] ?? 'Sin Asignar'); ?></span>
+                                    </p>
                                 </div>
-                                <button onclick="abrirPanel('panelLogin')" class="px-4 py-2 rounded-xl bg-slate-900 text-white dark:bg-sky-500 dark:text-slate-950 font-extrabold transition-all text-xs hover:opacity-90 cursor-pointer shadow-md">
-                                    Reservar / Ver
+
+                                <!-- Botón Reservar -->
+                                <button onclick="abrirPanel('panelLogin')" class="w-full py-3 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-slate-950 font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer group-hover:shadow-sky-500/30">
+                                    <i class="fas fa-ticket-alt"></i> RESERVAR PASAJE
                                 </button>
                             </div>
+
                         </div>
                     <?php endwhile; ?>
                 <?php else: ?>
-                    <div class="col-span-full py-12 text-center bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl">
-                        <i class="fas fa-route text-4xl text-slate-400 dark:text-slate-600 mb-3"></i>
-                        <p class="text-sm font-bold text-slate-600 dark:text-slate-300">No hay viajes activos programados en este momento.</p>
-                        <p class="text-xs text-slate-400 mt-1">Por favor, vuelve a consultar más tarde.</p>
+                    <div class="col-span-full py-16 px-6 text-center card-glass rounded-3xl">
+                        <div class="w-16 h-16 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center mx-auto mb-4 text-2xl">
+                            <i class="fas fa-route"></i>
+                        </div>
+                        <p class="text-base font-extrabold text-slate-800 dark:text-slate-200">No hay viajes activos programados en este momento</p>
+                        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Las nuevas salidas aparecerán aquí automáticamente tan pronto sean asignadas por la administración.</p>
                     </div>
                 <?php endif; ?>
             </div>
         </section>
 
-        <!-- SECCIÓN 3: RUTAS Y HORARIOS -->
-        <section id="rutas" class="py-16 px-6 max-w-6xl mx-auto space-y-8">
-            <div class="text-center space-y-2">
-                <span class="text-xs font-extrabold text-sky-500 uppercase tracking-widest">Frecuencias Fijas</span>
-                <h2 class="text-3xl font-black text-slate-900 dark:text-white">Rutas Principales y Cobertura</h2>
-                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-xl mx-auto font-medium">Horarios continuos para garantizar el cumplimiento de tus itinerarios.</p>
-            </div>
-
-            <div class="grid md:grid-cols-2 gap-6">
-                <div class="p-6 bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl shadow-lg flex items-start gap-4 hover:border-sky-500/40 transition-all">
-                    <div class="w-12 h-12 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center shrink-0 text-xl font-bold">
-                        <i class="fas fa-route"></i>
-                    </div>
-                    <div class="space-y-1.5">
-                        <span class="px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-extrabold uppercase">Ruta Expresa</span>
-                        <h3 class="font-extrabold text-slate-900 dark:text-white text-base">Troncal Norte - Sur</h3>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Conexión directa entre puntos de alto tráfico urbano.</p>
-                        <div class="pt-2 flex items-center gap-4 text-xs font-bold text-slate-700 dark:text-slate-300">
-                            <span><i class="far fa-clock text-sky-500 mr-1"></i>05:00 AM - 10:00 PM</span>
-                            <span><i class="fas fa-redo-alt text-sky-500 mr-1"></i>Cada 15 min</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="p-6 bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl shadow-lg flex items-start gap-4 hover:border-purple-500/40 transition-all">
-                    <div class="w-12 h-12 rounded-2xl bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0 text-xl font-bold">
-                        <i class="fas fa-graduation-cap"></i>
-                    </div>
-                    <div class="space-y-1.5">
-                        <span class="px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-extrabold uppercase">Ruta Especial</span>
-                        <h3 class="font-extrabold text-slate-900 dark:text-white text-base">Conector Universitario & Sede Campestre</h3>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Diseñada para traslados estudiantiles y de personal institucional.</p>
-                        <div class="pt-2 flex items-center gap-4 text-xs font-bold text-slate-700 dark:text-slate-300">
-                            <span><i class="far fa-clock text-purple-500 mr-1"></i>06:00 AM - 09:30 PM</span>
-                            <span><i class="fas fa-redo-alt text-purple-500 mr-1"></i>Cada 20 min</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- SECCIÓN 4: SERVICIOS Y VENTAJAS -->
+        <!-- SECCIÓN 3: SERVICIOS Y VENTAJAS -->
         <section id="servicios" class="py-16 px-6 max-w-6xl mx-auto space-y-10">
             <div class="text-center space-y-2">
-                <span class="text-xs font-extrabold text-indigo-500 uppercase tracking-widest">¿Por qué SGET?</span>
+                <span class="text-xs font-extrabold text-indigo-500 uppercase tracking-widest">¿POR QUÉ SGET?</span>
                 <h2 class="text-3xl font-black text-slate-900 dark:text-white">Servicios Diseñados para la Eficiencia</h2>
             </div>
             
             <div class="grid md:grid-cols-3 gap-6">
-                <div class="p-8 bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl shadow-xl space-y-4 hover:-translate-y-1 transition-all group">
+                <div class="card-glass glow-hover rounded-3xl p-8 space-y-4 text-left group">
                     <div class="w-12 h-12 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-500 flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">
                         <i class="fas fa-map-marked-alt"></i>
                     </div>
@@ -244,7 +234,7 @@ if (!$resultado_viajes) {
                     <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Control automatizado de itinerarios, asignaciones e imprevistos de ruta al instante.</p>
                 </div>
                 
-                <div class="p-8 bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl shadow-xl space-y-4 hover:-translate-y-1 transition-all group">
+                <div class="card-glass glow-hover rounded-3xl p-8 space-y-4 text-left group">
                     <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">
                         <i class="fas fa-user-shield"></i>
                     </div>
@@ -252,7 +242,7 @@ if (!$resultado_viajes) {
                     <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Monitoreo permanente de turnos, disponibilidades y estados del personal operativo.</p>
                 </div>
                 
-                <div class="p-8 bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl shadow-xl space-y-4 hover:-translate-y-1 transition-all group">
+                <div class="card-glass glow-hover rounded-3xl p-8 space-y-4 text-left group">
                     <div class="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-500 flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">
                         <i class="fas fa-chart-line"></i>
                     </div>
@@ -278,8 +268,8 @@ if (!$resultado_viajes) {
     <?php include 'modal_auth.php'; ?>
 
     <!-- MODAL POLÍTICA DE TRATAMIENTO DE DATOS -->
-    <div id="panelPolitica" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 modal-isla-container opacity-0 pointer-events-none hidden transition-opacity duration-300">
-        <div class="modal-isla-card bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[85vh] flex flex-col transform scale-95 transition-transform duration-300">
+    <div id="panelPolitica" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-isla-container opacity-0 pointer-events-none hidden transition-opacity duration-300">
+        <div class="modal-isla-card rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[85vh] flex flex-col transform scale-95 transition-transform duration-300">
             <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/10">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-lg">
@@ -296,7 +286,7 @@ if (!$resultado_viajes) {
             </div>
 
             <!-- CUERPO DE LA POLÍTICA -->
-            <div class="my-4 overflow-y-auto pr-2 space-y-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+            <div class="my-4 overflow-y-auto pr-2 space-y-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed text-left">
                 <div>
                     <h4 class="font-extrabold text-slate-900 dark:text-white text-sm mb-1">1. Responsable del Tratamiento</h4>
                     <p>El sistema **SGET (Sistema de Gestión de Transporte)** actúa como responsable del tratamiento de sus datos personales recolectados a través de esta plataforma digital.</p>
