@@ -121,15 +121,6 @@ if (!$resultado_viajes) {
                     Consulta horarios, rutas disponibles y asegura tu desplazamiento con la tecnología integral de SGET.
                 </p>
 
-                <!-- BOTONES DE ACCIÓN MEJORADOS -->
-                <div class="flex flex-wrap justify-center items-center gap-4 pt-4">
-                    <a href="#viajes-disponibles" class="px-8 py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-sm shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 hover:-translate-y-0.5 transition-all">
-                        <i class="fas fa-eye mr-2"></i>Ver Viajes
-                    </a>
-                    <button onclick="abrirPanel('panelLogin')" class="px-8 py-3.5 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10 font-extrabold text-sm hover:border-sky-500 dark:hover:border-sky-500 hover:-translate-y-0.5 transition-all shadow-sm cursor-pointer">
-                        <i class="fas fa-sign-in-alt mr-2 text-sky-500"></i>Iniciar Sesión
-                    </button>
-                </div>
             </div>
         </section>
 
@@ -268,8 +259,8 @@ if (!$resultado_viajes) {
     <?php include 'modal_auth.php'; ?>
 
     <!-- MODAL POLÍTICA DE TRATAMIENTO DE DATOS -->
-    <div id="panelPolitica" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-isla-container opacity-0 pointer-events-none hidden transition-opacity duration-300">
-        <div class="modal-isla-card rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[85vh] flex flex-col transform scale-95 transition-transform duration-300">
+    <div id="panelPolitica" onclick="if(event.target === this) cerrarPanel('panelPolitica')" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md opacity-0 pointer-events-none hidden transition-opacity duration-300">
+        <div class="modal-isla-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[85vh] flex flex-col transform scale-95 transition-transform duration-300 shadow-2xl">
             <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/10">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-lg">
@@ -280,7 +271,7 @@ if (!$resultado_viajes) {
                         <p class="text-[11px] font-bold text-slate-400">Cumplimiento Ley 1581 de 2012</p>
                     </div>
                 </div>
-                <button onclick="cerrarPanel('panelPolitica')" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors">
+                <button onclick="cerrarPanel('panelPolitica')" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer">
                     <i class="fas fa-times text-sm"></i>
                 </button>
             </div>
@@ -289,7 +280,7 @@ if (!$resultado_viajes) {
             <div class="my-4 overflow-y-auto pr-2 space-y-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed text-left">
                 <div>
                     <h4 class="font-extrabold text-slate-900 dark:text-white text-sm mb-1">1. Responsable del Tratamiento</h4>
-                    <p>El sistema **SGET (Sistema de Gestión de Transporte)** actúa como responsable del tratamiento de sus datos personales recolectados a través de esta plataforma digital.</p>
+                    <p>El sistema <strong>SGET (Sistema de Gestión de Transporte)</strong> actúa como responsable del tratamiento de sus datos personales recolectados a través de esta plataforma digital.</p>
                 </div>
 
                 <div>
@@ -411,6 +402,18 @@ if (!$resultado_viajes) {
             cerrarPanel('panelPolitica');
             setTimeout(() => { abrirPanel(idDestino); }, 200);
         }
+
+        // Cerrar con la tecla ESC
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                ['panelPolitica', 'panelLogin', 'panelRegistro'].forEach(id => {
+                    const panel = document.getElementById(id);
+                    if (panel && !panel.classList.contains('hidden')) {
+                        cerrarPanel(id);
+                    }
+                });
+            }
+        });
 
         document.addEventListener("DOMContentLoaded", function () {
             <?php if (isset($_SESSION['abrir_login']) && $_SESSION['abrir_login'] === true): ?>

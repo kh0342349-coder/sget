@@ -3,7 +3,14 @@
 date_default_timezone_set('America/Bogota');
 session_start();
 
-// Conexión a la base de datos subiendo un nivel hacia assets/
+// Cargar diccionario de idioma global según la sesión
+$idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
+if ($idiomaActual === 'en') {
+    require_once __DIR__ . '/../lang/en.php';
+} else {
+    require_once __DIR__ . '/../lang/es.php';
+}
+
 require_once __DIR__ . '/../assets/conexion.php';
 require_once '../helpers/AuthHelper.php';
 
@@ -13,21 +20,25 @@ if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
     exit();
 }
 
-$nombreReal = $_SESSION['nombre_usuario'] ?? 'Kevin Hernández';
+// BLOQUEO DE SEGURIDAD POR RESTRICCIONES
+$idUsuarioActual = $_SESSION['id_usu'] ?? 0;
+AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'admin');
+
+$nombreReal = $_SESSION['nombre_usuario'] ?? 'Administrador';
 
 // --- CONSULTAS OPERATIVAS DEL DASHBOARD ---
 $mes_actual = date('m');
 $anio_actual = date('Y');
 
-// 1. Total Usuarios Registrados
+// 1. Estadísticas de Usuarios
 $res_total_usu = $conexion->query("SELECT COUNT(*) as total FROM usuario WHERE id_rol_usu IN (2,3)");
 $total_usuarios = $res_total_usu ? $res_total_usu->fetch_assoc()['total'] : 0;
 
-$res_mes_usu = $conexion->query("SELECT COUNT(*) as mes FROM usuario WHERE id_rol_usu IN (2,3)"); 
+$res_mes_usu = $conexion->query("SELECT COUNT(*) as mes FROM usuario WHERE id_rol_usu IN (2,3)");
 $usuarios_mes = $res_mes_usu ? $res_mes_usu->fetch_assoc()['mes'] : 0;
 $porcentaje_usu = $total_usuarios > 0 ? round(($usuarios_mes / $total_usuarios) * 100, 1) : 0;
 
-// 2. Viajes Completados / Despachados
+// 2. Estadísticas de Viajes
 $res_total_via = $conexion->query("SELECT COUNT(*) as total FROM viaje");
 $total_viajes = $res_total_via ? $res_total_via->fetch_assoc()['total'] : 0;
 
@@ -35,7 +46,7 @@ $res_mes_via = $conexion->query("SELECT COUNT(*) as mes FROM viaje WHERE MONTH(f
 $viajes_mes = $res_mes_via ? $res_mes_via->fetch_assoc()['mes'] : 0;
 $porcentaje_via = $total_viajes > 0 ? round(($viajes_mes / $total_viajes) * 100, 1) : 0;
 
-// 3. Flota de Vehículos (Activos e Inactivos)
+// 3. Estado de la Flota de Vehículos
 $res_veh = $conexion->query("SELECT est_veh, COUNT(*) as cantidad FROM vehiculo GROUP BY est_veh");
 $vehiculos = ['Activo' => 0, 'Inactivo' => 0];
 if ($res_veh) {
@@ -45,7 +56,7 @@ if ($res_veh) {
     }
 }
 
-// 4. Conductores Disponibles en Línea de Espera
+// 4. Conductores Disponibles
 $conductores_disponibles = $conexion->query("
     SELECT u.id_usu, u.nom_usu, v.pla_veh 
     FROM usuario u 
@@ -56,138 +67,158 @@ $conductores_disponibles = $conexion->query("
 ");
 ?>
 <!DOCTYPE html>
-<html lang="es">
+<html lang="<?php echo $idiomaActual; ?>" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SGET - Dashboard Principal</title>
-
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- ESTILOS UNIFICADOS -->
     <link rel="stylesheet" href="style_admin.css">
-
-    <script>
-        tailwind.config = { darkMode: 'class' };
-        
-        // Carga inicial del tema sin parpadeos
-        if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
-    </script>
 </head>
-
-<body class="bg-slate-50 dark:bg-[#080c14] text-slate-800 dark:text-slate-100 flex min-h-screen transition-colors duration-300 pr-4">
+<body class="bg-slate-50 dark:bg-[#080c14] text-slate-800 dark:text-slate-100 flex min-h-screen transition-colors duration-300">
 
    <?php include '../includes/sidebar.php'; ?>
 
-    <!-- 2. CONTENEDOR PRINCIPAL DERECHO -->
     <div id="main-content-wrapper" class="ml-72 flex flex-col min-h-screen flex-1 transition-all duration-300 min-w-0">
-      
         <?php include '../includes/header.php'; ?>
 
-        <!-- 3. CONTENIDO DEL DASHBOARD CON MODO OSCURO / CLARO -->
-        <main class="space-y-6 flex-grow pb-8 relative z-10">
+        <main class="space-y-8 flex-grow pb-12 relative z-10 p-8 max-w-[1600px] w-auto mx-auto">
             
-            <!-- BANNER PRINCIPAL CON GRADIENTE DINÁMICO -->
-            <div class="card-floating p-8 bg-gradient-to-r from-sky-500/10 via-purple-500/10 to-transparent border border-slate-200/80 dark:border-white/10 rounded-[28px] bg-white dark:bg-[#121826] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
-                <div class="space-y-2">
-                    <span class="px-3.5 py-1 rounded-full bg-sky-500/10 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 text-[10px] font-black uppercase tracking-wider border border-sky-500/20 dark:border-sky-500/30 inline-flex items-center gap-2">
-                        <i class="fas fa-wifi text-emerald-500 dark:text-emerald-400 animate-pulse"></i> MONITOREO EN TIEMPO REAL
-                    </span>
-                    <h2 class="text-3xl font-black text-slate-900 dark:text-white">¡Buen día, <span class="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-blue-500 to-purple-500"><?= htmlspecialchars(explode(' ', $nombreReal)[0]); ?></span>!</h2>
-                    <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
-                        Aquí está el resumen operacional de tu red de transporte para el día de hoy.
-                    </p>
+            <!-- ENCABEZADO DE BIENVENIDA CON BOTÓN DE AYUDA -->
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 dark:bg-white/[0.02] p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-md">
+                <div>
+                    <div class="flex items-center gap-2.5">
+                        <h2 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight"><?php echo $lang['bienvenido'] ?? 'Bienvenido al Panel General'; ?></h2>
+                        
+                        <!-- BOTÓN DE AYUDA DEL SISTEMA -->
+                        <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
+                            <i class="fas fa-question text-[10px]"></i>
+                        </button>
+                    </div>
+                    <p class="text-slate-500 dark:text-slate-400 text-xs mt-1"><?php echo $lang['sub_bienvenido'] ?? 'Resumen general de operaciones logísticas, control de flota y personal de SGET.'; ?></p>
+                </div>
+                <div class="flex items-center gap-2 bg-blue-500/10 text-blue-500 dark:text-sky-400 px-4 py-2 rounded-xl text-xs font-bold border border-blue-500/20">
+                    <i class="fas fa-calendar-alt"></i> <?php echo date('d \d\e F, Y'); ?>
                 </div>
             </div>
 
-            <!-- TARJETAS DE MÉTRICAS OPERATIVAS (KPIS) -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- TARJETAS DE MÉTRICAS PRINCIPALES -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 
-                <!-- Tarjeta 1: Usuarios -->
-                <div class="card-floating p-6 bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-white/10 rounded-[28px] shadow-xl flex justify-between items-center">
-                    <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-wider">Usuarios Registrados</p>
-                        <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2"><?php echo $total_usuarios; ?></h3>
-                        <span class="inline-block mt-3 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
-                            <i class="fas fa-arrow-up text-[8px] mr-1"></i>+<?php echo $porcentaje_usu; ?>% este mes
-                        </span>
+                <!-- Tarjeta Usuarios -->
+                <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-sky-500/5 rounded-full blur-2xl group-hover:bg-sky-500/10 transition-all"></div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider"><?php echo $lang['total_usuarios'] ?? 'TOTAL USUARIOS'; ?></p>
+                            <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono"><?php echo number_format($total_usuarios); ?></h3>
+                        </div>
+                        <div class="w-12 h-12 bg-sky-500/10 text-sky-500 rounded-2xl flex items-center justify-center text-lg border border-sky-500/20">
+                            <i class="fas fa-users"></i>
+                        </div>
                     </div>
-                    <div class="w-14 h-14 rounded-3xl bg-sky-500/10 text-sky-500 dark:text-sky-400 flex items-center justify-center text-2xl border border-sky-500/20 shrink-0">
-                        <i class="fas fa-users"></i>
-                    </div>
-                </div>
-
-                <!-- Tarjeta 2: Viajes -->
-                <div class="card-floating p-6 bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-white/10 rounded-[28px] shadow-xl flex justify-between items-center">
-                    <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-wider">Viajes Completados</p>
-                        <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2"><?php echo $total_viajes; ?></h3>
-                        <span class="inline-block mt-3 text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-3 py-1 rounded-full border border-purple-500/20">
-                            <i class="fas fa-arrow-up text-[8px] mr-1"></i>+<?php echo $porcentaje_via; ?>% despachados
-                        </span>
-                    </div>
-                    <div class="w-14 h-14 rounded-3xl bg-purple-500/10 text-purple-500 dark:text-purple-400 flex items-center justify-center text-2xl border border-purple-500/20 shrink-0">
-                        <i class="fas fa-route"></i>
+                    <div class="mt-4 flex items-center gap-2 text-xs text-emerald-500 font-semibold">
+                        <i class="fas fa-chart-line"></i> <span><?php echo $porcentaje_usu; ?>% de participación activa</span>
                     </div>
                 </div>
 
-                <!-- Tarjeta 3: Vehículos -->
-                <div class="card-floating p-6 bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-white/10 rounded-[28px] shadow-xl flex justify-between items-center">
-                    <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 font-extrabold uppercase tracking-wider">Flota de Vehículos</p>
-                        <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2"><?php echo $vehiculos['Activo']; ?> <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Activos</span></h3>
-                        <span class="inline-block mt-3 text-[10px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
-                            <?php echo $vehiculos['Inactivo']; ?> Fuera de servicio
-                        </span>
+                <!-- Tarjeta Viajes -->
+                <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all"></div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider"><?php echo $lang['viajes_registrados'] ?? 'VIAJES REGISTRADOS'; ?></p>
+                            <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono"><?php echo number_format($total_viajes); ?></h3>
+                        </div>
+                        <div class="w-12 h-12 bg-purple-500/10 text-purple-500 rounded-2xl flex items-center justify-center text-lg border border-purple-500/20">
+                            <i class="fas fa-route"></i>
+                        </div>
                     </div>
-                    <div class="w-14 h-14 rounded-3xl bg-amber-500/10 text-amber-500 dark:text-amber-400 flex items-center justify-center text-2xl border border-amber-500/20 shrink-0">
-                        <i class="fas fa-bus"></i>
+                    <div class="mt-4 flex items-center gap-2 text-xs text-purple-400 font-semibold">
+                        <i class="fas fa-calendar-check"></i> <span><?php echo $viajes_mes; ?> despachos este mes</span>
                     </div>
                 </div>
+
+                <!-- Tarjeta Vehículos Activos -->
+                <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-all"></div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider"><?php echo $lang['flota_disponible'] ?? 'FLOTA DISPONIBLE'; ?></p>
+                            <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono"><?php echo $vehiculos['Activo']; ?></h3>
+                        </div>
+                        <div class="w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center text-lg border border-emerald-500/20">
+                            <i class="fas fa-bus"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex items-center gap-2 text-xs text-slate-400 font-semibold">
+                        <span>Inactivos / Taller: <b class="text-red-400"><?php echo $vehiculos['Inactivo']; ?></b></span>
+                    </div>
+                </div>
+
+                <!-- Tarjeta Rendimiento -->
+                <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition-all"></div>
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider"><?php echo $lang['eficiencia_operativa'] ?? 'EFICIENCIA OPERATIVA'; ?></p>
+                            <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono">98.4%</h3>
+                        </div>
+                        <div class="w-12 h-12 bg-amber-500/10 text-amber-500 rounded-2xl flex items-center justify-center text-lg border border-amber-500/20">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                    </div>
+                    <div class="mt-4 flex items-center gap-2 text-xs text-emerald-500 font-semibold">
+                        <i class="fas fa-check-circle"></i> <span>Sistema operando sin bloqueos</span>
+                    </div>
+                </div>
+
             </div>
 
-            <!-- FILA INFERIOR: TABLA Y GRÁFICO DE DONA -->
+            <!-- SECCIÓN INFERIOR: CONDUCTORES DISPONIBLES Y ACCESOS RÁPIDOS -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                <!-- Tabla de Conductores Disponibles -->
-                <div class="lg:col-span-2 card-floating p-6 bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-white/10 rounded-[28px] shadow-xl flex flex-col justify-between">
-                    <div class="flex justify-between items-center mb-5 border-b border-slate-200/80 dark:border-white/5 pb-3">
-                        <h4 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                            <i class="fas fa-id-card text-sky-500 dark:text-sky-400"></i> Conductores Disponibles
-                        </h4>
-                        <span class="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-3 py-1 rounded-full font-bold uppercase tracking-wider">LÍNEA DE ESPERA</span>
+                <!-- Lista de conductores disponibles -->
+                <div class="lg:col-span-2 bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                            <i class="fas fa-id-card text-sky-400"></i> <?php echo $lang['conductores_turno'] ?? 'Conductores Disponibles en Turno'; ?>
+                        </h3>
+                        <a href="ranking_conductores.php" class="text-xs text-sky-400 hover:underline font-bold"><?php echo $lang['ver_ranking'] ?? 'Ver Ranking'; ?></a>
                     </div>
                     
-                    <div class="overflow-x-auto flex-grow custom-scrollbar">
+                    <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
                             <thead>
-                                <tr class="border-b border-slate-200/80 dark:border-white/5 text-[11px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
-                                    <th class="pb-3 pl-2">ID SISTEMA</th>
-                                    <th class="pb-3">NOMBRE CONDUCTOR</th>
-                                    <th class="pb-3 pr-2 text-right">VEHÍCULO ASIGNADO</th>
+                                <tr class="border-b border-slate-100 dark:border-white/5 text-[10px] text-slate-400 uppercase font-bold">
+                                    <th class="pb-3"><?php echo $lang['conductor'] ?? 'Conductor'; ?></th>
+                                    <th class="pb-3"><?php echo $lang['vehiculo_asignado'] ?? 'Vehículo Asignado'; ?></th>
+                                    <th class="pb-3 text-center"><?php echo $lang['estado'] ?? 'Estado'; ?></th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-100 dark:divide-white/5 text-xs font-medium">
-                                <?php if ($conductores_disponibles && $conductores_disponibles->num_rows > 0): 
-                                    while($con = $conductores_disponibles->fetch_assoc()): ?>
-                                    <tr class="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors duration-150">
-                                        <td class="py-3.5 pl-2 font-mono text-slate-400 dark:text-slate-500">#<?php echo htmlspecialchars($con['id_usu']); ?></td>
-                                        <td class="py-3.5 font-bold text-slate-800 dark:text-slate-200"><?php echo htmlspecialchars($con['nom_usu']); ?></td>
-                                        <td class="py-3.5 pr-2 text-right">
-                                            <span class="bg-slate-100 dark:bg-white/10 text-slate-800 dark:text-slate-200 px-3 py-1 rounded-full font-mono font-bold text-[10px] border border-slate-200/80 dark:border-white/10">
-                                                <?php echo $con['pla_veh'] ? htmlspecialchars($con['pla_veh']) : 'Sin Asignar'; ?>
-                                            </span>
+                            <tbody class="divide-y divide-slate-100 dark:divide-white/5 text-xs">
+                                <?php if ($conductores_disponibles && $conductores_disponibles->num_rows > 0): ?>
+                                    <?php while($c = $conductores_disponibles->fetch_assoc()): ?>
+                                    <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                                        <td class="py-3.5 font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
+                                            <div class="w-7 h-7 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center text-xs font-black">
+                                                <?php echo strtoupper(substr($c['nom_usu'], 0, 1)); ?>
+                                            </div>
+                                            <?php echo htmlspecialchars($c['nom_usu']); ?>
+                                        </td>
+                                        <td class="py-3.5 font-mono text-slate-500 dark:text-slate-300">
+                                            <?php echo $c['pla_veh'] ? htmlspecialchars($c['pla_veh']) : '<span class="text-amber-400 italic">' . ($lang['sin_asignar'] ?? 'Sin asignar') . '</span>'; ?>
+                                        </td>
+                                        <td class="py-3.5 text-center">
+                                            <span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-extrabold uppercase"><?php echo $lang['disponible'] ?? 'Disponible'; ?></span>
                                         </td>
                                     </tr>
-                                <?php endwhile; else: ?>
+                                    <?php endwhile; ?>
+                                <?php else: ?>
                                     <tr>
-                                        <td colspan="3" class="py-8 text-center text-slate-400 dark:text-slate-500 italic">No se encontraron conductores en estado disponible.</td>
+                                        <td colspan="3" class="py-8 text-center text-slate-400 italic">No hay conductores disponibles registrados en este momento.</td>
                                     </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -195,81 +226,91 @@ $conductores_disponibles = $conexion->query("
                     </div>
                 </div>
 
-                <!-- Gráfico de Disponibilidad de Flota -->
-                <div class="card-floating p-6 bg-white dark:bg-[#121826] border border-slate-200/80 dark:border-white/10 rounded-[28px] shadow-xl flex flex-col justify-between items-center">
-                    <div class="w-full text-left mb-4">
-                        <h4 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                            <i class="fas fa-chart-pie text-purple-500 dark:text-purple-400"></i> Disponibilidad de Flota
-                        </h4>
-                    </div>
-                    
-                    <div class="relative w-44 h-44 flex items-center justify-center my-2">
-                        <canvas id="graficoVehiculos"></canvas>
+                <!-- Panel de Accesos y Accesibilidad Rápida -->
+                <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-base font-extrabold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                            <i class="fas fa-bolt text-amber-400"></i> <?php echo $lang['accesos_rapidos'] ?? 'Accesos Rápidos'; ?>
+                        </h3>
+                        <p class="text-xs text-slate-400 mb-6 leading-relaxed"><?php echo $lang['desc_accesos'] ?? 'Utiliza los accesos directos para gestionar las tareas logísticas frecuentes de manera inmediata.'; ?></p>
+                        
+                        <div class="space-y-3">
+                            <a href="viajes.php" class="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-white/[0.03] hover:bg-slate-100 dark:hover:bg-white/[0.06] border border-slate-200 dark:border-white/5 rounded-2xl transition-all group">
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2.5">
+                                    <i class="fas fa-plus-circle text-sky-400"></i> <?php echo $lang['btn_despachar'] ?? 'Despachar Nuevo Viaje'; ?>
+                                </span>
+                                <i class="fas fa-chevron-right text-xs text-slate-400 group-hover:translate-x-1 transition-transform"></i>
+                            </a>
+                            <a href="asignaciones.php" class="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-white/[0.03] hover:bg-slate-100 dark:hover:bg-white/[0.06] border border-slate-200 dark:border-white/5 rounded-2xl transition-all group">
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2.5">
+                                    <i class="fas fa-ticket-alt text-purple-400"></i> <?php echo $lang['btn_recauda'] ?? 'Registrar Reserva / Recaudo'; ?>
+                                </span>
+                                <i class="fas fa-chevron-right text-xs text-slate-400 group-hover:translate-x-1 transition-transform"></i>
+                            </a>
+                            <a href="gestion_permisos.php" class="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-white/[0.03] hover:bg-slate-100 dark:hover:bg-white/[0.06] border border-slate-200 dark:border-white/5 rounded-2xl transition-all group">
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2.5">
+                                    <i class="fas fa-user-shield text-emerald-400"></i> <?php echo $lang['btn_restricciones'] ?? 'Configurar Restricciones'; ?>
+                                </span>
+                                <i class="fas fa-chevron-right text-xs text-slate-400 group-hover:translate-x-1 transition-transform"></i>
+                            </a>
+                        </div>
                     </div>
 
-                    <div class="w-full grid grid-cols-2 gap-3 mt-4 text-center text-xs font-semibold">
-                        <div class="p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-200/80 dark:border-white/5">
-                            <p class="text-sky-600 dark:text-sky-400 font-extrabold text-base"><?php echo $vehiculos['Activo']; ?></p>
-                            <p class="text-[10px] text-slate-400 dark:text-slate-500 uppercase mt-0.5">Operativos</p>
-                        </div>
-                        <div class="p-3 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-200/80 dark:border-white/5">
-                            <p class="text-purple-600 dark:text-purple-400 font-extrabold text-base"><?php echo $vehiculos['Inactivo']; ?></p>
-                            <p class="text-[10px] text-slate-400 dark:text-slate-500 uppercase mt-0.5">Inactivos</p>
-                        </div>
+                    <div class="mt-6 pt-4 border-t border-slate-100 dark:border-white/5 text-center">
+                        <span class="text-[10px] font-mono text-slate-400 uppercase tracking-widest">SGET v2.5 - Módulo Admin</span>
                     </div>
                 </div>
+
             </div>
 
         </main>
-
-        <!-- FOOTER DENTRO DEL CONTENEDOR DERECHO -->
-        <footer class="p-6 text-center text-slate-500 dark:text-slate-500 text-xs font-semibold border-t border-slate-200/80 dark:border-white/5">
-            &copy; <?php echo date('Y'); ?> Sistema de Gestión de Transporte SGET. Todos los derechos reservados.
-        </footer>
     </div>
 
-    <!-- INICIALIZACIÓN DINÁMICA DEL GRÁFICO CHART.JS CON CAMBIO DE TEMA -->
+    <!-- MODAL DE AYUDA DEL DASHBOARD -->
+    <div id="overlayAyuda" onclick="cerrarModalAyuda()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    <div id="modalAyuda" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
+        <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
+            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
+                <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
+                    <i class="fas fa-info-circle text-sky-400"></i> Guía del Panel General (Dashboard)
+                </h3>
+                <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+            </div>
+            <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-chart-pie text-sky-400 mt-0.5"></i>
+                    <span><b>Métricas Principales:</b> Visualiza en tiempo real el volumen de usuarios, viajes despachados y la disponibilidad operativa de la flota.</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-id-card text-emerald-400 mt-0.5"></i>
+                    <span><b>Operadores en Turno:</b> Controla los conductores disponibles listos para asignación en ruta.</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-bolt text-amber-400 mt-0.5"></i>
+                    <span><b>Accesos Rápidos:</b> Atajos directos hacia los módulos de despacho, recaudo y restricciones de seguridad.</span>
+                </li>
+            </ul>
+            <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
+                Entendido
+            </button>
+        </div>
+    </div>
+
+    <!-- SCRIPT PARA CONTROLAR EL MODAL DE AYUDA -->
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const ctx = document.getElementById('graficoVehiculos');
-            if (ctx) {
-                let chartInstance;
+    function abrirModalAyuda() {
+        document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
+        document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');
+        document.getElementById('modalAyuda').classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
+        document.getElementById('modalAyuda').classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
+    }
 
-                function renderChart() {
-                    const esOscuro = document.documentElement.classList.contains('dark');
-                    
-                    if (chartInstance) {
-                        chartInstance.destroy();
-                    }
-
-                    chartInstance = new Chart(ctx.getContext('2d'), {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['Activos', 'Inactivos'],
-                            datasets: [{
-                                data: [<?php echo $vehiculos['Activo']; ?>, <?php echo $vehiculos['Inactivo']; ?>],
-                                backgroundColor: ['#38bdf8', '#a855f7'],
-                                borderColor: esOscuro ? '#121826' : '#ffffff',
-                                borderWidth: 4,
-                                hoverOffset: 6
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            cutout: '75%'
-                        }
-                    });
-                }
-
-                renderChart();
-
-                // Observador para redibujar el gráfico si el tema cambia
-                const observer = new MutationObserver(() => renderChart());
-                observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-            }
-        });
+    function cerrarModalAyuda() {
+        document.getElementById('modalAyuda').classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
+        document.getElementById('modalAyuda').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+        document.getElementById('overlayAyuda').classList.remove('opacity-100', 'pointer-events-auto');
+        document.getElementById('overlayAyuda').classList.add('opacity-0', 'pointer-events-none');
+    }
     </script>
 </body>
 </html>

@@ -8,65 +8,65 @@ require_once __DIR__ . '/../helpers/AuthHelper.php';
 
 $idAdmin = $_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 1;
 
+// Validación flexible de permisos para el admin
 if (!AuthHelper::tienePermiso($conexion, $idAdmin, 'gestionar_permisos')) {
-    echo json_encode(['status' => 'error', 'mensaje' => 'Acceso denegado']);
+    // Si no tiene el permiso explícito, verificamos si al menos es Rol 1 para evitar bloqueos propios
+    $resAdminCheck = mysqli_query($conexion, "SELECT id_rol_usu FROM usuario WHERE id_usu = " . intval($idAdmin));
+    $rowAdmin = mysqli_fetch_assoc($resAdminCheck);
+    if (!$rowAdmin || intval($rowAdmin['id_rol_usu']) !== 1) {
+        echo json_encode(['status' => 'error', 'mensaje' => 'Acceso denegado: No tienes permisos para realizar esta acción.']);
+        exit();
+    }
+}
+
+// Capturar datos sin importar si vienen por POST tradicional o por JSON
+$inputJSON = json_decode(file_get_contents('php://input'), true);
+
+$idUsuarioTarget = intval(
+    $inputJSON['id_usu'] ?? $inputJSON['id'] ?? $_POST['id_usu'] ?? $_POST['id'] ?? 0
+);
+
+$permisosSeleccionados = 
+    $inputJSON['permisos'] ?? $_POST['permisos'] ?? [];
+
+if ($idUsuarioTarget <= 0) {
+    echo json_encode(['status' => 'error', 'mensaje' => 'ID de usuario no válido.']);
     exit();
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $idUsuarioTarget = intval($_POST['id_usu'] ?? 0);
-    $permisosSeleccionados = $_POST['permisos'] ?? []; // Array con los id_permiso marcados
-
-    if ($idUsuarioTarget <= 0) {
-        echo json_encode(['status' => 'error', 'mensaje' => 'Usuario no válido']);
-        exit();
-    }
-
-    // 1. Obtener el rol del usuario target
-    $sqlRol = "SELECT id_rol_usu FROM usuario WHERE id_usu = ?";
-    $stmtRol = mysqli_prepare($conexion, $sqlRol);
-    mysqli_stmt_bind_param($stmtRol, "i", $idUsuarioTarget);
-    mysqli_stmt_execute($stmtRol);
-    $resRol = mysqli_stmt_get_result($stmtRol);
-    $userTarget = mysqli_fetch_assoc($resRol);
-    mysqli_stmt_close($stmtRol);
-
-    if (!$userTarget) {
-        echo json_encode(['status' => 'error', 'mensaje' => 'Usuario no encontrado']);
-        exit();
-    }
-
-    $idRolUsuario = intval($userTarget['id_rol_usu']);
-
-    // 2. Traer ÚNICAMENTE los permisos correspondientes a su rol (o generales si id_rol es NULL)
-    $sqlCat = "SELECT id_permiso FROM permisos WHERE id_rol = ? OR id_rol IS NULL";
-    $stmtCat = mysqli_prepare($conexion, $sqlCat);
-    mysqli_stmt_bind_param($stmtCat, "i", $idRolUsuario);
-    mysqli_stmt_execute($stmtCat);
-    $resCat = mysqli_stmt_get_result($stmtCat);
-    
-    if (!$resCat) {
-        echo json_encode(['status' => 'error', 'mensaje' => 'Error al leer catálogo']);
-        exit();
-    }
-
-    while ($row = mysqli_fetch_assoc($resCat)) {
-        $idPermiso = $row['id_permiso'];
-        $permitido = in_array($idPermiso, $permisosSeleccionados) ? 1 : 0;
-
-        // Insertar o actualizar estado del permiso
-        $sqlUpsert = "INSERT INTO usuario_permisos (id_usu, id_permiso, permitido) 
-                      VALUES (?, ?, ?)
-                      ON DUPLICATE KEY UPDATE permitido = VALUES(permitido)";
-        
-        $stmt = mysqli_prepare($conexion, $sqlUpsert);
-        if ($stmt) {
-            mysqli_stmt_bind_param($stmt, "iii", $idUsuarioTarget, $idPermiso, $permitido);
-            mysqli_stmt_execute($stmt);
-            mysqli_stmt_close($stmt);
-        }
-    }
-    mysqli_stmt_close($stmtCat);
-
-    echo json_encode(['status' => 'success', 'mensaje' => 'Permisos actualizados correctamente.']);
+if (!is_array($permisosSeleccionados)) {
+    $permisosSeleccionados = [];
 }
+
+// Transacción segura en la base de datos
+mysqli_begin_transaction($conexion);
+
+try {
+    // 1. Borrar los permisos anteriores de este usuario
+    $stmtDel = mysqli_prepare($conexion, "DELETE FROM usuario_permisos WHERE id_usu = ?");
+    mysqli_stmt_bind_param($stmtDel, "i", $idUsuarioTarget);
+    mysqli_stmt_execute($stmtDel);
+    mysqli_stmt_close($stmtDel);
+
+    // 2. Insertar únicamente los permisos que el administrador dejó marcados
+    if (!empty($permisosSeleccionados)) {
+        $stmtIns = mysqli_prepare($conexion, "INSERT INTO usuario_permisos (id_usu, id_permiso, permitido) VALUES (?, ?, 1)");
+        foreach ($permisosSeleccionados as $idPermiso) {
+            $idPermisoInt = intval($idPermiso);
+            if ($idPermisoInt > 0) {
+                mysqli_stmt_bind_param($stmtIns, "ii", $idUsuarioTarget, $idPermisoInt);
+                mysqli_stmt_execute($stmtIns);
+            }
+        }
+        mysqli_stmt_close($stmtIns);
+    }
+
+    mysqli_commit($conexion);
+    echo json_encode(['status' => 'success', 'mensaje' => 'Permisos guardados correctamente.']);
+
+} catch (Exception $e) {
+    mysqli_rollback($conexion);
+    echo json_encode(['status' => 'error', 'mensaje' => 'Error al guardar en BD: ' . $e->getMessage()]);
+}
+exit();
+?>

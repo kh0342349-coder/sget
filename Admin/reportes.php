@@ -1,22 +1,26 @@
 <?php
+// Archivo: Admin/reportes.php
 date_default_timezone_set('America/Bogota');
 session_start();
 
 include '../assets/conexion.php';
 require_once '../helpers/AuthHelper.php';
 
-// 1. Verificación de Seguridad (Admin = Rol 1)
+// 1. Verificación de Seguridad (Admin = Rol 1)[cite: 7]
 if (!isset($_SESSION['rol']) || $_SESSION['rol'] != 1) {
     header("Location: ../index.php");
     exit();
 }
 
+// BLOQUEO DE SEGURIDAD POR RESTRICCIONES[cite: 7]
+$idUsuarioActual = $_SESSION['id_usu'] ?? 0;
+AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'reportes');
+
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
 
-// 2. Control de Pestañas (Tabs)
-$tab = $_GET['tab'] ?? 'general'; 
+// 2. Control de Pestañas (Tabs)[cite: 7]
+$tab = $_GET['tab'] ?? 'general';
 ?>
-
 <!DOCTYPE html>
 <html lang="es" class="dark">
 <head>
@@ -24,339 +28,206 @@ $tab = $_GET['tab'] ?? 'general';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SGET - Panel de Reportes Analíticos</title>
 
-    <!-- PREVENCIÓN DE FLASHEO DE MODO OSCURO (Sincronizado con 'theme' y 'color-theme') -->
-    <script>
-        (function() {
-            const savedTheme = localStorage.getItem('theme') || localStorage.getItem('color-theme');
-            if (savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
-        })();
-    </script>
-
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="style_admin.css">
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
                 extend: {
                     colors: {
-                        'bg-principal': { DEFAULT: '#f8fafc', dark: '#0b0f19' },
-                        'bg-tarjeta': { DEFAULT: '#ffffff', dark: '#1e293b' },
                         'neon-azul': '#38bdf8',
-                        'neon-morado': '#a855f7',
-                        'color-mutado': { DEFAULT: '#64748b', dark: '#94a3b8' }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        'neon-morado': '#a855f7'
                     }
                 }
             }
         }
     </script>
-    
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-    </style>
 </head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] flex min-h-screen antialiased text-slate-800 dark:text-slate-100 transition-colors duration-300">
+<body class="bg-slate-50 dark:bg-[#080c14] text-slate-800 dark:text-slate-100 flex min-h-screen transition-colors duration-300">
 
-    <!-- BARRA LATERAL -->
     <?php include '../includes/sidebar.php'; ?>
 
-    <!-- CONTENEDOR PRINCIPAL -->
-    <div class="flex-1 ml-64 flex flex-col min-h-screen">
+    <div id="main-content-wrapper" class="ml-72 flex flex-col min-h-screen flex-1 transition-all duration-300 min-w-0">
         
-        <!-- HEADER MODULAR REUTILIZABLE -->
         <?php include '../includes/header.php'; ?>
 
-        <!-- SECCIÓN DE CONTENIDO -->
-        <main class="p-8 flex-1 space-y-6">
+        <main class="space-y-8 flex-grow pb-12 relative z-10 p-8 max-w-[1600px] w-auto mx-auto w-full">
             
-            <!-- ENCABEZADO DE SECCIÓN -->
-            <div>
-                <h1 class="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Panel de Inteligencia Logística</h1>
-                <p class="text-slate-500 dark:text-slate-400 text-xs mt-1">Historial integral de operaciones, reservas, viajes programados y métricas operativas.</p>
+            <!-- ENCABEZADO CON BOTÓN DE AYUDA -->
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 dark:bg-white/[0.02] p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-md">
+                <div>
+                    <div class="flex items-center gap-2.5">
+                        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Panel de Inteligencia Logística</h1>
+                        
+                        <!-- BOTÓN DE AYUDA DEL SISTEMA -->
+                        <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
+                            <i class="fas fa-question text-[10px]"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Historial integral de operaciones, reservas, viajes programados y métricas operativas[cite: 7].</p>
+                </div>
             </div>
 
-            <!-- CONTROL DE PESTAÑAS (TABS) -->
-            <div class="flex flex-wrap gap-2 bg-slate-200/80 dark:bg-[#1e293b] p-1.5 rounded-xl border border-slate-300/60 dark:border-white/5 w-fit shadow-md backdrop-blur-sm">
-                <a href="reportes.php?tab=general" 
-                   class="px-5 py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 <?php echo $tab == 'general' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-white/[0.05]'; ?>">
+            <!-- Navegación de Pestañas[cite: 7] -->
+            <div class="flex flex-wrap gap-2 bg-white dark:bg-[#121826] p-2 rounded-2xl border border-slate-200 dark:border-white/10 w-fit shadow-md">
+                <a href="reportes.php?tab=general" class="px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 <?php echo $tab == 'general' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'; ?>">
                     <i class="fas fa-chart-pie text-xs"></i> Consolidado General
                 </a>
-                <a href="reportes.php?tab=viajes" 
-                   class="px-5 py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 <?php echo $tab == 'viajes' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-white/[0.05]'; ?>">
+                <a href="reportes.php?tab=viajes" class="px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 <?php echo $tab == 'viajes' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'; ?>">
                     <i class="fas fa-route text-xs"></i> Historial de Viajes
                 </a>
-                <a href="reportes.php?tab=reservas" 
-                   class="px-5 py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 <?php echo $tab == 'reservas' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-white/[0.05]'; ?>">
+                <a href="reportes.php?tab=reservas" class="px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 <?php echo $tab == 'reservas' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'; ?>">
                     <i class="fas fa-ticket-alt text-xs"></i> Reservas de Pasajeros
                 </a>
-                <a href="reportes.php?tab=conductores" 
-                   class="px-5 py-2.5 rounded-lg text-[11px] font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 <?php echo $tab == 'conductores' ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-white/[0.05]'; ?>">
+                <a href="reportes.php?tab=conductores" class="px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 <?php echo $tab == 'conductores' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'; ?>">
                     <i class="fas fa-id-card text-xs"></i> Rendimiento Conductores
                 </a>
             </div>
 
-            <!-- ==========================================
-                 PESTAÑA 1: CONSOLIDADO GENERAL
-                 ========================================== -->
+            <!-- CONTENIDO SEGÚN LA PESTAÑA[cite: 7] -->
             <?php if ($tab == 'general'): ?>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    
                     <?php
-                    // Métricas globales
                     $tot_viajes = $conexion->query("SELECT COUNT(*) as total FROM viaje")->fetch_assoc()['total'] ?? 0;
                     $tot_usuarios = $conexion->query("SELECT COUNT(*) as total FROM usuario")->fetch_assoc()['total'] ?? 0;
                     $tot_recaudo = $conexion->query("SELECT SUM(val_via) as total FROM viaje")->fetch_assoc()['total'] ?? 0;
                     ?>
-
-                    <div class="bg-white dark:bg-[#1e293b] p-6 rounded-2xl border border-slate-200/80 dark:border-white/5 shadow-lg relative overflow-hidden backdrop-blur-sm transition-colors duration-300">
-                        <div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-blue-500 to-transparent"></div>
-                        <p class="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">Total Viajes Registrados</p>
-                        <h3 class="text-3xl font-extrabold text-slate-800 dark:text-white mt-2 font-mono"><?php echo number_format($tot_viajes); ?></h3>
-                        <p class="text-[10px] text-blue-600 dark:text-blue-400 mt-2 font-semibold"><i class="fas fa-arrow-up mr-1"></i> Registros globales en BD</p>
+                    <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl relative overflow-hidden">
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Viajes Registrados</p>
+                        <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono"><?php echo number_format($tot_viajes); ?></h3>
                     </div>
-
-                    <div class="bg-white dark:bg-[#1e293b] p-6 rounded-2xl border border-slate-200/80 dark:border-white/5 shadow-lg relative overflow-hidden backdrop-blur-sm transition-colors duration-300">
-                        <div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-purple-500 to-transparent"></div>
-                        <p class="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">Usuarios Registrados</p>
-                        <h3 class="text-3xl font-extrabold text-slate-800 dark:text-white mt-2 font-mono"><?php echo number_format($tot_usuarios); ?></h3>
-                        <p class="text-[10px] text-purple-600 dark:text-purple-400 mt-2 font-semibold"><i class="fas fa-users mr-1"></i> Admins, Conductores y Pasajeros</p>
+                    <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl relative overflow-hidden">
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Usuarios Registrados</p>
+                        <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono"><?php echo number_format($tot_usuarios); ?></h3>
                     </div>
-
-                    <div class="bg-white dark:bg-[#1e293b] p-6 rounded-2xl border border-slate-200/80 dark:border-white/5 shadow-lg relative overflow-hidden backdrop-blur-sm transition-colors duration-300">
-                        <div class="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500 to-transparent"></div>
-                        <p class="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-wider">Flujo Total Estimado</p>
-                        <h3 class="text-3xl font-extrabold text-slate-800 dark:text-white mt-2 font-mono">$<?php echo number_format($tot_recaudo); ?></h3>
-                        <p class="text-[10px] text-emerald-600 dark:text-emerald-400 mt-2 font-semibold"><i class="fas fa-coins mr-1"></i> Acumulado general tarifario</p>
+                    <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl relative overflow-hidden">
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Flujo Total Estimado</p>
+                        <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono">$<?php echo number_format($tot_recaudo); ?></h3>
                     </div>
-
                 </div>
-            <?php endif; ?>
 
-            <!-- ==========================================
-                 PESTAÑA 2: HISTORIAL DE VIAJES
-                 ========================================== -->
-            <?php if ($tab == 'viajes'): ?>
-                <div class="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200/80 dark:border-white/5 shadow-xl overflow-hidden backdrop-blur-sm transition-colors duration-300">
-                    <div class="p-6 border-b border-slate-200 dark:border-white/5 flex justify-between items-center">
-                        <div>
-                            <h2 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Trazabilidad Total de Viajes</h2>
-                            <p class="text-[10px] text-slate-500 dark:text-slate-400 font-mono uppercase mt-0.5 tracking-wider">Monitoreo general de asignación de servicios logísticos</p>
-                        </div>
-                    </div>
-                    
+            <?php elseif ($tab == 'viajes'): ?>
+                <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl space-y-6">
+                    <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fas fa-route text-sky-400"></i> Historial Completo de Viajes
+                    </h2>
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead class="bg-slate-100/80 dark:bg-[#0b0f19]/50 border-b border-slate-200 dark:border-white/5">
-                                <tr>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ID / Conductor</th>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ruta Programada</th>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Fecha / Hora</th>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Tarifa</th>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Estado</th>
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="border-b border-slate-100 dark:border-white/5 text-[10px] text-slate-400 uppercase font-bold">
+                                    <th class="pb-3 px-3">ID</th>
+                                    <th class="pb-3 px-3">Ruta</th>
+                                    <th class="pb-3 px-3">Conductor</th>
+                                    <th class="pb-3 px-3">Vehículo (Placa)</th>
+                                    <th class="pb-3 px-3">Fecha y Hora</th>
+                                    <th class="pb-3 px-3">Valor</th>
+                                    <th class="pb-3 px-3 text-center">Estado</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-200/80 dark:divide-white/5 text-slate-700 dark:text-slate-200">
+                            <tbody class="divide-y divide-slate-100 dark:divide-white/5">
                                 <?php
-                                $sql_viajes = "SELECT v.id_via, u.nom_usu, r.nom_rut, v.fec_via, v.val_via, v.est_via 
-                                               FROM viaje v
-                                               LEFT JOIN usuario u ON v.id_usu_via = u.id_usu
-                                               LEFT JOIN rutas r ON v.id_rut_via = r.id_rut
-                                               ORDER BY v.fec_via DESC";
-                                $res_viajes = $conexion->query($sql_viajes);
-
-                                if ($res_viajes && $res_viajes->num_rows > 0):
-                                    while($row = $res_viajes->fetch_assoc()): ?>
-                                        <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-all group">
-                                            <td class="px-6 py-4">
-                                                <div class="flex items-center gap-3">
-                                                    <span class="text-xs font-mono font-bold text-slate-400 dark:text-slate-500">#<?php echo $row['id_via']; ?></span>
-                                                    <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-white uppercase"><?php echo htmlspecialchars($row['nom_usu'] ?? 'Sin Asignar'); ?></span>
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4">
-                                                <span class="inline-flex items-center px-2.5 py-1 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300 rounded-lg text-xs">
-                                                    <i class="fas fa-map-pin text-blue-500 dark:text-neon-azul mr-2 text-[10px]"></i> <?php echo htmlspecialchars($row['nom_rut'] ?? 'Ruta No Especificada'); ?>
-                                                </span>
-                                            </td>
-                                            <td class="px-6 py-4 text-xs font-mono text-slate-500 dark:text-slate-400">
-                                                <?php echo date("d/m/Y • h:i A", strtotime($row['fec_via'])); ?>
-                                            </td>
-                                            <td class="px-6 py-4 text-center">
-                                                <span class="text-sm font-bold font-mono text-slate-800 dark:text-white">$<?php echo number_format($row['val_via']); ?></span>
-                                            </td>
-                                            <td class="px-6 py-4 text-center">
-                                                <?php 
-                                                $est = $row['est_via'];
-                                                $badge_style = ($est == 'Completado') 
-                                                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20' 
-                                                    : (($est == 'Pendiente') 
-                                                        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20' 
-                                                        : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10');
-                                                ?>
-                                                <span class="inline-block px-3 py-1.5 <?php echo $badge_style; ?> rounded-xl text-[10px] font-extrabold uppercase tracking-widest border">
-                                                    <?php echo htmlspecialchars($est); ?>
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    <?php endwhile; 
-                                else: ?>
-                                    <tr>
-                                        <td colspan="5" class="px-6 py-12 text-center text-slate-400 text-xs">
-                                            No hay registros de viajes registrados en el sistema.
-                                        </td>
-                                    </tr>
+                                $historial_viajes = $conexion->query("SELECT v.*, r.nom_rut, u.nom_usu, veh.pla_veh FROM viaje v LEFT JOIN rutas r ON v.id_rut_via = r.id_rut LEFT JOIN usuario u ON v.id_usu_via = u.id_usu LEFT JOIN vehiculo veh ON v.id_veh = veh.id_veh ORDER BY v.id_via DESC");
+                                if ($historial_viajes && $historial_viajes->num_rows > 0):
+                                    while($hv = $historial_viajes->fetch_assoc()):
+                                ?>
+                                <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                                    <td class="py-3.5 px-3 font-mono text-slate-400">#<?php echo $hv['id_via']; ?></td>
+                                    <td class="py-3.5 px-3 font-bold text-slate-800 dark:text-white"><?php echo htmlspecialchars($hv['nom_rut'] ?? 'Ruta no asignada'); ?></td>
+                                    <td class="py-3.5 px-3 text-slate-300"><?php echo htmlspecialchars($hv['nom_usu'] ?? 'Sin conductor'); ?></td>
+                                    <td class="py-3.5 px-3 font-mono text-sky-400"><?php echo htmlspecialchars($hv['pla_veh'] ?? 'Sin placa'); ?></td>
+                                    <td class="py-3.5 px-3 text-slate-400"><?php echo $hv['fec_via'] . ' ' . $hv['hor_sal_via']; ?></td>
+                                    <td class="py-3.5 px-3 font-mono text-emerald-400 font-bold">$<?php echo number_format($hv['val_via'], 0, ',', '.'); ?></td>
+                                    <td class="py-3.5 px-3 text-center">
+                                        <span class="px-2.5 py-1 bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded-full text-[10px] font-extrabold uppercase"><?php echo $hv['est_via']; ?></span>
+                                    </td>
+                                </tr>
+                                <?php endwhile; else: ?>
+                                <tr>
+                                    <td colspan="7" class="py-8 text-center text-slate-400 italic">No hay registros en el historial de viajes[cite: 7].</td>
+                                </tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
                 </div>
-            <?php endif; ?>
 
-            <!-- ==========================================
-                 PESTAÑA 3: RESERVAS DE PASAJEROS
-                 ========================================== -->
-            <?php if ($tab == 'reservas'): ?>
-                <div class="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200/80 dark:border-white/5 shadow-xl overflow-hidden backdrop-blur-sm transition-colors duration-300">
-                    <div class="p-6 border-b border-slate-200 dark:border-white/5 flex justify-between items-center">
-                        <div>
-                            <h2 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Solicitudes de Reservas</h2>
-                            <p class="text-[10px] text-slate-500 dark:text-slate-400 font-mono uppercase mt-0.5 tracking-wider">Histórico de cupos solicitados por pasajeros</p>
-                        </div>
-                    </div>
-                    
+            <?php elseif ($tab == 'reservas'): ?>
+                <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl space-y-6">
+                    <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fas fa-ticket-alt text-purple-400"></i> Historial de Reservas de Pasajeros
+                    </h2>
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead class="bg-slate-100/80 dark:bg-[#0b0f19]/50 border-b border-slate-200 dark:border-white/5">
-                                <tr>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pasajero</th>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ruta Destino</th>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Fecha del Servicio</th>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Valor</th>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Estado de Reserva</th>
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="border-b border-slate-100 dark:border-white/5 text-[10px] text-slate-400 uppercase font-bold">
+                                    <th class="pb-3 px-3">ID Reserva</th>
+                                    <th class="pb-3 px-3">Pasajero</th>
+                                    <th class="pb-3 px-3">Viaje / Ruta</th>
+                                    <th class="pb-3 px-3">Valor Pagado</th>
+                                    <th class="pb-3 px-3 text-center">Estado de Pago</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-200/80 dark:divide-white/5 text-slate-700 dark:text-slate-200">
+                            <tbody class="divide-y divide-slate-100 dark:divide-white/5">
                                 <?php
-                                $sql_res = "SELECT v.id_via, u.nom_usu, r.nom_rut, v.fec_via, v.val_via, v.est_via 
-                                            FROM viaje v
-                                            INNER JOIN usuario u ON v.id_usu_via = u.id_usu
-                                            INNER JOIN rutas r ON v.id_rut_via = r.id_rut
-                                            WHERE u.id_rol_usu = 3
-                                            ORDER BY v.fec_via DESC";
-                                $res_res = $conexion->query($sql_res);
-
-                                if ($res_res && $res_res->num_rows > 0):
-                                    while($row = $res_res->fetch_assoc()): ?>
-                                        <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-all group">
-                                            <td class="px-6 py-4">
-                                                <div class="flex items-center gap-4">
-                                                    <div class="w-9 h-9 bg-slate-100 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-blue-600 dark:text-neon-azul rounded-xl flex items-center justify-center font-bold text-xs shadow-inner">
-                                                        <?php echo strtoupper(substr($row['nom_usu'], 0, 1)); ?>
-                                                    </div>
-                                                    <span class="text-sm font-semibold text-slate-800 dark:text-slate-200 uppercase"><?php echo htmlspecialchars($row['nom_usu']); ?></span>
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4">
-                                                <span class="inline-flex items-center px-2.5 py-1 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300 rounded-lg text-xs">
-                                                    <i class="fas fa-map-pin text-blue-500 dark:text-neon-azul mr-2 text-[10px]"></i> <?php echo htmlspecialchars($row['nom_rut']); ?>
-                                                </span>
-                                            </td>
-                                            <td class="px-6 py-4 text-center text-xs font-mono text-slate-500 dark:text-slate-400">
-                                                <?php echo date("d/m/Y • h:i A", strtotime($row['fec_via'])); ?>
-                                            </td>
-                                            <td class="px-6 py-4 text-center">
-                                                <span class="text-sm font-bold font-mono text-slate-800 dark:text-white">$<?php echo number_format($row['val_via']); ?></span>
-                                            </td>
-                                            <td class="px-6 py-4 text-center">
-                                                <span class="inline-block px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 text-blue-700 dark:text-neon-azul rounded-xl text-[10px] font-extrabold uppercase tracking-widest">
-                                                    <?php echo htmlspecialchars($row['est_via']); ?>
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    <?php endwhile; 
-                                else: ?>
-                                    <tr>
-                                        <td colspan="5" class="px-6 py-12 text-center text-slate-400 text-xs">
-                                            No se encuentran solicitudes ni reservas activas en el sistema.
-                                        </td>
-                                    </tr>
+                                $historial_reservas = $conexion->query("SELECT r.*, u.nom_usu, rt.nom_rut FROM reserva r JOIN usuario u ON r.id_usu_res = u.id_usu JOIN viaje v ON r.id_via_res = v.id_via LEFT JOIN rutas rt ON v.id_rut_via = rt.id_rut ORDER BY r.id_res DESC");
+                                if ($historial_reservas && $historial_reservas->num_rows > 0):
+                                    while($hr = $historial_reservas->fetch_assoc()):
+                                ?>
+                                <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                                    <td class="py-3.5 px-3 font-mono text-slate-400">#<?php echo $hr['id_res']; ?></td>
+                                    <td class="py-3.5 px-3 font-bold text-slate-800 dark:text-white"><?php echo htmlspecialchars($hr['nom_usu']); ?></td>
+                                    <td class="py-3.5 px-3 text-slate-300"><?php echo htmlspecialchars($hr['nom_rut'] ?? 'Ruta General'); ?></td>
+                                    <td class="py-3.5 px-3 font-mono text-emerald-400 font-bold">$<?php echo number_format($hr['valor_pagado'] ?? 0, 0, ',', '.'); ?></td>
+                                    <td class="py-3.5 px-3 text-center">
+                                        <span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-extrabold uppercase"><?php echo $hr['estado_pago'] ?? 'Completado'; ?></span>
+                                    </td>
+                                </tr>
+                                <?php endwhile; else: ?>
+                                <tr>
+                                    <td colspan="5" class="py-8 text-center text-slate-400 italic">No hay reservas de pasajeros registradas[cite: 7].</td>
+                                </tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
                 </div>
-            <?php endif; ?>
 
-            <!-- ==========================================
-                 PESTAÑA 4: CONDUCTORES Y CALIFICACIÓN
-                 ========================================== -->
-            <?php if ($tab == 'conductores'): ?>
-                <div class="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200/80 dark:border-white/5 shadow-xl overflow-hidden backdrop-blur-sm transition-colors duration-300">
-                    <div class="p-6 border-b border-slate-200 dark:border-white/5 flex justify-between items-center">
-                        <div>
-                            <h2 class="text-base font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Desempeño del Operador / Conductor</h2>
-                            <p class="text-[10px] text-slate-500 dark:text-slate-400 font-mono uppercase mt-0.5 tracking-wider">Promedio de estrellas y aceptación del servicio</p>
-                        </div>
-                    </div>
-                    
+            <?php elseif ($tab == 'conductores'): ?>
+                <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl space-y-6">
+                    <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fas fa-id-card text-emerald-400"></i> Rendimiento de Conductores
+                    </h2>
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead class="bg-slate-100/80 dark:bg-[#0b0f19]/50 border-b border-slate-200 dark:border-white/5">
-                                <tr>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conductor</th>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Viajes Completados</th>
-                                    <th class="px-6 py-4 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Calificación Promedio</th>
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead>
+                                <tr class="border-b border-slate-100 dark:border-white/5 text-[10px] text-slate-400 uppercase font-bold">
+                                    <th class="pb-3 px-3">Conductor</th>
+                                    <th class="pb-3 px-3">Correo</th>
+                                    <th class="pb-3 px-3 text-center">Total Viajes Asignados</th>
                                 </tr>
                             </thead>
-                            <tbody class="divide-y divide-slate-200/80 dark:divide-white/5 text-slate-700 dark:text-slate-200">
+                            <tbody class="divide-y divide-slate-100 dark:divide-white/5">
                                 <?php
-                                $sql_conductores = "SELECT u.nom_usu, u.num_doc_usu, COUNT(DISTINCT v.id_via) as total_viajes, AVG(c.pun_cal) as promedio 
-                                                    FROM usuario u
-                                                    LEFT JOIN viaje v ON u.id_usu = v.id_usu_via
-                                                    LEFT JOIN calificacion c ON u.id_usu = c.id_usu_des
-                                                    WHERE u.id_rol_usu = 2
-                                                    GROUP BY u.id_usu";
-                                $res_cond = $conexion->query($sql_conductores);
-
-                                if ($res_cond && $res_cond->num_rows > 0):
-                                    while($row = $res_cond->fetch_assoc()): 
-                                        $prom = round($row['promedio'] ?? 0, 1);
-                                    ?>
-                                        <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-all">
-                                            <td class="px-6 py-4">
-                                                <div class="flex items-center gap-3">
-                                                    <div class="w-9 h-9 bg-slate-100 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 text-purple-600 dark:text-neon-morado rounded-xl flex items-center justify-center font-bold text-xs">
-                                                        <?php echo strtoupper(substr($row['nom_usu'], 0, 1)); ?>
-                                                    </div>
-                                                    <div>
-                                                        <p class="text-sm font-semibold text-slate-800 dark:text-slate-200 uppercase"><?php echo htmlspecialchars($row['nom_usu']); ?></p>
-                                                        <p class="text-[10px] text-slate-500 dark:text-slate-400 font-mono">CC: <?php echo $row['num_doc_usu']; ?></p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td class="px-6 py-4 text-center font-mono text-xs text-slate-600 dark:text-slate-300">
-                                                <?php echo $row['total_viajes']; ?> viajes
-                                            </td>
-                                            <td class="px-6 py-4 text-center">
-                                                <span class="text-sm font-bold text-amber-500 font-mono">
-                                                    <i class="fas fa-star text-amber-400 mr-1"></i><?php echo $prom > 0 ? number_format($prom, 1) : '0.0'; ?>
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    <?php endwhile; 
-                                else: ?>
-                                    <tr>
-                                        <td colspan="3" class="px-6 py-12 text-center text-slate-400 text-xs">
-                                            No hay registros de conductores en el sistema.
-                                        </td>
-                                    </tr>
+                                $rendimiento_conductores = $conexion->query("SELECT u.nom_usu, u.corre_usu, COUNT(v.id_via) as total_viajes FROM usuario u LEFT JOIN viaje v ON u.id_usu = v.id_usu_via WHERE u.id_rol_usu = 2 GROUP BY u.id_usu ORDER BY total_viajes DESC");
+                                if ($rendimiento_conductores && $rendimiento_conductores->num_rows > 0):
+                                    while($rc = $rendimiento_conductores->fetch_assoc()):
+                                ?>
+                                <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                                    <td class="py-3.5 px-3 font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
+                                        <div class="w-7 h-7 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-black text-xs border border-emerald-500/20">
+                                            <?php echo strtoupper(substr($rc['nom_usu'], 0, 1)); ?>
+                                        </div>
+                                        <?php echo htmlspecialchars($rc['nom_usu']); ?>
+                                    </td>
+                                    <td class="py-3.5 px-3 text-slate-400 italic"><?php echo htmlspecialchars($rc['corre_usu']); ?></td>
+                                    <td class="py-3.5 px-3 text-center font-mono font-bold text-sky-400 text-sm"><?php echo $rc['total_viajes']; ?></td>
+                                </tr>
+                                <?php endwhile; else: ?>
+                                <tr>
+                                    <td colspan="3" class="py-8 text-center text-slate-400 italic">No hay datos de rendimiento de conductores[cite: 7].</td>
+                                </tr>
                                 <?php endif; ?>
                             </tbody>
                         </table>
@@ -367,5 +238,55 @@ $tab = $_GET['tab'] ?? 'general';
         </main>
     </div>
 
+    <!-- MODAL DE AYUDA DEL MÓDULO -->
+    <div id="overlayAyuda" onclick="cerrarModalAyuda()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    <div id="modalAyuda" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
+        <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
+            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
+                <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
+                    <i class="fas fa-info-circle text-sky-400"></i> Guía del Panel de Reportes
+                </h3>
+                <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"><i class="fas fa-times text-xs"></i></button>
+            </div>
+            <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-chart-pie text-sky-400 mt-0.5"></i>
+                    <span><b>Consolidado General:</b> Muestra las métricas clave y totales globales del sistema de transporte (viajes, usuarios y flujo financiero).</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-route text-emerald-400 mt-0.5"></i>
+                    <span><b>Historial de Viajes:</b> Detalla todas las salidas operativas, rutas asignadas, vehículos y tarifas.</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-ticket-alt text-purple-400 mt-0.5"></i>
+                    <span><b>Reservas de Pasajeros:</b> Monitorea las reservas realizadas por los usuarios y el estado de sus pagos.</span>
+                </li>
+                <li class="flex items-start gap-2">
+                    <i class="fas fa-id-card text-amber-400 mt-0.5"></i>
+                    <span><b>Rendimiento de Conductores:</b> Consulta la cantidad de asignaciones de viaje completadas por cada miembro del personal de conducción.</span>
+                </li>
+            </ul>
+            <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
+                Entendido
+            </button>
+        </div>
+    </div>
+
+    <!-- SCRIPTS DE CONTROL -->
+    <script>
+        function abrirModalAyuda() {
+            document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');
+            document.getElementById('modalAyuda').classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
+            document.getElementById('modalAyuda').classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
+        }
+
+        function cerrarModalAyuda() {
+            document.getElementById('modalAyuda').classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
+            document.getElementById('modalAyuda').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+            document.getElementById('overlayAyuda').classList.remove('opacity-100', 'pointer-events-auto');
+            document.getElementById('overlayAyuda').classList.add('opacity-0', 'pointer-events-none');
+        }
+    </script>
 </body>
 </html>

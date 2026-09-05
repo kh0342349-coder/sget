@@ -4,66 +4,74 @@
 class AuthHelper {
 
     /**
-     * Verifica si un usuario tiene permiso para ejecutar una acción
+     * Verifica si un usuario tiene acceso a un módulo o recurso específico.
+     * Lee la columna 'restricciones' de la tabla 'usuario' (separado por comas).
+     * Retorna false si está restringido (bloqueado), true si está permitido por defecto.
      */
-    public static function tienePermiso($conexion, $idUsuario, $nombrePermiso) {
+    public static function tieneAcceso($conexion, $idUsuario, $recurso) {
         $idUsuario = intval($idUsuario);
-        
-        if ($idUsuario <= 0) {
-            return false;
-        }
+        if ($idUsuario <= 0) return false;
 
-        // Consultar permiso específico asignado en la BD para este usuario
-        $sql = "SELECT up.permitido 
-                FROM usuario_permisos up
-                INNER JOIN permisos p ON up.id_permiso = p.id_permiso
-                WHERE up.id_usu = ? AND p.nombre_permiso = ?";
-        
+        $sql = "SELECT restricciones FROM usuario WHERE id_usu = ?";
         $stmt = mysqli_prepare($conexion, $sql);
-        
         if ($stmt) {
-            mysqli_stmt_bind_param($stmt, "is", $idUsuario, $nombrePermiso);
+            mysqli_stmt_bind_param($stmt, "i", $idUsuario);
             mysqli_stmt_execute($stmt);
             $res = mysqli_stmt_get_result($stmt);
-
-            if ($fila = mysqli_fetch_assoc($res)) {
-                $permitido = (int)$fila['permitido'] === 1;
-                mysqli_stmt_close($stmt);
-                return $permitido;
+            
+            if ($row = mysqli_fetch_assoc($res)) {
+                $restriccionesStr = $row['restricciones'] ?? '';
+                if (!empty($restriccionesStr)) {
+                    $denegados = array_map('trim', explode(',', $restriccionesStr));
+                    if (in_array($recurso, $denegados)) {
+                        mysqli_stmt_close($stmt);
+                        return false; 
+                    }
+                }
             }
             mysqli_stmt_close($stmt);
         }
-
-        return false;
+        
+        return true; // Permitido por defecto si no está restringido
     }
 
     /**
-     * Muestra un modal elegante de acceso denegado y detiene la ejecución
+     * Exige acceso a un módulo o recurso, deteniendo la ejecución y mostrando 
+     * una pantalla de acceso restringido si el usuario lo tiene prohibido.
      */
-    public static function requerirPermiso($conexion, $idUsuario, $nombrePermiso) {
-        if (!self::tienePermiso($conexion, $idUsuario, $nombrePermiso)) {
-            http_response_code(403);
-            
-            // Renderizamos un modal flotante con Tailwind CSS acorde al diseño de SGET
-            echo '<script src="https://cdn.tailwindcss.com"></script>';
-            echo '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">';
-            echo '<body class="bg-[#0b0f19] text-slate-200 flex items-center justify-center min-h-screen m-0 font-sans">
-                    <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                        <div class="bg-[#1e293b] border border-white/10 w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden p-6 text-center space-y-4 transform transition-all">
-                            <div class="w-14 h-14 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center mx-auto text-2xl shadow-inner">
-                                <i class="fas fa-ban"></i>
-                            </div>
-                            <h3 class="text-base font-black text-white tracking-wide">Acceso Denegado</h3>
-                            <p class="text-xs text-slate-400 leading-relaxed px-2">No tienes los permisos necesarios para acceder a esta función o módulo del sistema SGET.</p>
-                            <div class="pt-2">
-                                <button onclick="history.back()" class="w-full py-3 bg-gradient-to-r from-sky-400 to-blue-600 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-lg hover:opacity-90 cursor-pointer">
-                                    Volver Atrás
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                  </body>';
+    public static function requerirAcceso($conexion, $idUsuario, $recurso) {
+        if (!self::tieneAcceso($conexion, $idUsuario, $recurso)) {
+            // Si es petición AJAX / JSON
+            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest' || strpos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false) {
+                header('Content-Type: application/json');
+                echo json_encode(['status' => 'error', 'mensaje' => 'Acceso restringido a este apartado: ' . $recurso]);
+                exit();
+            }
+
+            // Vista HTML de bloqueo amigable
+            echo "<div style='font-family:sans-serif; text-align:center; margin-top:80px; background:#0f172a; color:#fff; padding:40px; border-radius:16px; max-width:450px; margin-left:auto; margin-right:auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1);'>
+                    <h2 style='color:#ef4444; margin-bottom:12px; font-size:22px;'>Acceso Restringido</h2>
+                    <p style='color:#94a3b8; font-size:14px; line-height:1.5;'>No tienes permitido acceder o gestionar este módulo (<b>{$recurso}</b>).</p>
+                    <a href='javascript:history.back()' style='display:inline-block; margin-top:24px; padding:10px 24px; background:#3b82f6; color:#fff; text-decoration:none; border-radius:8px; font-weight:600; font-size:14px;'>Regresar</a>
+                  </div>";
             exit();
         }
     }
+
+    // =========================================================================
+    // MÉTODOS DE COMPATIBILIDAD (Para evitar errores si algún archivo los llama)
+    // =========================================================================
+    
+    public static function tienePermiso($conexion, $idUsuario, $recurso) {
+        return self::tieneAcceso($conexion, $idUsuario, $recurso);
+    }
+
+    public static function requerirPermiso($conexion, $idUsuario, $recurso) {
+        self::requerirAcceso($conexion, $idUsuario, $recurso);
+    }
+
+    public static function requerirModulo($conexion, $idUsuario, $recurso) {
+        self::requerirAcceso($conexion, $idUsuario, $recurso);
+    }
 }
+?>

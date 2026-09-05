@@ -1,4 +1,19 @@
 <?php
+
+// Al inicio de header.php
+if (isset($_POST['idioma'])) {
+    $_SESSION['sget_idioma'] = $_POST['idioma'];
+}
+$idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
+
+// Cargar diccionario de idioma global
+$idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
+if ($idiomaActual === 'en') {
+    require_once __DIR__ . '/../lang/en.php';
+} else {
+    require_once __DIR__ . '/../lang/es.php';
+}
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -115,27 +130,6 @@ foreach ($catalogoOpciones as $opcion) {
     </div>
 </header>
 
-<!-- MODAL GUÍA DE AYUDA (F1) -->
-<div id="modalAyudaSGET" class="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 rounded-[32px] max-w-md w-full p-6 shadow-2xl space-y-4">
-        <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-white/10">
-            <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-xl bg-sky-500/10 text-sky-500 dark:text-sky-400 flex items-center justify-center font-bold">
-                    <i class="fas fa-info-circle text-xs"></i>
-                </div>
-                <h3 class="font-bold text-slate-900 dark:text-white text-sm">Ayuda SGET: <span class="text-sky-500 dark:text-sky-400"><?php echo $submoduloTexto; ?></span></h3>
-            </div>
-            <button onclick="cerrarModalAyuda()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"><i class="fas fa-times"></i></button>
-        </div>
-        <div id="contenidoAyudaModulo" class="text-xs text-slate-500 dark:text-slate-400 space-y-2 leading-relaxed">
-            <!-- Contenido dinámico inyectado por JS -->
-        </div>
-        <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-lg cursor-pointer">
-            Entendido
-        </button>
-    </div>
-</div>
-
 <!-- MODAL INACTIVIDAD (3 MIN) -->
 <div id="inactivityModal" class="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
     <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 rounded-[32px] max-w-xs w-full p-6 shadow-2xl text-center space-y-4">
@@ -153,8 +147,12 @@ foreach ($catalogoOpciones as $opcion) {
     </div>
 </div>
 
+<!-- INCLUSIÓN AUTOMÁTICA DE LOS MODALES GLOBALES -->
+<?php include __DIR__ . '/help_modal.php'; ?>
+<?php include __DIR__ . '/configuracion_modal.php'; ?>
+
 <script>
-    // --- LÓGICA CONSOLIDADA (Tema, Buscador, Inactividad y Ayuda) ---
+    // --- LÓGICA CONSOLIDADA (Tema, Buscador e Inactividad) ---
     document.addEventListener('DOMContentLoaded', () => {
 
         // 1. TEMA OSCURO
@@ -189,7 +187,7 @@ foreach ($catalogoOpciones as $opcion) {
                 e.preventDefault();
                 document.body.classList.toggle('sidebar-collapsed');
                 localStorage.setItem('sidebar_collapsed', document.body.classList.contains('sidebar-collapsed'));
-                window.dispatchEvent(new CustomEvent('toggle-sidebar')); // Para sincronizar animaciones si es necesario
+                window.dispatchEvent(new CustomEvent('toggle-sidebar'));
             });
         }
 
@@ -286,7 +284,7 @@ foreach ($catalogoOpciones as $opcion) {
                 if (countdownSpan) countdownSpan.textContent = timeLeft;
                 if (timeLeft <= 0) {
                     clearInterval(countdownInterval);
-                    window.location.href = "../assets/cerrar.php"; // Cierre unificado
+                    window.location.href = "../assets/cerrar.php"; 
                 }
             }, 1000);
         }
@@ -299,33 +297,5 @@ foreach ($catalogoOpciones as $opcion) {
 
         if (btnContinuar) btnContinuar.addEventListener('click', iniciarTemporizadorInactividad);
         iniciarTemporizadorInactividad();
-    });
-
-    // 5. MODAL DE AYUDA GLOBAL (F1)
-    function abrirModalAyuda() {
-        const modalAyuda = document.getElementById('modalAyudaSGET');
-        const contenedorTexto = document.getElementById('contenidoAyudaModulo');
-        if (modalAyuda && contenedorTexto) {
-            contenedorTexto.innerHTML = `
-                <p class="font-semibold text-slate-700 dark:text-slate-200">Ayuda general de la vista actual:</p>
-                <ul class="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 mt-1">
-                    <li>Puedes utilizar <strong>Ctrl + K</strong> en cualquier momento para buscar funciones del sistema.</li>
-                    <li>Navega por el panel izquierdo para cambiar de módulo.</li>
-                    <li>Recuerda que por tu seguridad, la sesión se cerrará tras 3 minutos de inactividad.</li>
-                </ul>`;
-            modalAyuda.classList.remove('hidden');
-        }
-    }
-    
-    function cerrarModalAyuda() {
-        const modalAyuda = document.getElementById('modalAyudaSGET');
-        if (modalAyuda) modalAyuda.classList.add('hidden');
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'F1') {
-            e.preventDefault();
-            abrirModalAyuda();
-        }
     });
 </script>
