@@ -1,32 +1,43 @@
 <?php
 // Archivo: Admin/reportes.php
 date_default_timezone_set('America/Bogota');
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// CARGA DINÁMICA DEL DICCIONARIO DE IDIOMA
+$idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
+$archivoIdioma = __DIR__ . '/../lang/' . $idiomaActual . '.php';
+if (file_exists($archivoIdioma)) {
+    require_once $archivoIdioma;
+} else {
+    require_once __DIR__ . '/../lang/es.php';
+}
 
 include '../assets/conexion.php';
 require_once '../helpers/AuthHelper.php';
 
-// 1. Verificación de Seguridad (Admin = Rol 1)[cite: 7]
+// 1. Verificación de Seguridad (Admin = Rol 1)[cite: 17]
 if (!isset($_SESSION['rol']) || $_SESSION['rol'] != 1) {
     header("Location: ../index.php");
     exit();
 }
 
-// BLOQUEO DE SEGURIDAD POR RESTRICCIONES[cite: 7]
+// BLOQUEO DE SEGURIDAD POR RESTRICCIONES[cite: 17]
 $idUsuarioActual = $_SESSION['id_usu'] ?? 0;
 AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'reportes');
 
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
 
-// 2. Control de Pestañas (Tabs)[cite: 7]
+// 2. Control de Pestañas (Tabs)[cite: 17]
 $tab = $_GET['tab'] ?? 'general';
 ?>
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="<?= $idiomaActual ?>" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SGET - Panel de Reportes Analíticos</title>
+    <title>SGET - <?= $lang['mod_reportes_titulo'] ?? 'Panel de Reportes Analíticos' ?></title>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -59,34 +70,34 @@ $tab = $_GET['tab'] ?? 'general';
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 dark:bg-white/[0.02] p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-md">
                 <div>
                     <div class="flex items-center gap-2.5">
-                        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Panel de Inteligencia Logística</h1>
+                        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight"><?= $lang['tit_inteligencia_logistica'] ?? 'Panel de Inteligencia Logística' ?></h1>
                         
                         <!-- BOTÓN DE AYUDA DEL SISTEMA -->
                         <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
                             <i class="fas fa-question text-[10px]"></i>
                         </button>
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Historial integral de operaciones, reservas, viajes programados y métricas operativas[cite: 7].</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1"><?= $lang['sub_reportes_desc'] ?? 'Historial integral de operaciones, reservas, viajes programados y métricas operativas.' ?></p>
                 </div>
             </div>
 
-            <!-- Navegación de Pestañas[cite: 7] -->
+            <!-- Navegación de Pestañas -->
             <div class="flex flex-wrap gap-2 bg-white dark:bg-[#121826] p-2 rounded-2xl border border-slate-200 dark:border-white/10 w-fit shadow-md">
                 <a href="reportes.php?tab=general" class="px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 <?php echo $tab == 'general' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'; ?>">
-                    <i class="fas fa-chart-pie text-xs"></i> Consolidado General
+                    <i class="fas fa-chart-pie text-xs"></i> <?= $lang['tab_consolidado_general'] ?? 'Consolidado General' ?>
                 </a>
                 <a href="reportes.php?tab=viajes" class="px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 <?php echo $tab == 'viajes' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'; ?>">
-                    <i class="fas fa-route text-xs"></i> Historial de Viajes
+                    <i class="fas fa-route text-xs"></i> <?= $lang['tab_historial_viajes'] ?? 'Historial de Viajes' ?>
                 </a>
                 <a href="reportes.php?tab=reservas" class="px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 <?php echo $tab == 'reservas' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'; ?>">
-                    <i class="fas fa-ticket-alt text-xs"></i> Reservas de Pasajeros
+                    <i class="fas fa-ticket-alt text-xs"></i> <?= $lang['tab_reservas_pasajeros'] ?? 'Reservas de Pasajeros' ?>
                 </a>
                 <a href="reportes.php?tab=conductores" class="px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 <?php echo $tab == 'conductores' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white'; ?>">
-                    <i class="fas fa-id-card text-xs"></i> Rendimiento Conductores
+                    <i class="fas fa-id-card text-xs"></i> <?= $lang['tab_rendimiento_conductores'] ?? 'Rendimiento Conductores' ?>
                 </a>
             </div>
 
-            <!-- CONTENIDO SEGÚN LA PESTAÑA[cite: 7] -->
+            <!-- CONTENIDO SEGÚN LA PESTAÑA -->
             <?php if ($tab == 'general'): ?>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <?php
@@ -95,15 +106,15 @@ $tab = $_GET['tab'] ?? 'general';
                     $tot_recaudo = $conexion->query("SELECT SUM(val_via) as total FROM viaje")->fetch_assoc()['total'] ?? 0;
                     ?>
                     <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl relative overflow-hidden">
-                        <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Total Viajes Registrados</p>
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-wider"><?= $lang['lbl_tot_viajes_reg'] ?? 'Total Viajes Registrados' ?></p>
                         <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono"><?php echo number_format($tot_viajes); ?></h3>
                     </div>
                     <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl relative overflow-hidden">
-                        <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Usuarios Registrados</p>
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-wider"><?= $lang['lbl_tot_usuarios_reg'] ?? 'Usuarios Registrados' ?></p>
                         <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono"><?php echo number_format($tot_usuarios); ?></h3>
                     </div>
                     <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl relative overflow-hidden">
-                        <p class="text-slate-400 text-xs font-bold uppercase tracking-wider">Flujo Total Estimado</p>
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-wider"><?= $lang['lbl_flujo_total_est'] ?? 'Flujo Total Estimado' ?></p>
                         <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono">$<?php echo number_format($tot_recaudo); ?></h3>
                     </div>
                 </div>
@@ -111,19 +122,19 @@ $tab = $_GET['tab'] ?? 'general';
             <?php elseif ($tab == 'viajes'): ?>
                 <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl space-y-6">
                     <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                        <i class="fas fa-route text-sky-400"></i> Historial Completo de Viajes
+                        <i class="fas fa-route text-sky-400"></i> <?= $lang['tit_historial_completo_viajes'] ?? 'Historial Completo de Viajes' ?>
                     </h2>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse text-xs">
                             <thead>
                                 <tr class="border-b border-slate-100 dark:border-white/5 text-[10px] text-slate-400 uppercase font-bold">
                                     <th class="pb-3 px-3">ID</th>
-                                    <th class="pb-3 px-3">Ruta</th>
-                                    <th class="pb-3 px-3">Conductor</th>
-                                    <th class="pb-3 px-3">Vehículo (Placa)</th>
-                                    <th class="pb-3 px-3">Fecha y Hora</th>
-                                    <th class="pb-3 px-3">Valor</th>
-                                    <th class="pb-3 px-3 text-center">Estado</th>
+                                    <th class="pb-3 px-3"><?= $lang['lbl_ruta'] ?? 'Ruta' ?></th>
+                                    <th class="pb-3 px-3"><?= $lang['conductor'] ?? 'Conductor' ?></th>
+                                    <th class="pb-3 px-3"><?= $lang['lbl_vehiculo_placa'] ?? 'Vehículo (Placa)' ?></th>
+                                    <th class="pb-3 px-3"><?= $lang['lbl_fecha_hora'] ?? 'Fecha y Hora' ?></th>
+                                    <th class="pb-3 px-3"><?= $lang['lbl_valor'] ?? 'Valor' ?></th>
+                                    <th class="pb-3 px-3 text-center"><?= $lang['estado'] ?? 'Estado' ?></th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-white/5">
@@ -134,9 +145,9 @@ $tab = $_GET['tab'] ?? 'general';
                                 ?>
                                 <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                                     <td class="py-3.5 px-3 font-mono text-slate-400">#<?php echo $hv['id_via']; ?></td>
-                                    <td class="py-3.5 px-3 font-bold text-slate-800 dark:text-white"><?php echo htmlspecialchars($hv['nom_rut'] ?? 'Ruta no asignada'); ?></td>
-                                    <td class="py-3.5 px-3 text-slate-300"><?php echo htmlspecialchars($hv['nom_usu'] ?? 'Sin conductor'); ?></td>
-                                    <td class="py-3.5 px-3 font-mono text-sky-400"><?php echo htmlspecialchars($hv['pla_veh'] ?? 'Sin placa'); ?></td>
+                                    <td class="py-3.5 px-3 font-bold text-slate-800 dark:text-white"><?php echo htmlspecialchars($hv['nom_rut'] ?? ($lang['lbl_ruta_no_asignada'] ?? 'Ruta no asignada')); ?></td>
+                                    <td class="py-3.5 px-3 text-slate-300"><?php echo htmlspecialchars($hv['nom_usu'] ?? ($lang['lbl_sin_conductor'] ?? 'Sin conductor')); ?></td>
+                                    <td class="py-3.5 px-3 font-mono text-sky-400"><?php echo htmlspecialchars($hv['pla_veh'] ?? ($lang['lbl_sin_placa'] ?? 'Sin placa')); ?></td>
                                     <td class="py-3.5 px-3 text-slate-400"><?php echo $hv['fec_via'] . ' ' . $hv['hor_sal_via']; ?></td>
                                     <td class="py-3.5 px-3 font-mono text-emerald-400 font-bold">$<?php echo number_format($hv['val_via'], 0, ',', '.'); ?></td>
                                     <td class="py-3.5 px-3 text-center">
@@ -145,7 +156,7 @@ $tab = $_GET['tab'] ?? 'general';
                                 </tr>
                                 <?php endwhile; else: ?>
                                 <tr>
-                                    <td colspan="7" class="py-8 text-center text-slate-400 italic">No hay registros en el historial de viajes[cite: 7].</td>
+                                    <td colspan="7" class="py-8 text-center text-slate-400 italic"><?= $lang['lbl_no_hay_historial_viajes'] ?? 'No hay registros en el historial de viajes.' ?></td>
                                 </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -156,17 +167,17 @@ $tab = $_GET['tab'] ?? 'general';
             <?php elseif ($tab == 'reservas'): ?>
                 <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl space-y-6">
                     <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                        <i class="fas fa-ticket-alt text-purple-400"></i> Historial de Reservas de Pasajeros
+                        <i class="fas fa-ticket-alt text-purple-400"></i> <?= $lang['tit_historial_reservas'] ?? 'Historial de Reservas de Pasajeros' ?>
                     </h2>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse text-xs">
                             <thead>
                                 <tr class="border-b border-slate-100 dark:border-white/5 text-[10px] text-slate-400 uppercase font-bold">
-                                    <th class="pb-3 px-3">ID Reserva</th>
-                                    <th class="pb-3 px-3">Pasajero</th>
-                                    <th class="pb-3 px-3">Viaje / Ruta</th>
-                                    <th class="pb-3 px-3">Valor Pagado</th>
-                                    <th class="pb-3 px-3 text-center">Estado de Pago</th>
+                                    <th class="pb-3 px-3"><?= $lang['lbl_id_reserva'] ?? 'ID Reserva' ?></th>
+                                    <th class="pb-3 px-3"><?= $lang['lbl_pasajero'] ?? 'Pasajero' ?></th>
+                                    <th class="pb-3 px-3"><?= $lang['lbl_viaje_ruta'] ?? 'Viaje / Ruta' ?></th>
+                                    <th class="pb-3 px-3"><?= $lang['lbl_valor_pagado'] ?? 'Valor Pagado' ?></th>
+                                    <th class="pb-3 px-3 text-center"><?= $lang['lbl_estado_pago'] ?? 'Estado de Pago' ?></th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-white/5">
@@ -178,15 +189,15 @@ $tab = $_GET['tab'] ?? 'general';
                                 <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                                     <td class="py-3.5 px-3 font-mono text-slate-400">#<?php echo $hr['id_res']; ?></td>
                                     <td class="py-3.5 px-3 font-bold text-slate-800 dark:text-white"><?php echo htmlspecialchars($hr['nom_usu']); ?></td>
-                                    <td class="py-3.5 px-3 text-slate-300"><?php echo htmlspecialchars($hr['nom_rut'] ?? 'Ruta General'); ?></td>
+                                    <td class="py-3.5 px-3 text-slate-300"><?php echo htmlspecialchars($hr['nom_rut'] ?? ($lang['lbl_ruta_general'] ?? 'Ruta General')); ?></td>
                                     <td class="py-3.5 px-3 font-mono text-emerald-400 font-bold">$<?php echo number_format($hr['valor_pagado'] ?? 0, 0, ',', '.'); ?></td>
                                     <td class="py-3.5 px-3 text-center">
-                                        <span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-extrabold uppercase"><?php echo $hr['estado_pago'] ?? 'Completado'; ?></span>
+                                        <span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-extrabold uppercase"><?php echo $hr['estado_pago'] ?? ($lang['lbl_completado'] ?? 'Completado'); ?></span>
                                     </td>
                                 </tr>
                                 <?php endwhile; else: ?>
                                 <tr>
-                                    <td colspan="5" class="py-8 text-center text-slate-400 italic">No hay reservas de pasajeros registradas[cite: 7].</td>
+                                    <td colspan="5" class="py-8 text-center text-slate-400 italic"><?= $lang['lbl_no_hay_reservas'] ?? 'No hay reservas de pasajeros registradas.' ?></td>
                                 </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -197,15 +208,15 @@ $tab = $_GET['tab'] ?? 'general';
             <?php elseif ($tab == 'conductores'): ?>
                 <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl space-y-6">
                     <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                        <i class="fas fa-id-card text-emerald-400"></i> Rendimiento de Conductores
+                        <i class="fas fa-id-card text-emerald-400"></i> <?= $lang['tit_rendimiento_conductores'] ?? 'Rendimiento de Conductores' ?>
                     </h2>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse text-xs">
                             <thead>
                                 <tr class="border-b border-slate-100 dark:border-white/5 text-[10px] text-slate-400 uppercase font-bold">
-                                    <th class="pb-3 px-3">Conductor</th>
-                                    <th class="pb-3 px-3">Correo</th>
-                                    <th class="pb-3 px-3 text-center">Total Viajes Asignados</th>
+                                    <th class="pb-3 px-3"><?= $lang['conductor'] ?? 'Conductor' ?></th>
+                                    <th class="pb-3 px-3"><?= $lang['cfg_correo'] ?? 'Correo' ?></th>
+                                    <th class="pb-3 px-3 text-center"><?= $lang['lbl_total_viajes_asig'] ?? 'Total Viajes Asignados' ?></th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-white/5">
@@ -226,7 +237,7 @@ $tab = $_GET['tab'] ?? 'general';
                                 </tr>
                                 <?php endwhile; else: ?>
                                 <tr>
-                                    <td colspan="3" class="py-8 text-center text-slate-400 italic">No hay datos de rendimiento de conductores[cite: 7].</td>
+                                    <td colspan="3" class="py-8 text-center text-slate-400 italic"><?= $lang['lbl_no_hay_datos_rendimiento'] ?? 'No hay datos de rendimiento de conductores.' ?></td>
                                 </tr>
                                 <?php endif; ?>
                             </tbody>
@@ -244,36 +255,38 @@ $tab = $_GET['tab'] ?? 'general';
         <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
                 <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                    <i class="fas fa-info-circle text-sky-400"></i> Guía del Panel de Reportes
+                    <i class="fas fa-info-circle text-sky-400"></i> <?= $lang['tit_guia_reportes'] ?? 'Guía del Panel de Reportes' ?>
                 </h3>
                 <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"><i class="fas fa-times text-xs"></i></button>
             </div>
             <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                 <li class="flex items-start gap-2">
                     <i class="fas fa-chart-pie text-sky-400 mt-0.5"></i>
-                    <span><b>Consolidado General:</b> Muestra las métricas clave y totales globales del sistema de transporte (viajes, usuarios y flujo financiero).</span>
+                    <span><b><?= $lang['tab_consolidado_general'] ?? 'Consolidado General' ?>:</b> <?= $lang['item_guia_rep_1'] ?? 'Muestra las métricas clave y totales globales del sistema de transporte (viajes, usuarios y flujo financiero).' ?></span>
                 </li>
                 <li class="flex items-start gap-2">
                     <i class="fas fa-route text-emerald-400 mt-0.5"></i>
-                    <span><b>Historial de Viajes:</b> Detalla todas las salidas operativas, rutas asignadas, vehículos y tarifas.</span>
+                    <span><b><?= $lang['tab_historial_viajes'] ?? 'Historial de Viajes' ?>:</b> <?= $lang['item_guia_rep_2'] ?? 'Detalla todas las salidas operativas, rutas asignadas, vehículos y tarifas.' ?></span>
                 </li>
                 <li class="flex items-start gap-2">
                     <i class="fas fa-ticket-alt text-purple-400 mt-0.5"></i>
-                    <span><b>Reservas de Pasajeros:</b> Monitorea las reservas realizadas por los usuarios y el estado de sus pagos.</span>
+                    <span><b><?= $lang['tab_reservas_pasajeros'] ?? 'Reservas de Pasajeros' ?>:</b> <?= $lang['item_guia_rep_3'] ?? 'Monitorea las reservas realizadas por los usuarios y el estado de sus pagos.' ?></span>
                 </li>
                 <li class="flex items-start gap-2">
                     <i class="fas fa-id-card text-amber-400 mt-0.5"></i>
-                    <span><b>Rendimiento de Conductores:</b> Consulta la cantidad de asignaciones de viaje completadas por cada miembro del personal de conducción.</span>
+                    <span><b><?= $lang['tab_rendimiento_conductores'] ?? 'Rendimiento de Conductores' ?>:</b> <?= $lang['item_guia_rep_4'] ?? 'Consulta la cantidad de asignaciones de viaje completadas por cada miembro del personal de conducción.' ?></span>
                 </li>
             </ul>
             <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
-                Entendido
+                <?= $lang['cfg_cancelar'] ? 'Entendido' : 'Entendido' ?>
             </button>
         </div>
     </div>
 
     <!-- SCRIPTS DE CONTROL -->
     <script>
+        const IDIOMA_ACTUAL = "<?= $idiomaActual ?>";
+
         function abrirModalAyuda() {
             document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
             document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');

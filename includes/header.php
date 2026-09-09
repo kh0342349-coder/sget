@@ -1,22 +1,27 @@
 <?php
-
-// Al inicio de header.php
-if (isset($_POST['idioma'])) {
-    $_SESSION['sget_idioma'] = $_POST['idioma'];
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
-$idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
 
-// Cargar diccionario de idioma global
+// 1. Manejo del Cambio de Idioma mediante POST/AJAX
+if (isset($_POST['idioma'])) {
+    $_SESSION['sget_idioma'] = ($_POST['idioma'] === 'en') ? 'en' : 'es';
+    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true, 'idioma' => $_SESSION['sget_idioma']]);
+        exit;
+    }
+}
+
+// 2. Cargar Diccionario Global
 $idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
-if ($idiomaActual === 'en') {
-    require_once __DIR__ . '/../lang/en.php';
+$archivoIdioma = __DIR__ . '/../lang/' . $idiomaActual . '.php';
+if (file_exists($archivoIdioma)) {
+    require_once $archivoIdioma;
 } else {
     require_once __DIR__ . '/../lang/es.php';
 }
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 require_once __DIR__ . '/../helpers/AuthHelper.php';
 
 $rolUsuario = $_SESSION['rol'] ?? $_SESSION['id_rol_usu'] ?? 0;
@@ -25,41 +30,55 @@ $nombreRealHeader = htmlspecialchars($_SESSION['nombre_usuario'] ?? 'Usuario SGE
 $inicialUsuario = !empty($nombreRealHeader) ? strtoupper(substr($nombreRealHeader, 0, 1)) : 'U';
 
 $pagina_titulo = basename($_SERVER['PHP_SELF'], '.php');
-$submoduloTexto = "Inicio";
 
-// --- CATÁLOGOS DINÁMICOS POR ROL PARA EL BUSCADOR ---
+// 3. Mapeo Traducible del Encabezado del Header (Breadcrumbs)
 $catalogoOpciones = [];
-$etiquetaRolHeader = 'Usuario';
+$etiquetaRolHeader = ($idiomaActual === 'en') ? 'User' : 'Usuario';
 $colorRolHeader = 'text-slate-500';
 
+// Nombres traducidos de submódulos
+$mapaSubmodulos = [
+    'admin' => $lang['dashboard'] ?? 'Dashboard',
+    'usuarios' => $lang['usuarios'] ?? 'Usuarios & Roles',
+    'asignaciones' => $lang['recaudo'] ?? 'Recaudo & Abordaje',
+    'rutas' => $lang['rutas'] ?? 'Gestión de Rutas',
+    'viajes' => $lang['viajes'] ?? 'Programación Viajes',
+    'viajes_3' => $lang['viajes'] ?? 'Programación Viajes',
+    'vehiculos' => $lang['vehiculos'] ?? 'Flota de Vehículos',
+    'gestion_permisos' => $lang['permisos'] ?? 'Permisos',
+    'ranking_conductores' => $lang['calificaciones'] ?? 'Calificaciones',
+    'reportes' => $lang['reportes'] ?? 'Reportes Generales',
+    'conductor' => $lang['dashboard'] ?? 'Dashboard',
+    'viajes_conductor' => 'Mis Viajes',
+    'viaje_asignado' => 'Viaje Asignado',
+    'pasajero' => 'Inicio',
+    'viajes_pasajero' => 'Ver Viajes',
+    'historial_pasajero' => 'Historial'
+];
+
+$submoduloTexto = $mapaSubmodulos[$pagina_titulo] ?? str_replace('_', ' ', ucfirst($pagina_titulo));
+
 if ($rolUsuario == 1) { // ADMIN
-    $etiquetaRolHeader = 'Administrador';
+    $etiquetaRolHeader = ($idiomaActual === 'en') ? 'Administrator' : 'Administrador';
     $colorRolHeader = 'text-sky-500';
-    $submoduloTexto = str_replace('_', ' ', ucfirst($pagina_titulo));
     $catalogoOpciones = [
-        ["titulo" => "Inicio / Dashboard", "categoria" => "Principal", "descripcion" => "Vista general del sistema", "url" => "admin.php", "icono" => "fa-chart-pie"],
-        ["titulo" => "Gestión de Usuarios", "categoria" => "Admin", "descripcion" => "Usuarios y roles", "url" => "usuarios.php", "icono" => "fa-users"],
-        ["titulo" => "Gestión de Permisos", "categoria" => "Admin", "descripcion" => "Asignar funciones al personal", "url" => "gestion_permisos.php", "icono" => "fa-key"],
-        ["titulo" => "Rutas de Transporte", "categoria" => "Operaciones", "descripcion" => "Gestión de trayectos", "url" => "rutas.php", "icono" => "fa-route"],
-        ["titulo" => "Control de Viajes", "categoria" => "Operaciones", "descripcion" => "Monitoreo de viajes", "url" => "viajes_3.php", "icono" => "fa-calendar-alt"]
+        ["titulo" => $lang['dashboard'] ?? "Dashboard", "categoria" => "Principal", "descripcion" => "Vista general del sistema", "url" => "admin.php", "icono" => "fa-chart-pie"],
+        ["titulo" => $lang['usuarios'] ?? "Gestión de Usuarios", "categoria" => "Admin", "descripcion" => "Usuarios y roles", "url" => "usuarios.php", "icono" => "fa-users"],
+        ["titulo" => $lang['permisos'] ?? "Gestión de Permisos", "categoria" => "Admin", "descripcion" => "Asignar funciones al personal", "url" => "gestion_permisos.php", "icono" => "fa-key"],
+        ["titulo" => $lang['rutas'] ?? "Rutas de Transporte", "categoria" => "Operaciones", "descripcion" => "Gestión de trayectos", "url" => "rutas.php", "icono" => "fa-route"],
+        ["titulo" => $lang['viajes'] ?? "Control de Viajes", "categoria" => "Operaciones", "descripcion" => "Monitoreo de viajes", "url" => "viajes_3.php", "icono" => "fa-calendar-alt"]
     ];
 } elseif ($rolUsuario == 2) { // CONDUCTOR
-    $etiquetaRolHeader = 'Conductor';
+    $etiquetaRolHeader = ($idiomaActual === 'en') ? 'Driver' : 'Conductor';
     $colorRolHeader = 'text-emerald-500';
-    if ($pagina_titulo === 'conductor' || $pagina_titulo === 'dashboard_conductor') $submoduloTexto = "Inicio";
-    else if ($pagina_titulo === 'viajes_conductor') $submoduloTexto = "Mis Viajes";
-    else if ($pagina_titulo === 'viaje_asignado') $submoduloTexto = "Viaje Asignado";
     $catalogoOpciones = [
-        ["titulo" => "Dashboard", "categoria" => "Principal", "descripcion" => "Métricas de tu jornada", "url" => "conductor.php", "icono" => "fa-chart-pie"],
+        ["titulo" => $lang['dashboard'] ?? "Dashboard", "categoria" => "Principal", "descripcion" => "Métricas de tu jornada", "url" => "conductor.php", "icono" => "fa-chart-pie"],
         ["titulo" => "Mis Viajes", "categoria" => "Rutas", "descripcion" => "Consulta de viajes", "url" => "viajes_conductor.php", "icono" => "fa-route"],
         ["titulo" => "Viaje Asignado", "categoria" => "Operaciones", "descripcion" => "Detalles del viaje actual", "url" => "viaje_asignado.php", "icono" => "fa-bus"]
     ];
 } elseif ($rolUsuario == 3) { // PASAJERO
-    $etiquetaRolHeader = 'Pasajero';
+    $etiquetaRolHeader = ($idiomaActual === 'en') ? 'Passenger' : 'Pasajero';
     $colorRolHeader = 'text-purple-500';
-    if ($pagina_titulo === 'pasajero') $submoduloTexto = "Inicio";
-    else if ($pagina_titulo === 'viajes_pasajero') $submoduloTexto = "Ver Viajes";
-    else if ($pagina_titulo === 'historial_pasajero') $submoduloTexto = "Historial";
     $catalogoOpciones = [
         ["titulo" => "Panel Pasajero", "categoria" => "Principal", "descripcion" => "Resumen de tus viajes", "url" => "pasajero.php", "icono" => "fa-th-large", "permiso" => null],
         ["titulo" => "Ver Viajes Disponibles", "categoria" => "Rutas", "descripcion" => "Rutas, precios y horarios", "url" => "viajes_pasajero.php", "icono" => "fa-bus", "permiso" => null],
@@ -95,7 +114,7 @@ foreach ($catalogoOpciones as $opcion) {
         <div class="relative w-full max-w-xs md:max-w-sm ml-1">
             <div class="relative flex items-center">
                 <i class="fas fa-search absolute left-4 text-slate-400 text-xs pointer-events-none"></i>
-                <input type="text" id="inputBuscadorHeader" placeholder="Buscar función... (Ctrl + K)" autocomplete="off" class="w-full pl-10 pr-8 py-2.5 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-full text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-sky-500 transition-all shadow-inner">
+                <input type="text" id="inputBuscadorHeader" placeholder="<?= ($idiomaActual === 'en') ? 'Search function... (Ctrl + K)' : 'Buscar función... (Ctrl + K)' ?>" autocomplete="off" class="w-full pl-10 pr-8 py-2.5 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-full text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-sky-500 transition-all shadow-inner">
                 <span id="btnLimpiarBuscador" class="absolute right-3.5 text-slate-400 hover:text-sky-500 text-xs cursor-pointer hidden"><i class="fas fa-times"></i></span>
             </div>
             <div id="resultadosBusquedaHeader" class="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden hidden z-50 max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-white/5 custom-scrollbar"></div>
@@ -103,6 +122,32 @@ foreach ($catalogoOpciones as $opcion) {
     </div>
 
     <div class="flex items-center space-x-3 sm:space-x-4 shrink-0">
+        
+        <!-- BOTÓN CONMUTADOR DE IDIOMA CON BANDERAS SVG -->
+        <button id="langToggleBtn" type="button" class="h-10 px-3 flex items-center gap-2 rounded-2xl bg-slate-200/50 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 font-extrabold text-xs transition-all border border-slate-300/50 dark:border-white/10 cursor-pointer shrink-0" title="Switch Language / Cambiar Idioma">
+            <?php if ($idiomaActual === 'en'): ?>
+                <!-- Bandera Estados Unidos / EE.UU. -->
+                <svg class="w-5 h-3.5 rounded-sm object-cover shadow-xs" viewBox="0 0 640 480">
+                    <g fill-rule="evenodd">
+                        <path fill="#bd3d44" d="M0 0h640v480H0z"/>
+                        <path stroke="#fff" stroke-width="37" d="M0 55.5h640M0 129h640M0 203h640M0 277h640M0 351h640M0 424.5h640"/>
+                        <path fill="#192f5d" d="M0 0h285v258.5H0z"/>
+                        <g fill="#fff">
+                            <path d="M18 18l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM53 18l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM88 18l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM123 18l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM158 18l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM193 18l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM228 18l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM263 18l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM35 43l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM70 43l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM105 43l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM140 43l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM175 43l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM210 43l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM245 43l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM18 68l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM53 68l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM88 68l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM123 68l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM158 68l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM193 68l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM228 68l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM263 68l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM35 93l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM70 93l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM105 93l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM140 93l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM175 93l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM210 93l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM245 93l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM18 118l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM53 118l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM88 118l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM123 118l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM158 118l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM193 118l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM228 118l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM263 118l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM35 143l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM70 143l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM105 143l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM140 143l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM175 143l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM210 143l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM245 143l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM18 168l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM53 168l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM88 168l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM123 168l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM158 168l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM193 168l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM228 168l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM263 168l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM35 193l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM70 193l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM105 193l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM140 193l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM175 193l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM210 193l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM245 193l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM18 218l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM53 218l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM88 218l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM123 218l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM158 218l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM193 218l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM228 218l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9zM263 218l3 9h9l-7 5 3 9-8-5-7 5 3-9-7-5h9z"/>
+                        </g>
+                    </g>
+                </svg>
+                <span id="langText" class="tracking-wider uppercase">EN</span>
+            <?php else: ?>
+                <!-- Bandera España / Español -->
+                <svg class="w-5 h-3.5 rounded-sm object-cover shadow-xs" viewBox="0 0 640 480">
+                    <path fill="#c60b1e" d="M0 0h640v480H0z"/>
+                    <path fill="#ffc400" d="M0 120h640v240H0z"/>
+                </svg>
+                <span id="langText" class="tracking-wider uppercase">ES</span>
+            <?php endif; ?>
+        </button>
+
         <div class="relative group shrink-0">
             <button type="button" onclick="abrirModalAyuda()" class="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-500 dark:text-sky-400 hover:bg-sky-500/20 border border-sky-500/20 transition-all flex items-center justify-center text-sm shadow-sm cursor-pointer" title="Guía del módulo (F1)">
                 <i class="fas fa-question text-xs"></i>
@@ -136,13 +181,13 @@ foreach ($catalogoOpciones as $opcion) {
         <div class="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto text-xl">
             <i class="fas fa-user-clock"></i>
         </div>
-        <h4 class="text-base font-black text-slate-900 dark:text-white">¿Sigues ahí?</h4>
-        <p class="text-xs text-slate-500 dark:text-slate-400">Tu sesión se cerrará automáticamente por inactividad.</p>
+        <h4 class="text-base font-black text-slate-900 dark:text-white"><?= ($idiomaActual === 'en') ? 'Are you still there?' : '¿Sigues ahí?' ?></h4>
+        <p class="text-xs text-slate-500 dark:text-slate-400"><?= ($idiomaActual === 'en') ? 'Your session will close automatically due to inactivity.' : 'Tu sesión se cerrará automáticamente por inactividad.' ?></p>
         <div class="text-xs font-bold text-red-500 dark:text-red-400 bg-red-500/10 py-2 px-3 rounded-2xl border border-red-500/20 font-mono">
-            Cierre en: <span id="countdownTimer" class="font-extrabold text-sm">30</span> seg
+            <?= ($idiomaActual === 'en') ? 'Closing in:' : 'Cierre en:' ?> <span id="countdownTimer" class="font-extrabold text-sm">30</span> sec
         </div>
         <button id="btnContinuar" class="w-full py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-lg cursor-pointer">
-            Continuar Sesión
+            <?= ($idiomaActual === 'en') ? 'Continue Session' : 'Continuar Sesión' ?>
         </button>
     </div>
 </div>
@@ -152,10 +197,44 @@ foreach ($catalogoOpciones as $opcion) {
 <?php include __DIR__ . '/configuracion_modal.php'; ?>
 
 <script>
-    // --- LÓGICA CONSOLIDADA (Tema, Buscador e Inactividad) ---
     document.addEventListener('DOMContentLoaded', () => {
 
-        // 1. TEMA OSCURO
+        // 1. GESTIÓN DE IDIOMA
+        const langToggleBtn = document.getElementById('langToggleBtn');
+        const langText = document.getElementById('langText');
+        const idiomaServidor = "<?= $idiomaActual ?>";
+        let idiomaGuardado = localStorage.getItem('sget_idioma') || idiomaServidor;
+
+        if (idiomaGuardado !== idiomaServidor) {
+            actualizarIdiomaServidor(idiomaGuardado);
+        }
+
+        if (langToggleBtn) {
+            langToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const nuevoIdioma = (langText.textContent.trim().toLowerCase() === 'es') ? 'en' : 'es';
+                localStorage.setItem('sget_idioma', nuevoIdioma);
+                actualizarIdiomaServidor(nuevoIdioma);
+            });
+        }
+
+        function actualizarIdiomaServidor(idioma) {
+            const formData = new FormData();
+            formData.append('idioma', idioma);
+
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(() => {
+                window.location.reload();
+            }).catch(err => {
+                console.error('Error al cambiar idioma:', err);
+                window.location.reload();
+            });
+        }
+
+        // 2. TEMA OSCURO
         const themeToggleBtn = document.getElementById('themeToggle');
         const themeIcon = document.getElementById('themeIcon');
         const themeGuardado = localStorage.getItem('theme');
@@ -178,7 +257,7 @@ foreach ($catalogoOpciones as $opcion) {
             });
         }
 
-        // 2. SIDEBAR TOGGLE
+        // 3. SIDEBAR TOGGLE
         const btnToggle = document.getElementById('btnToggleSidebar');
         if (localStorage.getItem('sidebar_collapsed') === 'true') document.body.classList.add('sidebar-collapsed');
         
@@ -191,7 +270,7 @@ foreach ($catalogoOpciones as $opcion) {
             });
         }
 
-        // 3. BUSCADOR CTRL+K
+        // 4. BUSCADOR CTRL+K
         const inputBuscador = document.getElementById('inputBuscadorHeader');
         const contenedorResultados = document.getElementById('resultadosBusquedaHeader');
         const btnLimpiar = document.getElementById('btnLimpiarBuscador');
@@ -258,7 +337,7 @@ foreach ($catalogoOpciones as $opcion) {
             }
         }
 
-        // 4. INACTIVIDAD (3 MINUTOS)
+        // 5. INACTIVIDAD
         const TOTAL_INACTIVITY_TIME = 3 * 60 * 1000; 
         const WARNING_TIME = 30 * 1000;              
         let inactivityTimer, countdownInterval, timeLeft = 30;

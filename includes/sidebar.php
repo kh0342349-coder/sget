@@ -1,10 +1,23 @@
 <?php
+// Archivo: includes/sidebar.php
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Cargar conexión si no se ha importado
 if (!isset($conexion)) {
     include_once __DIR__ . '/../assets/conexion.php';
+}
+
+// Cargar diccionario de idioma si no ha sido cargado por la vista
+if (!isset($lang)) {
+    $idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
+    $archivoIdioma = __DIR__ . '/../lang/' . $idiomaActual . '.php';
+    if (file_exists($archivoIdioma)) {
+        require_once $archivoIdioma;
+    } else {
+        require_once __DIR__ . '/../lang/es.php';
+    }
 }
 
 $rolUsuario = $_SESSION['rol'] ?? $_SESSION['id_rol_usu'] ?? 0;
@@ -130,8 +143,8 @@ if (!function_exists('tiene_acceso_sb')) {
             <?php endif; ?>
 
             <?php if (tiene_acceso_sb('viajes', $rolUsuario, $restricciones_usuario_str, $restricciones_admin_array)): ?>
-            <a href="viajes.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('viajes_3.php', $pagina_actual); ?>">
-                <i class="fas fa-calendar-alt text-sm shrink-0 <?php echo verificarIconoActivo('viajes_3.php', $pagina_actual); ?>"></i>
+            <a href="viajes.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva(['viajes.php', 'viajes_3.php'], $pagina_actual); ?>">
+                <i class="fas fa-calendar-alt text-sm shrink-0 <?php echo verificarIconoActivo(['viajes.php', 'viajes_3.php'], $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['viajes'] ?? 'Programación Viajes'; ?></span>
             </a>
             <?php endif; ?>
@@ -173,39 +186,39 @@ if (!function_exists('tiene_acceso_sb')) {
             <?php if (tiene_acceso_sb('ver_rutas', $rolUsuario, $restricciones_usuario_str, $restricciones_admin_array)): ?>
             <a href="viajes_conductor.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('viajes_conductor.php', $pagina_actual); ?>">
                 <i class="fas fa-route text-sm shrink-0 <?php echo verificarIconoActivo('viajes_conductor.php', $pagina_actual); ?>"></i>
-                <span class="sidebar-text truncate">Mis Viajes</span>
+                <span class="sidebar-text truncate"><?php echo $lang['mod_mis_viajes'] ?? 'Mis Viajes'; ?></span>
             </a>
             <?php endif; ?>
             
             <a href="viaje_asignado.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('viaje_asignado.php', $pagina_actual); ?>">
                 <i class="fas fa-bus text-sm shrink-0 <?php echo verificarIconoActivo('viaje_asignado.php', $pagina_actual); ?>"></i>
-                <span class="sidebar-text truncate">Viaje Asignado</span>
+                <span class="sidebar-text truncate"><?php echo $lang['viaje_asignado'] ?? 'Viaje Asignado'; ?></span>
             </a>
             
             <?php if (tiene_acceso_sb('ver_ranking', $rolUsuario, $restricciones_usuario_str, $restricciones_admin_array)): ?>
             <a href="resenas_conductor.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva(['resenas_conductor.php', 'reseñas_conductor.php'], $pagina_actual); ?>">
                 <i class="fas fa-star text-sm shrink-0 <?php echo verificarIconoActivo(['resenas_conductor.php', 'reseñas_conductor.php'], $pagina_actual); ?>"></i>
-                <span class="sidebar-text truncate">Mis Reseñas</span>
+                <span class="sidebar-text truncate"><?php echo $lang['mod_mis_resenas'] ?? 'Mis Reseñas'; ?></span>
             </a>
             <?php endif; ?>
 
         <?php elseif ($rolUsuario == 3): // ================== PASAJERO ================== ?>
             <a href="pasajero.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('pasajero.php', $pagina_actual); ?>">
                 <i class="fas fa-th-large text-sm shrink-0 <?php echo verificarIconoActivo('pasajero.php', $pagina_actual); ?>"></i>
-                <span class="sidebar-text truncate">Inicio</span>
+                <span class="sidebar-text truncate"><?php echo $lang['inicio'] ?? 'Inicio'; ?></span>
             </a>
             
             <?php if (tiene_acceso_sb('ver_viajes', $rolUsuario, $restricciones_usuario_str, $restricciones_admin_array)): ?>
             <a href="viajes_pasajero.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('viajes_pasajero.php', $pagina_actual); ?>">
                 <i class="fas fa-bus text-sm shrink-0 <?php echo verificarIconoActivo('viajes_pasajero.php', $pagina_actual); ?>"></i>
-                <span class="sidebar-text truncate">Ver Viajes</span>
+                <span class="sidebar-text truncate"><?php echo $lang['mod_ver_viajes_disp'] ?? 'Ver Viajes'; ?></span>
             </a>
             <?php endif; ?>
 
             <?php if (tiene_acceso_sb('historial', $rolUsuario, $restricciones_usuario_str, $restricciones_admin_array)): ?>
             <a href="historial_pasajero.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('historial_pasajero.php', $pagina_actual); ?>">
                 <i class="fas fa-history text-sm shrink-0 <?php echo verificarIconoActivo('historial_pasajero.php', $pagina_actual); ?>"></i>
-                <span class="sidebar-text truncate">Historial</span>
+                <span class="sidebar-text truncate"><?php echo $lang['mod_historial_reservas'] ?? 'Historial'; ?></span>
             </a>
             <?php endif; ?>
 

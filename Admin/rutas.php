@@ -1,7 +1,18 @@
 <?php
 // Archivo: Admin/rutas.php
 date_default_timezone_set('America/Bogota');
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// 1. CARGA DINÁMICA DEL DICCIONARIO DE IDIOMA
+$idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
+$archivoIdioma = __DIR__ . '/../lang/' . $idiomaActual . '.php';
+if (file_exists($archivoIdioma)) {
+    require_once $archivoIdioma;
+} else {
+    require_once __DIR__ . '/../lang/es.php';
+}
 
 include '../assets/conexion.php';
 require_once '../helpers/AuthHelper.php';
@@ -40,32 +51,36 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
         $stmt = $conexion->prepare("INSERT INTO rutas (nom_rut, val_rut, img_rut) VALUES (?, ?, ?)");
         $stmt->bind_param("sds", $nom_rut, $val_rut, $img_rut);
         if ($stmt->execute()) {
+            $msjOk = $lang['msj_ruta_creada'] ?? '¡Ruta creada exitosamente!';
             $mensaje = "
             <div class='bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-2xl shadow-lg flex items-center gap-3 mb-6'>
                 <i class='fas fa-check-circle text-lg'></i>
-                <span class='text-sm font-semibold'>¡Ruta creada exitosamente!</span>
+                <span class='text-sm font-semibold'>{$msjOk}</span>
             </div>";
         } else {
+            $msjErr = $lang['msj_err_crear_ruta'] ?? 'Error al crear la ruta.';
             $mensaje = "
             <div class='bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl shadow-lg flex items-center gap-3 mb-6'>
                 <i class='fas fa-times-circle text-lg'></i>
-                <span class='text-sm font-semibold'>Error al crear la ruta.</span>
+                <span class='text-sm font-semibold'>{$msjErr}</span>
             </div>";
         }
     } elseif ($accion === 'editar' && $id_rut > 0) {
         $stmt = $conexion->prepare("UPDATE rutas SET nom_rut = ?, val_rut = ?, img_rut = ? WHERE id_rut = ?");
         $stmt->bind_param("sdsi", $nom_rut, $val_rut, $img_rut, $id_rut);
         if ($stmt->execute()) {
+            $msjUpdOk = $lang['msj_ruta_actualizada'] ?? '¡Ruta actualizada exitosamente!';
             $mensaje = "
             <div class='bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-2xl shadow-lg flex items-center gap-3 mb-6'>
                 <i class='fas fa-check-circle text-lg'></i>
-                <span class='text-sm font-semibold'>¡Ruta actualizada exitosamente!</span>
+                <span class='text-sm font-semibold'>{$msjUpdOk}</span>
             </div>";
         } else {
+            $msjUpdErr = $lang['msj_err_act_ruta'] ?? 'Error al actualizar la ruta.';
             $mensaje = "
             <div class='bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl shadow-lg flex items-center gap-3 mb-6'>
                 <i class='fas fa-times-circle text-lg'></i>
-                <span class='text-sm font-semibold'>Error al actualizar la ruta.</span>
+                <span class='text-sm font-semibold'>{$msjUpdErr}</span>
             </div>";
         }
     }
@@ -76,11 +91,11 @@ $sql_rutas = "SELECT * FROM rutas ORDER BY id_rut DESC";
 $resultado_rutas = mysqli_query($conexion, $sql_rutas);
 ?>
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="<?= $idiomaActual ?>" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SGET - Gestión de Rutas</title>
+    <title>SGET - <?= $lang['mod_rutas_titulo'] ?? 'Gestión de Rutas' ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="style_admin.css">
@@ -110,19 +125,19 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 dark:bg-white/[0.02] p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-md">
                 <div>
                     <div class="flex items-center gap-2.5">
-                        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Gestión de Rutas</h1>
+                        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight"><?= $lang['mod_rutas_titulo'] ?? 'Gestión de Rutas' ?></h1>
                         
                         <!-- BOTÓN DE AYUDA -->
                         <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
                             <i class="fas fa-question text-[10px]"></i>
                         </button>
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Administre los trayectos, origen, destino, tarifas base y fotos de despacho.</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1"><?= $lang['sub_rutas_desc'] ?? 'Administre los trayectos, origen, destino, tarifas base y fotos de despacho.' ?></p>
                 </div>
                 
                 <!-- BOTÓN NUEVA RUTA -->
                 <button type="button" onclick="abrirDrawerCrear()" class="px-5 py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:opacity-90 text-white font-extrabold rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 transition-all flex items-center gap-2 cursor-pointer">
-                    <i class="fas fa-plus"></i> Nueva Ruta
+                    <i class="fas fa-plus"></i> <?= $lang['btn_nueva_ruta'] ?? 'Nueva Ruta' ?>
                 </button>
             </div>
 
@@ -151,7 +166,7 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                                     #<?php echo $r['id_rut']; ?>
                                 </span>
                                 <span class="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-900/60 px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1 backdrop-blur-md">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span> Activa
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span> <?= $lang['lbl_activa'] ?? 'Activa' ?>
                                 </span>
                             </div>
 
@@ -168,12 +183,12 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                                 <button type="button" 
                                         onclick="abrirDrawerEditar(<?php echo $r['id_rut']; ?>, '<?php echo htmlspecialchars($r['nom_rut'], ENT_QUOTES); ?>', <?php echo $r['val_rut'] ?? 0; ?>, '<?php echo htmlspecialchars($nombreImagen, ENT_QUOTES); ?>')"
                                         class="flex-1 text-center py-1.5 px-2 bg-blue-600/90 hover:bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 backdrop-blur-sm cursor-pointer">
-                                    <i class="fas fa-edit"></i> Editar
+                                    <i class="fas fa-edit"></i> <?= $lang['btn_editar'] ?? 'Editar' ?>
                                 </button>
                                 <a href="eliminar.php?tipo=ruta&id=<?php echo $r['id_rut']; ?>" 
-                                onclick="return confirm('¿Confirma que desea eliminar esta ruta?')"
+                                onclick="return confirm('<?= $lang['confirm_eliminar_ruta'] ?? '¿Confirma que desea eliminar esta ruta?' ?>')"
                                 class="flex-1 text-center py-1.5 px-2 bg-red-600/90 hover:bg-red-600 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 backdrop-blur-sm">
-                                    <i class="fas fa-trash"></i> Eliminar
+                                    <i class="fas fa-trash"></i> <?= $lang['btn_eliminar'] ?? 'Eliminar' ?>
                                 </a>
                             </div>
 
@@ -185,8 +200,8 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                     <div class="w-16 h-16 rounded-2xl bg-sky-500/10 text-sky-400 flex items-center justify-center text-2xl mb-4">
                         <i class="fas fa-route"></i>
                     </div>
-                    <h3 class="text-base font-bold text-slate-800 dark:text-white">No hay rutas registradas</h3>
-                    <p class="text-slate-500 dark:text-slate-400 text-xs mt-1">Actualmente no existen trayectos creados en el sistema.</p>
+                    <h3 class="text-base font-bold text-slate-800 dark:text-white"><?= $lang['lbl_no_hay_rutas'] ?? 'No hay rutas registradas' ?></h3>
+                    <p class="text-slate-500 dark:text-slate-400 text-xs mt-1"><?= $lang['sublbl_no_hay_rutas'] ?? 'Actualmente no existen trayectos creados en el sistema.' ?></p>
                 </div>
             <?php endif; ?>
 
@@ -199,7 +214,7 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
         
         <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-4 mb-6">
             <h3 id="drawerTitulo" class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                <i class="fas fa-route text-sky-400"></i> Registrar Nueva Ruta
+                <i class="fas fa-route text-sky-400"></i> <?= $lang['tit_registrar_ruta'] ?? 'Registrar Nueva Ruta' ?>
             </h3>
             <button onclick="cerrarDrawerRuta()" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer">
                 <i class="fas fa-times text-xs"></i>
@@ -213,26 +228,26 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
                 <input type="hidden" name="imagen_actual" id="input_imagen_actual" value="">
 
                 <div class="space-y-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nombre del Trayecto / Ruta</label>
-                    <input type="text" name="nom_rut" id="input_nom_rut" required placeholder="Ej: Fusagasugá - Bogotá" class="w-full px-4 py-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs text-slate-800 dark:text-white">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider"><?= $lang['lbl_nom_ruta'] ?? 'Nombre del Trayecto / Ruta' ?></label>
+                    <input type="text" name="nom_rut" id="input_nom_rut" required placeholder="<?= $lang['ph_nom_ruta'] ?? 'Ej: Fusagasugá - Bogotá' ?>" class="w-full px-4 py-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs text-slate-800 dark:text-white">
                 </div>
 
                 <div class="space-y-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tarifa Base ($)</label>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider"><?= $lang['lbl_tarifa_base'] ?? 'Tarifa Base' ?> ($)</label>
                     <input type="number" name="val_rut" id="input_val_rut" step="0.01" required placeholder="0.00" class="w-full px-4 py-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs font-mono text-slate-800 dark:text-white">
                 </div>
 
                 <div class="space-y-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fotografía de la Ruta</label>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider"><?= $lang['lbl_foto_ruta'] ?? 'Fotografía de la Ruta' ?></label>
                     <input type="file" name="img_rut" accept="image/*" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-sky-500/10 file:text-sky-400 hover:file:bg-sky-500/20 cursor-pointer">
-                    <p class="text-[10px] text-slate-500 mt-1">Formatos permitidos: JPG, PNG. (Opcional al editar)</p>
+                    <p class="text-[10px] text-slate-500 mt-1"><?= $lang['lbl_formatos_foto'] ?? 'Formatos permitidos: JPG, PNG. (Opcional al editar)' ?></p>
                 </div>
             </div>
 
             <div class="pt-4 border-t border-slate-100 dark:border-white/5 flex gap-3">
-                <button type="button" onclick="cerrarDrawerRuta()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
+                <button type="button" onclick="cerrarDrawerRuta()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer"><?= $lang['cfg_cancelar'] ?? 'Cancelar' ?></button>
                 <button type="submit" class="flex-1 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 hover:opacity-90 transition-all cursor-pointer">
-                    Guardar Ruta
+                    <?= $lang['btn_guardar_ruta'] ?? 'Guardar Ruta' ?>
                 </button>
             </div>
         </form>
@@ -245,34 +260,38 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
         <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
                 <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                    <i class="fas fa-info-circle text-sky-400"></i> Guía de Gestión de Rutas
+                    <i class="fas fa-info-circle text-sky-400"></i> <?= $lang['tit_guia_rutas'] ?? 'Guía de Gestión de Rutas' ?>
                 </h3>
                 <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"><i class="fas fa-times text-xs"></i></button>
             </div>
             <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                 <li class="flex items-start gap-2">
                     <i class="fas fa-plus-circle text-sky-400 mt-0.5"></i>
-                    <span><b>Nueva Ruta:</b> Despliega el panel lateral derecho para registrar un nuevo trayecto especificando su nombre, tarifa e imagen.</span>
+                    <span><b><?= $lang['btn_nueva_ruta'] ?? 'Nueva Ruta' ?>:</b> <?= $lang['item_guia_ruta_1'] ?? 'Despliega el panel lateral derecho para registrar un nuevo trayecto especificando su nombre, tarifa e imagen.' ?></span>
                 </li>
                 <li class="flex items-start gap-2">
                     <i class="fas fa-edit text-blue-400 mt-0.5"></i>
-                    <span><b>Editar Ruta:</b> Despliega el mismo panel lateral precargando los datos del trayecto seleccionado.</span>
+                    <span><b><?= $lang['btn_editar'] ?? 'Editar' ?>:</b> <?= $lang['item_guia_ruta_2'] ?? 'Despliega el mismo panel lateral precargando los datos del trayecto seleccionado.' ?></span>
                 </li>
                 <li class="flex items-start gap-2">
                     <i class="fas fa-trash text-red-400 mt-0.5"></i>
-                    <span><b>Eliminar:</b> Remueve permanentemente el trayecto del sistema.</span>
+                    <span><b><?= $lang['btn_eliminar'] ?? 'Eliminar' ?>:</b> <?= $lang['item_guia_ruta_3'] ?? 'Remueve permanentemente el trayecto del sistema.' ?></span>
                 </li>
             </ul>
             <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
-                Entendido
+                <?= $lang['cfg_cancelar'] ? 'Entendido' : 'Entendido' ?>
             </button>
         </div>
     </div>
 
     <!-- SCRIPTS DE CONTROL -->
     <script>
+    const IDIOMA_ACTUAL = "<?= $idiomaActual ?>";
+    const txtRegistrarRuta = "<?= $lang['tit_registrar_ruta'] ?? 'Registrar Nueva Ruta' ?>";
+    const txtEditarRuta = "<?= $lang['tit_editar_ruta'] ?? 'Editar Ruta' ?>";
+
     function abrirDrawerCrear() {
-        document.getElementById('drawerTitulo').innerHTML = '<i class="fas fa-route text-sky-400"></i> Registrar Nueva Ruta';
+        document.getElementById('drawerTitulo').innerHTML = '<i class="fas fa-route text-sky-400"></i> ' + txtRegistrarRuta;
         document.getElementById('input_accion').value = 'crear';
         document.getElementById('input_id_rut').value = '';
         document.getElementById('input_nom_rut').value = '';
@@ -286,7 +305,7 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
     }
 
     function abrirDrawerEditar(id, nombre, valor, imagen) {
-        document.getElementById('drawerTitulo').innerHTML = '<i class="fas fa-edit text-sky-400"></i> Editar Ruta #' + id;
+        document.getElementById('drawerTitulo').innerHTML = '<i class="fas fa-edit text-sky-400"></i> ' + txtEditarRuta + ' #' + id;
         document.getElementById('input_accion').value = 'editar';
         document.getElementById('input_id_rut').value = id;
         document.getElementById('input_nom_rut').value = nombre;
