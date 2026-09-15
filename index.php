@@ -43,7 +43,7 @@ if (!$resultado_viajes) {
     <link rel="stylesheet" href="index.css">
 
     <!-- SDK de Google Identity Services -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://accounts.google.com/gsi/client?hl=en" async defer></script>
 
     <script>
         tailwind.config = {
@@ -89,7 +89,7 @@ if (!$resultado_viajes) {
                 if (data.success) {
                     window.location.href = data.redirect;
                 } else {
-                    alert('Error en inicio de sesión con Google: ' + data.message);
+                    alert((window.SGET_I18N?.t('Error en inicio de sesión con Google:') || 'Google sign-in error:') + ' ' + data.message);
                 }
             })
             .catch(error => console.error('Error al comunicarse con el servidor:', error));
@@ -246,73 +246,14 @@ if (!$resultado_viajes) {
     </main>
 
     <!-- FOOTER CON ENLACE LEGAL -->
-   <!-- FOOTER COMPLETO MULTICOLUMNA -->
-    <footer class="bg-slate-900 text-slate-300 pt-16 pb-8 border-t border-slate-800 text-xs">
-        <div class="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-10 text-left pb-12 border-b border-slate-800">
-            
-            <!-- COLUMNA 1: LOGO E INFO -->
-            <div class="space-y-4">
-                <div class="flex items-center gap-3">
-                    <img src="img/logo-sget-2.png" alt="SGET Logo" class="h-10 w-auto object-contain" onerror="this.src='img/logo-sget-1.png';">
-                </div>
-                <p class="text-slate-400 leading-relaxed text-[11px]">
-                    Conectamos personas y destinos con seguridad, eficiencia y monitoreo constante en tiempo real.
-                </p>
-                <div class="flex items-center gap-3 pt-2">
-                    <a href="#" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-sky-500 hover:text-slate-950 text-slate-300 flex items-center justify-center transition-colors"><i class="fab fa-facebook-f text-xs"></i></a>
-                    <a href="#" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-sky-500 hover:text-slate-950 text-slate-300 flex items-center justify-center transition-colors"><i class="fab fa-instagram text-xs"></i></a>
-                    <a href="#" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-sky-500 hover:text-slate-950 text-slate-300 flex items-center justify-center transition-colors"><i class="fab fa-tiktok text-xs"></i></a>
-                    <a href="#" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-sky-500 hover:text-slate-950 text-slate-300 flex items-center justify-center transition-colors"><i class="fab fa-youtube text-xs"></i></a>
-                </div>
-            </div>
-
-            <!-- COLUMNA 2: EXPLORA -->
-            <div class="space-y-3">
-                <h4 class="font-extrabold text-white text-sm uppercase tracking-wider">Explora</h4>
-                <ul class="space-y-2 text-slate-400">
-                    <li><a href="#destinos" class="hover:text-sky-400 transition-colors">Destinos Populares</a></li>
-                    <li><a href="#viajes-disponibles" class="hover:text-sky-400 transition-colors">Salidas Programadas</a></li>
-                    <li><a href="#rutas" class="hover:text-sky-400 transition-colors">Rutas y Frecuencias</a></li>
-                    <li><a href="#servicios" class="hover:text-sky-400 transition-colors">Servicios SGET</a></li>
-                </ul>
-            </div>
-
-            <!-- COLUMNA 3: SERVICIOS -->
-            <div class="space-y-3">
-                <h4 class="font-extrabold text-white text-sm uppercase tracking-wider">Servicios</h4>
-                <ul class="space-y-2 text-slate-400">
-                    <li><a href="#" onclick="abrirPanel('panelLogin'); return false;" class="hover:text-sky-400 transition-colors">Pasajeros & Reservas</a></li>
-                    <li><a href="#" onclick="abrirPanel('panelLogin'); return false;" class="hover:text-sky-400 transition-colors">Portal Conductores</a></li>
-                    <li><a href="#" onclick="abrirPanel('panelLogin'); return false;" class="hover:text-sky-400 transition-colors">SGET Empresarial</a></li>
-                    <li><a href="#" onclick="abrirPanel('panelPolitica'); return false;" class="hover:text-sky-400 transition-colors">Tratamiento de Datos (Ley 1581)</a></li>
-                </ul>
-            </div>
-
-            <!-- COLUMNA 4: CANALES DE ATENCIÓN -->
-            <div class="space-y-3">
-                <h4 class="font-extrabold text-white text-sm uppercase tracking-wider">Canales de Atención</h4>
-                <ul class="space-y-2.5 text-slate-400 text-[11px]">
-                    <li class="flex items-center gap-2.5"><i class="fas fa-phone-alt text-sky-400"></i> 601 873 9999</li>
-                    <li class="flex items-center gap-2.5"><i class="fab fa-whatsapp text-emerald-400"></i> +57 300 123 4567</li>
-                    <li class="flex items-center gap-2.5"><i class="fas fa-envelope text-sky-400"></i> servicioalcliente@sget.com</li>
-                </ul>
-            </div>
+    <footer class="p-6 text-center text-slate-500 dark:text-slate-400 text-xs font-semibold border-t border-slate-200 dark:border-white/10 bg-white/50 dark:bg-[#0b0f19]/50 flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto w-full gap-4">
+        <p>&copy; 2026 SGET - Sistema de Gestión de Transporte. Todos los derechos reservados.</p>
+        <div>
+            <button onclick="abrirPanel('panelPolitica')" class="hover:text-sky-500 underline transition-colors cursor-pointer">
+                Tratamiento de Datos Personales (Ley 1581)
+            </button>
         </div>
-
-        <!-- BARRA DE DERECHOS INFERIOR -->
-        <div class="max-w-7xl mx-auto px-6 pt-6 flex flex-col sm:flex-row items-center justify-between text-slate-500 text-[11px] gap-2">
-            <p>&copy; 2026 SGET - Sistema de Gestión de Transporte. Todos los derechos reservados.</p>
-            <div class="flex items-center gap-4">
-                <button onclick="abrirPanel('panelPolitica')" class="hover:text-sky-400 transition-colors underline cursor-pointer">Tratamiento de Datos</button>
-                <a href="#" onclick="abrirPanel('panelLogin'); return false;" class="hover:text-sky-400 transition-colors font-bold">Administración</a>
-            </div>
-        </div>
-    </footer>}
-
-    <!-- BOTÓN FLOTANTE "VOLVER ARRIBA" (SCROLL TO TOP) -->
-    <button id="btnScrollTop" onclick="scrollToTop()" class="fixed bottom-6 right-6 w-11 h-11 rounded-full bg-slate-900/90 dark:bg-sky-500/90 text-white dark:text-slate-950 flex items-center justify-center font-bold text-base shadow-xl border border-white/20 backdrop-blur-md opacity-0 pointer-events-none transition-all duration-300 z-40 hover:scale-110 cursor-pointer">
-        <i class="fas fa-chevron-up"></i>
-    </button>
+    </footer>
 
     <!-- INCLUSIÓN DEL MODAL AUTENTICACIÓN -->
     <?php include 'modal_auth.php'; ?>
@@ -379,28 +320,7 @@ if (!$resultado_viajes) {
 
     <!-- SCRIPTS DE CONTROL DEL MODAL Y GOOGLE SIGN-IN -->
     <script>
-
-        // Muestra u oculta el botón "Volver arriba"
-        window.addEventListener('scroll', function() {
-            const btnScroll = document.getElementById('btnScrollTop');
-            if (window.scrollY > 300) {
-                btnScroll.classList.remove('opacity-0', 'pointer-events-none');
-                btnScroll.classList.add('opacity-100');
-            } else {
-                btnScroll.classList.add('opacity-0', 'pointer-events-none');
-                btnScroll.classList.remove('opacity-100');
-            }
-        });
-
-        // Desplazamiento suave a la parte superior
-        function scrollToTop() {
-            window.scrollTo({
-                top: 0,
-                behavior: 'smooth'
-            });
-        }
-
-        function inicializarBotonGoogle(panel) {
+        window.inicializarBotonGoogle = function(panel) {
             if (window.google && google.accounts && google.accounts.id) {
                 google.accounts.id.initialize({
                     client_id: "916674198156-4uh6adhaklk2bpsvli6hnmrgg0bgktlp.apps.googleusercontent.com",
@@ -416,7 +336,7 @@ if (!$resultado_viajes) {
                         divisor.className = 'relative flex py-2 items-center my-4';
                         divisor.innerHTML = `
                             <div class="flex-grow border-t border-slate-200 dark:border-white/10"></div>
-                            <span class="flex-shrink mx-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">O INICIA CON</span>
+                            <span data-i18n-text class="flex-shrink mx-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">O INICIA CON</span>
                             <div class="flex-grow border-t border-slate-200 dark:border-white/10"></div>
                         `;
 
@@ -429,12 +349,14 @@ if (!$resultado_viajes) {
                 }
 
                 if (googleContainer) {
+                    googleContainer.innerHTML = '';
                     google.accounts.id.renderButton(googleContainer, {
                         theme: 'outline',
                         size: 'large',
                         type: 'standard',
                         shape: 'pill',
-                        width: 250
+                        width: 250,
+                        locale: (document.documentElement.getAttribute('data-language') === 'en' ? 'en' : 'es')
                     });
                 }
             }

@@ -139,7 +139,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
                             <i class="fas fa-search text-xs"></i>
                         </span>
-                        <input type="text" id="inputBuscador" placeholder="Buscar por ruta, estado o fecha..." 
+                        <input type="text" id="inputBuscador" placeholder="Buscar por ruta, estado o fecha..." data-i18n-placeholder-es="Buscar por ruta, estado o fecha..." data-i18n-placeholder-en="Search by route, status, or date..." 
                                class="w-full pl-9 pr-4 py-2 text-xs bg-slate-100 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
                     </div>
                 </div>
@@ -340,7 +340,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
                 <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Comentario del Viaje</label>
-                    <textarea name="com_cal" rows="3" placeholder="¿Cómo fue tu experiencia en el recorrido?" class="w-full p-3 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-xs transition-all resize-none"></textarea>
+                    <textarea name="com_cal" rows="3" placeholder="¿Cómo fue tu experiencia en el recorrido?" data-i18n-placeholder-es="¿Cómo fue tu experiencia en el recorrido?" data-i18n-placeholder-en="How was your experience on the trip?" class="w-full p-3 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-xs transition-all resize-none"></textarea>
                 </div>
 
                 <div class="flex gap-3 pt-2">

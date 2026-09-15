@@ -130,7 +130,7 @@ $res = $conexion->query($sql);
                                             Activo
                                         </span>
                                         <span class="text-[10px] font-black <?php echo ($disponibles <= 2) ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'; ?> px-2.5 py-0.5 rounded-md uppercase tracking-tight">
-                                            <?php echo $disponibles; ?> Cupos libres
+                                            <?php echo $disponibles; ?> Available Seats
                                         </span>
                                     </div>
                                 </div>
@@ -159,7 +159,7 @@ $res = $conexion->query($sql);
                                 </div>
 
                                 <div class="flex items-center gap-2">
-                                    <!-- Botón Ver Ficha Tecnica -->
+                                    <!-- Botón Ver Ficha Técnica -->
                                     <button type="button" 
                                             data-viaje='<?php echo $jsonViaje; ?>'
                                             onclick="verFichaViajePasajero(this)"

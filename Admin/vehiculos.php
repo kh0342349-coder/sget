@@ -134,26 +134,26 @@ $resultado = $conexion->query($query);
     </div>
 
     <!-- Panel Lateral / Drawer[cite: 6] -->
-    <div id="overlayVehiculo" onclick="cerrarTodosModales()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    <div id="overlayVehículo" onclick="cerrarTodosModales()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-    <aside id="drawerVehiculo" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#121826] border-l border-slate-200 dark:border-white/15 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
+    <aside id="drawerVehículo" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#121826] border-l border-slate-200 dark:border-white/15 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
             <h3 id="drawerTitulo" class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                 <i class="fas fa-bus text-sky-400"></i> Registrar Vehículo
             </h3>
-            <button onclick="cerrarModalVehiculo()" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"><i class="fas fa-times text-xs"></i></button>
+            <button onclick="cerrarModalVehículo()" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"><i class="fas fa-times text-xs"></i></button>
         </div>
         <div class="p-6 flex-1 overflow-y-auto space-y-4">
             <!-- Apuntamos al archivo unificado procesar_vehiculo.php -->
-            <form id="formVehiculo" action="procesar_vehiculo.php" method="POST" class="space-y-4">
+            <form id="formVehículo" action="procesar_vehiculo.php" method="POST" class="space-y-4">
                 <input type="hidden" name="id_veh" id="input_id_veh" value="">
                 <div class="space-y-1">
                     <label class="block text-[10px] font-bold text-slate-400 uppercase">Placa Identificadora</label>
-                    <input type="text" name="pla_veh" id="input_pla_veh" required placeholder="Ej: XYZ-123" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-white uppercase font-mono">
+                    <input type="text" name="pla_veh" id="input_pla_veh" required placeholder="Ej.: XYZ-123" data-i18n-placeholder-es="Ej.: XYZ-123" data-i18n-placeholder-en="e.g. XYZ-123" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-white uppercase font-mono">
                 </div>
                 <div class="space-y-1">
                     <label class="block text-[10px] font-bold text-slate-400 uppercase">Línea / Modelo</label>
-                    <input type="text" name="mode_veh" id="input_mode_veh" required placeholder="Ej: Chevrolet N300" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-white">
+                    <input type="text" name="mode_veh" id="input_mode_veh" required placeholder="Ej.: Chevrolet N300" data-i18n-placeholder-es="Ej.: Chevrolet N300" data-i18n-placeholder-en="e.g. Chevrolet N300" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-white">
                 </div>
                 <div class="space-y-1">
                     <label class="block text-[10px] font-bold text-slate-400 uppercase">Capacidad de Puestos</label>
@@ -169,8 +169,8 @@ $resultado = $conexion->query($query);
             </form>
         </div>
         <div class="p-6 border-t border-slate-100 dark:border-white/5 flex gap-3">
-            <button type="button" onclick="cerrarModalVehiculo()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
-            <button type="submit" form="formVehiculo" id="btnGuardarDrawer" class="flex-1 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 hover:opacity-90 transition-all cursor-pointer">Guardar</button>
+            <button type="button" onclick="cerrarModalVehículo()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
+            <button type="submit" form="formVehículo" id="btnGuardarDrawer" class="flex-1 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 hover:opacity-90 transition-all cursor-pointer">Guardar</button>
         </div>
     </aside>
 
@@ -207,21 +207,21 @@ $resultado = $conexion->query($query);
     <!-- SCRIPTS DE CONTROL[cite: 6] -->
     <script>
         function abrirDrawer() {
-            document.getElementById('overlayVehiculo').classList.remove('opacity-0', 'pointer-events-none');
-            document.getElementById('overlayVehiculo').classList.add('opacity-100', 'pointer-events-auto');
-            document.getElementById('drawerVehiculo').classList.remove('translate-x-full');
-            document.getElementById('drawerVehiculo').classList.add('translate-x-0');
+            document.getElementById('overlayVehículo').classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('overlayVehículo').classList.add('opacity-100', 'pointer-events-auto');
+            document.getElementById('drawerVehículo').classList.remove('translate-x-full');
+            document.getElementById('drawerVehículo').classList.add('translate-x-0');
         }
 
-        function cerrarModalVehiculo() {
-            document.getElementById('drawerVehiculo').classList.remove('translate-x-0');
-            document.getElementById('drawerVehiculo').classList.add('translate-x-full');
-            document.getElementById('overlayVehiculo').classList.remove('opacity-100', 'pointer-events-auto');
-            document.getElementById('overlayVehiculo').classList.add('opacity-0', 'pointer-events-none');
+        function cerrarModalVehículo() {
+            document.getElementById('drawerVehículo').classList.remove('translate-x-0');
+            document.getElementById('drawerVehículo').classList.add('translate-x-full');
+            document.getElementById('overlayVehículo').classList.remove('opacity-100', 'pointer-events-auto');
+            document.getElementById('overlayVehículo').classList.add('opacity-0', 'pointer-events-none');
         }
 
         function cerrarTodosModales() {
-            cerrarModalVehiculo();
+            cerrarModalVehículo();
             cerrarModalAyuda();
         }
 
@@ -229,7 +229,7 @@ $resultado = $conexion->query($query);
             document.getElementById('drawerTitulo').innerHTML = '<i class="fas fa-bus text-sky-400"></i> Registrar Vehículo';
             document.getElementById('btnGuardarDrawer').innerText = 'Guardar Vehículo';
             document.getElementById('input_id_veh').value = '';
-            document.getElementById('formVehiculo').reset();
+            document.getElementById('formVehículo').reset();
             abrirDrawer();
         }
 

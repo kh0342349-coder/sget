@@ -148,7 +148,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
                             <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
                                 <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
-                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía de Calificaciones
+                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía de Calificaciónes
                                 </p>
                                 <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
                                     <li class="flex items-start gap-1.5">
@@ -162,7 +162,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Registra tu opinión del trayecto y consulta el historial enviado.</p>
                 </div>
 
-                <button onclick="abrirModalReservaCalificacion()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap">
+                <button onclick="abrirModalReservaCalificación()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap">
                     <i class="fas fa-plus-circle text-sm"></i> Buscar Rutas
                 </button>
             </div>
@@ -202,7 +202,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
                             <div>
                                 <label class="text-[10px] font-black uppercase text-slate-400 mb-2 ml-2 block tracking-widest">¿Algo que destacar?</label>
-                                <textarea name="comentario" rows="3" placeholder="Ej: Muy puntual y amable..." class="w-full bg-slate-100 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3.5 text-xs font-medium text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-blue-500 transition resize-none"></textarea>
+                                <textarea name="comentario" rows="3" placeholder="Ej.: Muy puntual y amable..." data-i18n-placeholder-es="Ej.: Muy puntual y amable..." data-i18n-placeholder-en="e.g. Very punctual and friendly..." class="w-full bg-slate-100 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3.5 text-xs font-medium text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-blue-500 transition resize-none"></textarea>
                             </div>
 
                             <div class="flex flex-col gap-2 pt-2">
@@ -271,7 +271,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                             <i class="fas fa-history"></i>
                         </div>
                         <div>
-                            <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Mis Calificaciones Realizadas</h2>
+                            <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Mis Calificaciónes Realizadas</h2>
                             <p class="text-slate-500 dark:text-slate-400 text-xs">Historial de las opiniones que has enviado a tus conductores</p>
                         </div>
                     </div>
@@ -318,7 +318,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                 <div class="flex justify-end pt-1">
                                     <button type="button" 
                                             data-opinion='<?php echo $jsonRes; ?>'
-                                            onclick="verDetalleOpinionCalificacion(this)"
+                                            onclick="verDetalleOpinionCalificación(this)"
                                             class="text-[10px] font-bold text-blue-600 dark:text-neon-azul hover:underline flex items-center gap-1 cursor-pointer">
                                         <i class="fas fa-eye text-[9px]"></i> Leer Completa
                                     </button>
@@ -333,7 +333,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
     </main>
 
     <!-- OVERLAY GENERAL PARA MODALES -->
-    <div id="overlayCalificacion" onclick="cerrarTodosModalesCalificacion()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    <div id="overlayCalificación" onclick="cerrarTodosModalesCalificación()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
     <!-- MODAL POP-UP DE LECTURA COMPLETA -->
     <div id="modalLecturaOpinion" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
@@ -372,7 +372,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
     </div>
 
     <!-- PANEL LATERAL DESLIZANTE (DRAWER) DE BÚSQUEDA Y RESERVA -->
-    <aside id="drawerReservaCalificacion" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
+    <aside id="drawerReservaCalificación" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-neon-morado"></div>
             <div class="flex items-center gap-3">
@@ -384,13 +384,13 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                     <p class="text-[11px] text-slate-500 dark:text-slate-400">Solicitar cupo en ruta disponible</p>
                 </div>
             </div>
-            <button onclick="cerrarModalDrawerCalificacion()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-all">
+            <button onclick="cerrarModalDrawerCalificación()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-all">
                 <i class="fas fa-times text-sm"></i>
             </button>
         </div>
 
         <div class="p-6 flex-1 overflow-y-auto space-y-5">
-            <form id="formReservaCalificacion" action="viajes_pasajero.php" method="GET" class="space-y-4">
+            <form id="formReservaCalificación" action="viajes_pasajero.php" method="GET" class="space-y-4">
                 <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Destino Deseado</label>
                     <select name="ruta" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
@@ -414,10 +414,10 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
         </div>
 
         <div class="p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-black/10 flex gap-3">
-            <button type="button" onclick="cerrarModalDrawerCalificacion()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer">
+            <button type="button" onclick="cerrarModalDrawerCalificación()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer">
                 Cancelar
             </button>
-            <button type="submit" form="formReservaCalificacion" class="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-500/20 hover:opacity-95 transition-all cursor-pointer">
+            <button type="submit" form="formReservaCalificación" class="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-500/20 hover:opacity-95 transition-all cursor-pointer">
                 Buscar Disponibilidad
             </button>
         </div>
@@ -425,13 +425,13 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
     <!-- CONTROLADORES JAVASCRIPT -->
     <script>
-        function verDetalleOpinionCalificacion(btn) {
+        function verDetalleOpinionCalificación(btn) {
             const res = JSON.parse(btn.getAttribute('data-opinion'));
             document.getElementById('detConductorOpinion').innerText = res.nombre_conductor || 'Conductor';
             document.getElementById('detFechaOpinion').innerText = res.fech_cal || 'Fecha no registrada';
             document.getElementById('detComentarioOpinion').innerText = res.coment_cal || 'Sin comentario escrito.';
 
-            const overlay = document.getElementById('overlayCalificacion');
+            const overlay = document.getElementById('overlayCalificación');
             const modal = document.getElementById('modalLecturaOpinion');
             const box = document.getElementById('modalOpinionBox');
 
@@ -446,7 +446,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
         }
 
         function cerrarModalOpinion() {
-            const overlay = document.getElementById('overlayCalificacion');
+            const overlay = document.getElementById('overlayCalificación');
             const modal = document.getElementById('modalLecturaOpinion');
             const box = document.getElementById('modalOpinionBox');
 
@@ -460,9 +460,9 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             overlay.classList.add('opacity-0', 'pointer-events-none');
         }
 
-        function abrirModalReservaCalificacion() {
-            const drawer = document.getElementById('drawerReservaCalificacion');
-            const overlay = document.getElementById('overlayCalificacion');
+        function abrirModalReservaCalificación() {
+            const drawer = document.getElementById('drawerReservaCalificación');
+            const overlay = document.getElementById('overlayCalificación');
 
             const hoy = new Date().toISOString().split('T')[0];
             document.getElementById('input_fecha_calificacion').value = hoy;
@@ -475,9 +475,9 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             drawer.classList.add('translate-x-0');
         }
 
-        function cerrarModalDrawerCalificacion() {
-            const drawer = document.getElementById('drawerReservaCalificacion');
-            const overlay = document.getElementById('overlayCalificacion');
+        function cerrarModalDrawerCalificación() {
+            const drawer = document.getElementById('drawerReservaCalificación');
+            const overlay = document.getElementById('overlayCalificación');
 
             drawer.classList.remove('translate-x-0');
             drawer.classList.add('translate-x-full');
@@ -486,9 +486,9 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             overlay.classList.add('opacity-0', 'pointer-events-none');
         }
 
-        function cerrarTodosModalesCalificacion() {
+        function cerrarTodosModalesCalificación() {
             cerrarModalOpinion();
-            cerrarModalDrawerCalificacion();
+            cerrarModalDrawerCalificación();
         }
 
         document.addEventListener('DOMContentLoaded', function() {

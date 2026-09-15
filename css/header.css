@@ -54,3 +54,13 @@ html.dark .header-floating {
 .user-avatar-glow {
     box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
 }
+/* Selector de idioma unificado SGET */
+.sget-language-selector {
+    min-width: 108px;
+    width: auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.sget-language-selector option {
+    font-weight: 800;
+}

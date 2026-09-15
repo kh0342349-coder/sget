@@ -133,7 +133,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                 <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
                                     <li class="flex items-start gap-1.5">
                                         <i class="fas fa-plus-circle text-blue-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Reservar Cupo (+):</b> Busca rutas activas y reserva tu transporte al instante.</span>
+                                        <span><b>Book a Seat (＋):</b> Busca rutas activas y reserva tu transporte al instante.</span>
                                     </li>
                                     <li class="flex items-start gap-1.5">
                                         <i class="fas fa-star text-amber-400 mt-0.5 shrink-0"></i>
@@ -298,7 +298,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
                 <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Comentario del Viaje</label>
-                    <textarea name="com_cal" rows="3" placeholder="¿Cómo fue tu experiencia en el recorrido?" class="w-full p-3 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-xs transition-all resize-none"></textarea>
+                    <textarea name="com_cal" rows="3" placeholder="¿Cómo fue tu experiencia en el recorrido?" data-i18n-placeholder-es="¿Cómo fue tu experiencia en el recorrido?" data-i18n-placeholder-en="How was your experience on the trip?" class="w-full p-3 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-xs transition-all resize-none"></textarea>
                 </div>
 
                 <div class="flex gap-3 pt-2">

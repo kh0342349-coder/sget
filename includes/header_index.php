@@ -7,6 +7,7 @@ header("Expires: 0");
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
+$idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
 
 // 2. Comprobar si realmente hay una sesión activa válida
 $estaAutenticado = !empty($_SESSION['nombre_usuario']) || !empty($_SESSION['documento']);
@@ -58,6 +59,12 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
         <!-- ACCIONES (DERECHA) -->
         <div class="flex items-center gap-2.5">
             
+            <!-- SELECTOR DE IDIOMA -->
+            <select data-sget-language aria-label="Language" title="Seleccionar idioma / Select language" style="min-width: 108px;" class="sget-language-selector h-10 px-2.5 rounded-full bg-slate-100/70 dark:bg-slate-800/70 text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer">
+                <option value="es" <?= $idiomaActual === 'es' ? 'selected' : '' ?>>🇪🇸 ESP</option>
+                <option value="en" <?= $idiomaActual === 'en' ? 'selected' : '' ?>>🇺🇸 ENG</option>
+            </select>
+
             <!-- TOGGLE TEMA -->
             <button id="theme-toggle" type="button" class="w-10 h-10 rounded-full bg-slate-100/70 dark:bg-slate-800/70 text-slate-700 dark:text-amber-300 flex items-center justify-center transition-all cursor-pointer border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105" title="Cambiar Tema">
                 <i id="theme-toggle-icon" class="fas fa-moon text-sm"></i>
@@ -87,7 +94,7 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
                     <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-500 to-blue-600 text-white font-bold text-xs flex items-center justify-center shadow-md">
                         <?php echo strtoupper(substr($nombreRealHeader, 0, 1)); ?>
                     </div>
-                    <a href="../assets/cerrar.php" onclick="sessionStorage.clear();" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors" title="Cerrar Sesión">
+                    <a href="assets/cerrar.php" onclick="sessionStorage.clear();" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors" title="Cerrar Sesión">
                         <i class="fas fa-sign-out-alt text-xs"></i>
                     </a>
                 </div>
@@ -96,6 +103,12 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
         </div>
     </div>
 </header>
+
+<script>
+    window.SGET_LANGUAGE_URL = 'set_language.php';
+    document.documentElement.setAttribute('data-language', '<?= htmlspecialchars($idiomaActual, ENT_QUOTES, 'UTF-8') ?>');
+</script>
+<script src="js/i18n.js?v=20260908-1"></script>
 
 <!-- SCRIPT DE MANEJO DE TEMA -->
 <script>

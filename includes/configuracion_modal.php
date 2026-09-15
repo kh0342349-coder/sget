@@ -2,7 +2,7 @@
 // Asegurar que el diccionario esté disponible
 $idiomaActualModal = $_SESSION['sget_idioma'] ?? 'es';
 ?>
-<div id="modalConfiguracionSGET" class="fixed inset-0 bg-black/70 backdrop-blur-md z-[110] hidden flex items-center justify-center p-4">
+<div id="modalConfiguraciónSGET" class="fixed inset-0 bg-black/70 backdrop-blur-md z-[110] hidden flex items-center justify-center p-4">
     <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 rounded-[32px] max-w-2xl w-full p-8 shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto custom-scrollbar">
         
         <!-- Cabecera del Modal -->
@@ -16,7 +16,7 @@ $idiomaActualModal = $_SESSION['sget_idioma'] ?? 'es';
                     <p class="text-xs text-slate-400"><?= $lang['cfg_sub'] ?? 'Actualiza tus datos personales.' ?></p>
                 </div>
             </div>
-            <button type="button" onclick="cerrarModalConfiguracion()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 cursor-pointer transition-colors">
+            <button type="button" onclick="cerrarModalConfiguración()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 cursor-pointer transition-colors">
                 <i class="fas fa-times text-base"></i>
             </button>
         </div>
@@ -49,22 +49,22 @@ $idiomaActualModal = $_SESSION['sget_idioma'] ?? 'es';
 
                 <div class="space-y-1.5">
                     <label class="block text-xs font-bold text-slate-900 dark:text-white"><?= $lang['cfg_telefono'] ?? 'Número de Teléfono' ?></label>
-                    <input type="text" name="telefono" value="<?= htmlspecialchars($_SESSION['telefono'] ?? '') ?>" placeholder="Ej: 3101234567" class="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-2xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 transition-all">
+                    <input type="text" name="telefono" value="<?= htmlspecialchars($_SESSION['telefono'] ?? '') ?>" placeholder="Ej.: 3101234567" data-i18n-placeholder-es="Ej.: 3101234567" data-i18n-placeholder-en="e.g. 3101234567" class="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-2xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 transition-all">
                 </div>
 
                 <!-- Selector de Idioma -->
                 <div class="space-y-1.5">
                     <label class="block text-xs font-bold text-slate-900 dark:text-white"><?= $lang['cfg_idioma'] ?? 'Idioma del Sistema' ?></label>
-                    <select name="idioma" id="selectIdiomaModal" class="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-2xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 transition-all cursor-pointer">
-                        <option value="es" <?= $idiomaActualModal === 'es' ? 'selected' : '' ?>>Español (Colombia)</option>
-                        <option value="en" <?= $idiomaActualModal === 'en' ? 'selected' : '' ?>>English (US)</option>
+                    <select name="idioma" id="selectIdiomaModal" data-sget-language style="min-width: 108px;" class="sget-language-selector w-full px-4 py-3 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-2xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 transition-all cursor-pointer">
+                        <option value="es" <?= $idiomaActualModal === 'es' ? 'selected' : '' ?>>🇪🇸 ESP — Español (Colombia)</option>
+                        <option value="en" <?= $idiomaActualModal === 'en' ? 'selected' : '' ?>>🇺🇸 ENG — English (US)</option>
                     </select>
                 </div>
             </div>
 
             <!-- Botones de Acción -->
             <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-white/10">
-                <button type="button" onclick="cerrarModalConfiguracion()" class="px-5 py-3 bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 font-black text-xs uppercase tracking-wider rounded-2xl transition-all cursor-pointer">
+                <button type="button" onclick="cerrarModalConfiguración()" class="px-5 py-3 bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 font-black text-xs uppercase tracking-wider rounded-2xl transition-all cursor-pointer">
                     <?= $lang['cfg_cancelar'] ?? 'Cancelar' ?>
                 </button>
                 <button type="submit" class="px-6 py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-lg cursor-pointer">
@@ -77,13 +77,13 @@ $idiomaActualModal = $_SESSION['sget_idioma'] ?? 'es';
 </div>
 
 <script>
-    window.abrirModalConfiguracion = function() {
-        const modal = document.getElementById('modalConfiguracionSGET');
+    window.abrirModalConfiguración = function() {
+        const modal = document.getElementById('modalConfiguraciónSGET');
         if (modal) modal.classList.remove('hidden');
     }
 
-    window.cerrarModalConfiguracion = function() {
-        const modal = document.getElementById('modalConfiguracionSGET');
+    window.cerrarModalConfiguración = function() {
+        const modal = document.getElementById('modalConfiguraciónSGET');
         if (modal) modal.classList.add('hidden');
     }
 </script>

@@ -260,7 +260,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE
                                 </li>
                                 <li class="flex justify-between">
                                     <span class="text-slate-400 dark:text-slate-500">Disponibilidad:</span>
-                                    <span class="font-bold text-amber-500"><?= htmlspecialchars($viaje['cup_dis']) ?> cupos libres / <?= htmlspecialchars($viaje['cup_tot']) ?> totales</span>
+                                    <span class="font-bold text-amber-500"><?= htmlspecialchars($viaje['cup_dis']) ?> available seats / <?= htmlspecialchars($viaje['cup_tot']) ?> totales</span>
                                 </li>
                             </ul>
                         </div>

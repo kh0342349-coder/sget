@@ -37,7 +37,7 @@ function abrirModalPermisos(idUsuario, nombreUsuario) {
         })
         .catch(err => {
             console.error('Error al obtener permisos:', err);
-            contenedor.innerHTML = '<p class="text-center text-red-400 py-6">Error de conexión al cargar permisos.</p>';
+            contenedor.innerHTML = '<p class="text-center text-red-400 py-6">' + (window.SGET_I18N?.t('Error de conexión al cargar permisos.') || 'Connection error while loading permissions.') + '</p>';
         })
         .finally(() => {
             if (loader) loader.classList.add('hidden');
@@ -81,7 +81,7 @@ function renderizarSwitchesPermisos(permisos) {
                            class="mt-1 w-4 h-4 rounded text-neon-azul focus:ring-neon-azul border-white/20 bg-slate-800">
                     <div>
                         <span class="text-xs font-bold text-slate-200 block">${p.nombre_permiso}</span>
-                        <span class="text-[10px] text-color-mutado block leading-tight mt-0.5">${p.descripcion || 'Sin descripción'}</span>
+                        <span class="text-[10px] text-color-mutado block leading-tight mt-0.5">${p.descripcion || (window.SGET_I18N?.t('Sin descripción') || 'No description')}</span>
                     </div>
                 </label>
             `;
@@ -111,10 +111,10 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(r => r.json())
             .then(res => {
                 if (res.status === 'success') {
-                    alert('Permisos actualizados correctamente.');
+                    alert(window.SGET_I18N?.t('Permisos actualizados correctamente.') || 'Permissions updated successfully.');
                     cerrarModalPermisos();
                 } else {
-                    alert('Error al guardar: ' + res.mensaje);
+                    alert((window.SGET_I18N?.t('Error al guardar:') || 'Save error:') + ' ' + res.mensaje);
                 }
             })
             .catch(err => console.error('Error al guardar permisos:', err));

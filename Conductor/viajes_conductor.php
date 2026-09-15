@@ -291,7 +291,7 @@ $stmt_user->close();
                     <i class="fas fa-shuttle-van text-blue-500 text-base w-5 text-center"></i>
                     <div>
                         <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Vehículo & Placa</p>
-                        <p id="detVehiculo" class="font-mono font-bold text-slate-800 dark:text-slate-100 mt-0.5"></p>
+                        <p id="detVehículo" class="font-mono font-bold text-slate-800 dark:text-slate-100 mt-0.5"></p>
                     </div>
                 </div>
 
@@ -456,7 +456,7 @@ $stmt_user->close();
         function verFichaViaje(btn) {
             const v = JSON.parse(btn.getAttribute('data-viaje'));
             document.getElementById('detRuta').innerText = v.des_rut || 'Sin Destino';
-            document.getElementById('detVehiculo').innerText = (v.pla_veh || 'N/A') + ' - ' + (v.mode_veh || '');
+            document.getElementById('detVehículo').innerText = (v.pla_veh || 'N/A') + ' - ' + (v.mode_veh || '');
             document.getElementById('detFecha').innerText = v.fec_via + ' ' + (v.hor_sal_via || '');
             document.getElementById('detPasajeros').innerText = (v.num_pasajeros || 0) + ' pasajeros a bordo';
 

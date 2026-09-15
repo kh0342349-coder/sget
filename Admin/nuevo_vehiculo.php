@@ -86,7 +86,7 @@ $nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
                             <i class="fas fa-id-card text-neon-azul"></i> Matrícula / Placa Identificadora
                         </label>
                         <div class="relative group">
-                            <input type="text" name="pla_veh" required placeholder="EJ: FUSA-123" maxlength="7"
+                            <input type="text" name="pla_veh" required placeholder="Ej.: FUSA-123" data-i18n-placeholder-es="Ej.: FUSA-123" data-i18n-placeholder-en="e.g. FUSA-123" maxlength="7"
                                    class="w-full pl-14 pr-4 py-3.5 bg-bg-principal/60 border border-white/5 rounded-xl outline-none focus:border-neon-azul/50 text-white font-mono font-bold text-lg tracking-widest uppercase transition-all shadow-inner placeholder-white/10">
                             <div class="absolute inset-y-0 left-0 flex items-center px-4 pointer-events-none text-white/30 border-r border-white/5 bg-white/[0.02] rounded-l-xl">
                                 <i class="fas fa-hashtag text-xs"></i>
@@ -99,7 +99,7 @@ $nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
                             <i class="fas fa-tag text-neon-azul"></i> Línea / Modelo / Descripción
                         </label>
                         <div class="relative">
-                            <input type="text" name="mode_veh" required placeholder="Ej: Chevrolet Sail 2023"
+                            <input type="text" name="mode_veh" required placeholder="Ej.: Chevrolet Sail 2023" data-i18n-placeholder-es="Ej.: Chevrolet Sail 2023" data-i18n-placeholder-en="e.g. Chevrolet Sail 2023"
                                    class="w-full pl-12 pr-4 py-3 bg-bg-principal/60 border border-white/5 rounded-xl outline-none focus:border-neon-azul/50 text-white text-sm transition-all placeholder-white/20">
                             <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-white/20">
                                 <i class="fas fa-car text-xs"></i>
@@ -114,7 +114,7 @@ $nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
                                 <i class="fas fa-users text-neon-azul"></i> Capacidad Total
                             </label>
                             <div class="relative">
-                                <input type="number" name="cap_veh" required placeholder="0" min="1"
+                                <input type="number" name="cap_veh" required placeholder="0" data-i18n-placeholder-es="0" data-i18n-placeholder-en="0" min="1"
                                        class="w-full pl-11 pr-16 py-3 bg-bg-principal/60 border border-white/5 rounded-xl outline-none focus:border-neon-azul/50 text-white font-mono font-bold text-sm transition-all placeholder-white/20">
                                 <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-white/20">
                                     <i class="fas fa-layer-group text-xs"></i>

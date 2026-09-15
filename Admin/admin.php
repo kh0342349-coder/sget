@@ -67,12 +67,31 @@ $conductores_disponibles = $conexion->query("
 ");
 ?>
 <!DOCTYPE html>
-<html lang="<?php echo $idiomaActual; ?>" class="dark">
+<html lang="<?php echo $idiomaActual; ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SGET - Dashboard Principal</title>
+
+    <!-- SCRIPT SÍNCRONO: Debe ir lo más arriba posible para evitar el parpadeo de tema -->
+    <script>
+        (function() {
+            const savedTheme = localStorage.getItem('theme');
+            // Si no hay tema guardado, por defecto asigna 'dark' (o cámbialo a 'light' según prefieras)
+            if (savedTheme === 'dark' || (!savedTheme && true)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        })();
+    </script>
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        }
+    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style_admin.css">
@@ -296,8 +315,9 @@ $conductores_disponibles = $conexion->query("
         </div>
     </div>
 
-    <!-- SCRIPT PARA CONTROLAR EL MODAL DE AYUDA -->
+    <!-- SCRIPTS GENERALES (MODAL DE AYUDA Y CAMBIO DE TEMA) -->
     <script>
+    // Control del Modal de Ayuda
     function abrirModalAyuda() {
         document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
         document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');
@@ -310,6 +330,18 @@ $conductores_disponibles = $conexion->query("
         document.getElementById('modalAyuda').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
         document.getElementById('overlayAyuda').classList.remove('opacity-100', 'pointer-events-auto');
         document.getElementById('overlayAyuda').classList.add('opacity-0', 'pointer-events-none');
+    }
+
+    // Control del Modo Claro / Oscuro
+    function toggleTheme() {
+        const htmlEl = document.documentElement;
+        if (htmlEl.classList.contains('dark')) {
+            htmlEl.classList.remove('dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            htmlEl.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        }
     }
     </script>
 </body>

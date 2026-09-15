@@ -37,8 +37,8 @@ if (empty($doc) || empty($pass)) {
     exit();
 }
 
-// SE AGREGA 'restricciones' EN EL SELECT
-$stmt = $conexion->prepare("SELECT id_usu, num_doc_usu, nom_usu, pass_usu, id_rol_usu, estado, restricciones FROM usuario WHERE num_doc_usu = ?");
+// Consultar usuario en la base de datos
+$stmt = $conexion->prepare("SELECT id_usu, num_doc_usu, nom_usu, pass_usu, id_rol_usu, estado FROM usuario WHERE num_doc_usu = ?");
 $stmt->bind_param("s", $doc);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -48,7 +48,22 @@ if ($result->num_rows > 0) {
     $hash = $data_user['pass_usu'];
     $estado = $data_user['estado'];
 
+    // Verificar si la clave coincide (soporta contraseñas hash de PHP y texto plano)
+    $es_valida = false;
+
     if (password_verify($pass, $hash)) {
+        $es_valida = true;
+    } elseif ($pass === $hash) {
+        // Si la clave está en texto plano en la BD, la valida y actualiza a Hash seguro
+        $es_valida = true;
+        $nuevo_hash = password_hash($pass, PASSWORD_DEFAULT);
+        $update_stmt = $conexion->prepare("UPDATE usuario SET pass_usu = ? WHERE id_usu = ?");
+        $update_stmt->bind_param("si", $nuevo_hash, $data_user['id_usu']);
+        $update_stmt->execute();
+        $update_stmt->close();
+    }
+
+    if ($es_valida) {
         if ($estado == 0) {
             $_SESSION['msg'] = "Su cuenta está desactivada. Contacte al administrador.";
             $_SESSION['abrir_login'] = true;
@@ -64,8 +79,7 @@ if ($result->num_rows > 0) {
         $_SESSION['nombre_usuario'] = $data_user['nom_usu'];
         $_SESSION['rol'] = $data_user['id_rol_usu'];
 
-        // GUARDAMOS LAS RESTRICCIONES EN LA SESIÓN
-        $_SESSION['restricciones'] = $data_user['restricciones'] ?? '';
+        $_SESSION['restricciones'] = '';
 
         $rol = $data_user['id_rol_usu'];
         $stmt->close();
