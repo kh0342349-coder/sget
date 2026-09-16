@@ -1,5 +1,13 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) {
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'domain'   => '',
+        'secure'   => true,    // Restringe el envío a conexiones cifradas HTTPS
+        'httponly' => true,    // Evita lecturas no autorizadas vía JavaScript
+        'samesite' => 'Lax'    // Mitiga solicitudes forzadas CSRF
+    ]);
     session_start();
 }
 
@@ -71,6 +79,19 @@ foreach ($catalogoOpciones as $opcion) {
     }
 }
 ?>
+<!-- SCRIPT BLOQUEANTE ANTI-TITILEO DE TEMA (FOUC) -->
+<script>
+    (function() {
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    })();
+</script>
+
 <script>window.SGET_LANGUAGE_URL = '../set_language.php'; document.documentElement.setAttribute('data-language', '<?= htmlspecialchars($idiomaActual, ENT_QUOTES, 'UTF-8') ?>');</script>
 <script src="../js/i18n.js?v=20260908-1"></script>
 <script>
@@ -163,15 +184,12 @@ foreach ($catalogoOpciones as $opcion) {
         // 1. TEMA OSCURO
         const themeToggleBtn = document.getElementById('themeToggle');
         const themeIcon = document.getElementById('themeIcon');
-        const themeGuardado = localStorage.getItem('theme');
-        const esOscuro = themeGuardado === 'dark' || (!themeGuardado && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        const esOscuro = document.documentElement.classList.contains('dark');
         
         const actualizarIconoTema = (oscuro) => {
             if (themeIcon) themeIcon.className = oscuro ? "fas fa-sun text-amber-400 text-base" : "fas fa-moon text-slate-700 text-base";
         };
 
-        if (esOscuro) document.documentElement.classList.add('dark');
-        else document.documentElement.classList.remove('dark');
         actualizarIconoTema(esOscuro);
 
         if (themeToggleBtn) {

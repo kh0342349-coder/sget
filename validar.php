@@ -1,4 +1,14 @@
 <?php
+// Configurar las directivas de seguridad para la cookie de sesión antes de iniciarla
+session_set_cookie_params([
+    'lifetime' => 0,         // Persiste durante la sesión activa del navegador
+    'path'     => '/',
+    'domain'   => '',        // Asigna automáticamente el dominio/host actual
+    'secure'   => true,      // Tridente defensivo: Transmisión exclusiva mediante HTTPS
+    'httponly' => true,      // Tridente defensivo: Inaccesible mediante JS/document.cookie (Anti-XSS)
+    'samesite' => 'Lax'      // Tridente defensivo: Protección contra ataques CSRF
+]);
+
 session_start();
 include 'assets/conexion.php';
 

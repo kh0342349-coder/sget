@@ -132,8 +132,7 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../css/style.css">
 </head>
-<body class="bg-slate-50 dark:bg-[#080c14] text-slate-800 dark:text-slate-100 flex min-h-screen antialiased transition-colors duration-300">
-
+<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
     <!-- 1. SIDEBAR FIJO -->
     <?php include '../includes/sidebar.php'; ?>
 

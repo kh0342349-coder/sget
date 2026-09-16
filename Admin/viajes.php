@@ -107,7 +107,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
         }
     </script>
 </head>
-<body class="bg-slate-50 dark:bg-[#080c14] text-slate-800 dark:text-slate-100 flex min-h-screen transition-colors duration-300">
+    <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
 
     <?php include '../includes/sidebar.php'; ?>
 
