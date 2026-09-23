@@ -1,0 +1,115 @@
+/* ==========================================
+   assets/css/sidebar.css - SGET Sidebar
+   ========================================== */
+
+/* --- 1. VARIABLES MODO CLARO (POR DEFECTO) --- */
+#sidebar-menu {
+    --bg-sidebar: rgba(255, 255, 255, 0.95);
+    --border-sidebar: rgba(226, 232, 240, 0.9);
+    --text-sidebar: #475569;
+    --text-sidebar-hover: #0f172a;
+    --bg-sidebar-hover: rgba(0, 0, 0, 0.05);
+    --text-sidebar-active: #0284c7;
+    --shadow-sidebar: 0 20px 40px -15px rgba(0, 0, 0, 0.08);
+
+    background-color: var(--bg-sidebar) !important;
+    border-color: var(--border-sidebar) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: var(--shadow-sidebar) !important;
+    transition: width 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                background-color 0.3s ease, 
+                border-color 0.3s ease !important;
+    will-change: width, transform;
+}
+
+/* --- 2. VARIABLES MODO OSCURO (html.dark) --- */
+html.dark #sidebar-menu {
+    --bg-sidebar: rgba(15, 23, 42, 0.85);
+    --border-sidebar: rgba(255, 255, 255, 0.1);
+    --text-sidebar: #94a3b8;
+    --text-sidebar-hover: #ffffff;
+    --bg-sidebar-hover: rgba(255, 255, 255, 0.05);
+    --text-sidebar-active: #38bdf8;
+    --shadow-sidebar: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+}
+
+/* Transición suave para el contenedor del contenido */
+#main-content-wrapper {
+    transition: margin-left 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* --- 3. MODO COLAPSADO / MINI SIDEBAR --- */
+body.sidebar-collapsed #sidebar-menu {
+    width: 5.5rem !important; /* 88px */
+}
+
+body.sidebar-collapsed #main-content-wrapper {
+    margin-left: 6.5rem !important;
+}
+
+body.sidebar-collapsed .sidebar-text,
+body.sidebar-collapsed .sidebar-logo-text {
+    opacity: 0 !important;
+    display: none !important;
+}
+
+body.sidebar-collapsed .sidebar-link {
+    justify-content: center !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    position: relative;
+}
+
+/* Tooltip flotante al pasar el cursor en modo mini */
+body.sidebar-collapsed .sidebar-link:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: 110%;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 0.5rem 0.85rem;
+    background: #0f172a;
+    color: #ffffff;
+    font-size: 0.75rem;
+    font-weight: 800;
+    white-space: nowrap;
+    border-radius: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+    z-index: 60;
+    pointer-events: none;
+}
+
+/* --- 4. ENLACES Y ESTADO ACTIVO --- */
+.sidebar-link {
+    color: var(--text-sidebar) !important;
+    transition: all 0.2s ease;
+}
+
+.sidebar-link:hover {
+    color: var(--text-sidebar-hover) !important;
+    background-color: var(--bg-sidebar-hover) !important;
+}
+
+.sidebar-link.active-link {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(168, 85, 247, 0.15) 100%) !important;
+    border: 1px solid rgba(56, 189, 248, 0.4) !important;
+    color: var(--text-sidebar-active) !important;
+}
+
+/* --- 5. CONMUTACIÓN DE LOGOS SEGÚN EL TEMA --- */
+.logo-tema-claro {
+    display: block !important;
+}
+.logo-tema-oscuro {
+    display: none !important;
+}
+
+html.dark .logo-tema-claro {
+    display: none !important;
+}
+html.dark .logo-tema-oscuro {
+    display: block !important;
+}

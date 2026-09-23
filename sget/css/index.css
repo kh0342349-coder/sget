@@ -1,0 +1,74 @@
+@import url('style.css');
+
+/* ==========================================================================
+   ESTILOS EXCLUSIVOS LANDING PAGE CON SOPORTE DE TEMA Y GLASSMORPHISM
+   ========================================================================== */
+
+.hero-section {
+    position: relative;
+    background-color: var(--bg-principal);
+    color: var(--color-texto);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.landing-features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 25px;
+    max-width: 1200px;
+    margin: 60px auto;
+}
+
+/* EFECTO GLASSMORPHISM AVANZADO PARA TARJETAS */
+.card-glass {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .card-glass,
+html.dark .card-glass {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* HOVER CON RESPLANDOR NEÓN Y ELEVACIÓN */
+.glow-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glow-hover:hover {
+    transform: translateY(-4px);
+    border-color: var(--neon-azul);
+    box-shadow: 0 12px 25px -5px rgba(56, 189, 248, 0.25);
+}
+
+/* LÍNEA SEPARADORA CON GRADIENTE DE LUZ */
+.divider-glow {
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(56, 189, 248, 0.3) 50%, transparent 100%);
+}
+
+/* Modales y Contenedores Isla Traslúcidos */
+.modal-isla-container {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background-color: rgba(11, 15, 25, 0.75);
+    transition: background-color 0.3s ease;
+}
+
+[data-theme="light"] .modal-isla-container,
+html.light .modal-isla-container {
+    background-color: rgba(248, 250, 252, 0.75);
+}
+
+.modal-isla-card {
+    background-color: var(--bg-tarjeta);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--sombra-tarjeta);
+    color: var(--color-texto);
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
