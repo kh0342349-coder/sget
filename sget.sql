@@ -244,3 +244,4 @@ UPDATE permisos SET id_rol = 2 WHERE nombre_permiso IN ('cancelar_viaje', 'redir
 
 -- Permisos de Pasajero (id_rol = 3)
 UPDATE permisos SET id_rol = 3 WHERE nombre_permiso IN ('hacer_reserva', 'cancelar_reserva');
+addfsfwetyifdgukyiuhi
