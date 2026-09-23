@@ -1,26 +1,33 @@
 <?php
 // Archivo: Admin/admin.php
 date_default_timezone_set('America/Bogota');
-session_start();
 
-// Cargar diccionario de idioma global según la sesión
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Cargar diccionario de idioma global
 $idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
 if ($idiomaActual === 'en') {
-    require_once __DIR__ . '/../lang/en.php';
+    @include_once __DIR__ . '/../lang/en.php';
 } else {
-    require_once __DIR__ . '/../lang/es.php';
+    @include_once __DIR__ . '/../lang/es.php';
 }
 
 require_once __DIR__ . '/../assets/conexion.php';
-require_once '../helpers/AuthHelper.php';
+require_once __DIR__ . '/../helpers/AuthHelper.php';
 
 // Verificación de seguridad para Administrador (Rol 1)
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
+$rolSesion = $_SESSION['rol'] ?? $_SESSION['id_rol_usu'] ?? 0;
+if (!isset($_SESSION['documento']) || $rolSesion != 1) {
     header("Location: ../index.php");
     exit();
 }
 
-// BLOQUEO DE SEGURIDAD POR RESTRICCIONES
 $idUsuarioActual = $_SESSION['id_usu'] ?? 0;
 AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'admin');
 
@@ -31,24 +38,40 @@ $mes_actual = date('m');
 $anio_actual = date('Y');
 
 // 1. Estadísticas de Usuarios
+$total_usuarios = 0;
 $res_total_usu = $conexion->query("SELECT COUNT(*) as total FROM usuario WHERE id_rol_usu IN (2,3)");
-$total_usuarios = $res_total_usu ? $res_total_usu->fetch_assoc()['total'] : 0;
+if ($res_total_usu) {
+    $row = $res_total_usu->fetch_assoc();
+    $total_usuarios = $row['total'] ?? 0;
+}
 
+$usuarios_mes = 0;
 $res_mes_usu = $conexion->query("SELECT COUNT(*) as mes FROM usuario WHERE id_rol_usu IN (2,3)");
-$usuarios_mes = $res_mes_usu ? $res_mes_usu->fetch_assoc()['mes'] : 0;
+if ($res_mes_usu) {
+    $row = $res_mes_usu->fetch_assoc();
+    $usuarios_mes = $row['mes'] ?? 0;
+}
 $porcentaje_usu = $total_usuarios > 0 ? round(($usuarios_mes / $total_usuarios) * 100, 1) : 0;
 
 // 2. Estadísticas de Viajes
+$total_viajes = 0;
 $res_total_via = $conexion->query("SELECT COUNT(*) as total FROM viaje");
-$total_viajes = $res_total_via ? $res_total_via->fetch_assoc()['total'] : 0;
+if ($res_total_via) {
+    $row = $res_total_via->fetch_assoc();
+    $total_viajes = $row['total'] ?? 0;
+}
 
+$viajes_mes = 0;
 $res_mes_via = $conexion->query("SELECT COUNT(*) as mes FROM viaje WHERE MONTH(fec_via) = '$mes_actual' AND YEAR(fec_via) = '$anio_actual'");
-$viajes_mes = $res_mes_via ? $res_mes_via->fetch_assoc()['mes'] : 0;
+if ($res_mes_via) {
+    $row = $res_mes_via->fetch_assoc();
+    $viajes_mes = $row['mes'] ?? 0;
+}
 $porcentaje_via = $total_viajes > 0 ? round(($viajes_mes / $total_viajes) * 100, 1) : 0;
 
 // 3. Estado de la Flota de Vehículos
-$res_veh = $conexion->query("SELECT est_veh, COUNT(*) as cantidad FROM vehiculo GROUP BY est_veh");
 $vehiculos = ['Activo' => 0, 'Inactivo' => 0];
+$res_veh = $conexion->query("SELECT est_veh, COUNT(*) as cantidad FROM vehiculo GROUP BY est_veh");
 if ($res_veh) {
     while($row = $res_veh->fetch_assoc()) {
         $estado = ($row['est_veh'] == 1) ? 'Activo' : 'Inactivo';
@@ -73,11 +96,9 @@ $conductores_disponibles = $conexion->query("
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SGET - Dashboard Principal</title>
 
-    <!-- SCRIPT SÍNCRONO: Debe ir lo más arriba posible para evitar el parpadeo de tema -->
     <script>
         (function() {
             const savedTheme = localStorage.getItem('theme');
-            // Si no hay tema guardado, por defecto asigna 'dark' (o cámbialo a 'light' según prefieras)
             if (savedTheme === 'dark' || (!savedTheme && true)) {
                 document.documentElement.classList.add('dark');
             } else {
@@ -98,20 +119,27 @@ $conductores_disponibles = $conexion->query("
 </head>
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
 
-   <?php include '../includes/sidebar.php'; ?>
+   <?php 
+   if (file_exists(__DIR__ . '/../includes/sidebar.php')) {
+       include __DIR__ . '/../includes/sidebar.php';
+   }
+   ?>
 
     <div id="main-content-wrapper" class="ml-72 flex flex-col min-h-screen flex-1 transition-all duration-300 min-w-0">
-        <?php include '../includes/header.php'; ?>
+        <?php 
+        if (file_exists(__DIR__ . '/../includes/header.php')) {
+            include __DIR__ . '/../includes/header.php';
+        } else {
+            echo "<header class='p-4 bg-slate-800 text-white'>Header SGET</header>";
+        }
+        ?>
 
         <main class="space-y-8 flex-grow pb-12 relative z-10 p-8 max-w-[1600px] w-auto mx-auto">
             
-            <!-- ENCABEZADO DE BIENVENIDA CON BOTÓN DE AYUDA -->
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 dark:bg-white/[0.02] p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-md">
                 <div>
                     <div class="flex items-center gap-2.5">
                         <h2 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight"><?php echo $lang['bienvenido'] ?? 'Bienvenido al Panel General'; ?></h2>
-                        
-                        <!-- BOTÓN DE AYUDA DEL SISTEMA -->
                         <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
                             <i class="fas fa-question text-[10px]"></i>
                         </button>
@@ -123,12 +151,10 @@ $conductores_disponibles = $conexion->query("
                 </div>
             </div>
 
-            <!-- TARJETAS DE MÉTRICAS PRINCIPALES -->
+            <!-- TARJETAS DE MÉTRICAS -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 
-                <!-- Tarjeta Usuarios -->
                 <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 w-32 h-32 bg-sky-500/5 rounded-full blur-2xl group-hover:bg-sky-500/10 transition-all"></div>
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider"><?php echo $lang['total_usuarios'] ?? 'TOTAL USUARIOS'; ?></p>
@@ -143,9 +169,7 @@ $conductores_disponibles = $conexion->query("
                     </div>
                 </div>
 
-                <!-- Tarjeta Viajes -->
                 <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 w-32 h-32 bg-purple-500/5 rounded-full blur-2xl group-hover:bg-purple-500/10 transition-all"></div>
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider"><?php echo $lang['viajes_registrados'] ?? 'VIAJES REGISTRADOS'; ?></p>
@@ -160,9 +184,7 @@ $conductores_disponibles = $conexion->query("
                     </div>
                 </div>
 
-                <!-- Tarjeta Vehículos Activos -->
                 <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl group-hover:bg-emerald-500/10 transition-all"></div>
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider"><?php echo $lang['flota_disponible'] ?? 'FLOTA DISPONIBLE'; ?></p>
@@ -173,13 +195,11 @@ $conductores_disponibles = $conexion->query("
                         </div>
                     </div>
                     <div class="mt-4 flex items-center gap-2 text-xs text-slate-400 font-semibold">
-                        <span>Inactivos / Taller: <b class="text-red-400"><?php echo $vehiculos['Inactivo']; ?></b></span>
+                        <span>Inactivos: <b class="text-red-400"><?php echo $vehiculos['Inactivo']; ?></b></span>
                     </div>
                 </div>
 
-                <!-- Tarjeta Rendimiento -->
                 <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl group-hover:bg-amber-500/10 transition-all"></div>
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider"><?php echo $lang['eficiencia_operativa'] ?? 'EFICIENCIA OPERATIVA'; ?></p>
@@ -196,10 +216,9 @@ $conductores_disponibles = $conexion->query("
 
             </div>
 
-            <!-- SECCIÓN INFERIOR: CONDUCTORES DISPONIBLES Y ACCESOS RÁPIDOS -->
+            <!-- SECCIÓN INFERIOR -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                <!-- Lista de conductores disponibles -->
                 <div class="lg:col-span-2 bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl">
                     <div class="flex justify-between items-center mb-6">
                         <h3 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
@@ -245,7 +264,6 @@ $conductores_disponibles = $conexion->query("
                     </div>
                 </div>
 
-                <!-- Panel de Accesos y Accesibilidad Rápida -->
                 <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/5 shadow-xl flex flex-col justify-between">
                     <div>
                         <h3 class="text-base font-extrabold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
@@ -285,7 +303,7 @@ $conductores_disponibles = $conexion->query("
         </main>
     </div>
 
-    <!-- MODAL DE AYUDA DEL DASHBOARD -->
+    <!-- MODAL DE AYUDA -->
     <div id="overlayAyuda" onclick="cerrarModalAyuda()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300"></div>
     <div id="modalAyuda" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
@@ -300,14 +318,6 @@ $conductores_disponibles = $conexion->query("
                     <i class="fas fa-chart-pie text-sky-400 mt-0.5"></i>
                     <span><b>Métricas Principales:</b> Visualiza en tiempo real el volumen de usuarios, viajes despachados y la disponibilidad operativa de la flota.</span>
                 </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-id-card text-emerald-400 mt-0.5"></i>
-                    <span><b>Operadores en Turno:</b> Controla los conductores disponibles listos para asignación en ruta.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-bolt text-amber-400 mt-0.5"></i>
-                    <span><b>Accesos Rápidos:</b> Atajos directos hacia los módulos de despacho, recaudo y restricciones de seguridad.</span>
-                </li>
             </ul>
             <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
                 Entendido
@@ -315,9 +325,7 @@ $conductores_disponibles = $conexion->query("
         </div>
     </div>
 
-    <!-- SCRIPTS GENERALES (MODAL DE AYUDA Y CAMBIO DE TEMA) -->
     <script>
-    // Control del Modal de Ayuda
     function abrirModalAyuda() {
         document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
         document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');
@@ -330,18 +338,6 @@ $conductores_disponibles = $conexion->query("
         document.getElementById('modalAyuda').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
         document.getElementById('overlayAyuda').classList.remove('opacity-100', 'pointer-events-auto');
         document.getElementById('overlayAyuda').classList.add('opacity-0', 'pointer-events-none');
-    }
-
-    // Control del Modo Claro / Oscuro
-    function toggleTheme() {
-        const htmlEl = document.documentElement;
-        if (htmlEl.classList.contains('dark')) {
-            htmlEl.classList.remove('dark');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            htmlEl.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-        }
     }
     </script>
 </body>

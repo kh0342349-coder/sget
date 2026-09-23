@@ -1,11 +1,13 @@
 <?php
-// Configuración de parámetros seguros para la cookie de sesión nativa antes de iniciarla
+// Detección dinámica de protocolo (HTTP en red local / HTTPS en producción)
+$esHttps = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
+
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,         // Persiste mientras el navegador permanezca abierto
         'path'     => '/',
-        'domain'   => '',        // Dominio actual (localhost o producción)
-        'secure'   => true,      // Tridente defensivo: Solo sobre HTTPS
+        'domain'   => '',        // Dominio actual (localhost, IP o producción)
+        'secure'   => $esHttps,  // false en red local HTTP para permitir login; true en HTTPS
         'httponly' => true,      // Tridente defensivo: Inaccesible desde JavaScript (XSS)
         'samesite' => 'Lax'      // Tridente defensivo: Protección CSRF
     ]);
@@ -109,7 +111,7 @@ if (!$resultado_viajes) {
     </script>
     <script src="theme-toggle.js" defer></script>
 </head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen flex flex-col antialiased transition-colors duration-300">
+<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen flex flex-col antialiased">
 
     <!-- HEADER MODULAR -->
     <?php include 'includes/header_index.php'; ?>
@@ -257,12 +259,12 @@ if (!$resultado_viajes) {
 
     </main>
 
-    <!-- FOOTER CON ENLACE LEGAL -->
-    <footer class="p-6 text-center text-slate-500 dark:text-slate-400 text-xs font-semibold border-t border-slate-200 dark:border-white/10 bg-white/50 dark:bg-[#0b0f19]/50 flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto w-full gap-4">
+    <!-- FOOTER CON ENLACE LEGAL Y COOKIES -->
+    <footer class="p-6 text-center text-slate-500 dark:text-slate-400 text-xs font-semibold border-t border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0b0f19]/80 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto w-full gap-4">
         <p>&copy; 2026 SGET - Sistema de Gestión de Transporte. Todos los derechos reservados.</p>
         <div class="flex items-center gap-4">
-            <button onclick="abrirPanel('panelConfigCookies')" class="hover:text-sky-500 underline transition-colors cursor-pointer">
-                Configuración de Cookies
+            <button onclick="abrirPanel('panelConfigCookies')" class="hover:text-amber-600 dark:hover:text-amber-400 underline transition-colors cursor-pointer flex items-center gap-1.5">
+                <i class="fas fa-cookie-bite text-amber-700 dark:text-amber-500"></i> Configuración de Cookies
             </button>
             <span>•</span>
             <button onclick="abrirPanel('panelPolitica')" class="hover:text-sky-500 underline transition-colors cursor-pointer">
@@ -274,25 +276,28 @@ if (!$resultado_viajes) {
     <!-- INCLUSIÓN DEL MODAL AUTENTICACIÓN -->
     <?php include 'modal_auth.php'; ?>
 
-    <!-- BANNER FLOTANTE DE AVISO DE COOKIES -->
-    <div id="cookieBanner" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md bg-slate-900/95 dark:bg-[#0f172a]/95 text-white p-5 rounded-3xl border border-white/10 shadow-2xl z-[100] backdrop-blur-md hidden transition-all duration-300">
-        <div class="flex items-start gap-3">
-            <div class="w-9 h-9 rounded-2xl bg-sky-500/10 text-sky-400 flex items-center justify-center shrink-0 mt-0.5">
-                <i class="fas fa-cookie-bite text-base"></i>
+    <!-- BANNER FLOTANTE DE AVISO DE COOKIES CON GALLETA CAFÉ Y SOPORTE CLARO/OSCURO -->
+    <div id="cookieBanner" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md bg-white/95 dark:bg-[#0f172a]/95 text-slate-800 dark:text-white p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl z-[100] backdrop-blur-md hidden transition-all duration-300">
+        <div class="flex items-start gap-3.5">
+            <!-- Contenedor con la Galleta Café -->
+            <div class="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                <i class="fas fa-cookie-bite text-xl"></i>
             </div>
             <div class="space-y-2">
-                <h4 class="text-xs font-black uppercase tracking-wider text-sky-400">Aviso de Privacidad y Cookies</h4>
-                <p class="text-[11px] text-slate-300 leading-relaxed font-medium">
-                    Utilizamos cookies técnicas estrictamente necesarias para el funcionamiento seguro de SGET y cookies opcionales para personalizar tu experiencia.
+                <h4 class="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
+                    Aviso de Privacidad y Cookies
+                </h4>
+                <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
+                    Utilizamos cookies técnicas necesarias para el funcionamiento seguro de SGET y cookies opcionales para recordar tus preferencias de navegación.
                 </p>
                 <div class="flex flex-wrap items-center gap-2 pt-1">
                     <button onclick="aceptarTodasCookies()" class="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-lg shadow-sky-500/20">
                         Aceptar Todas
                     </button>
-                    <button onclick="abrirPanel('panelConfigCookies')" class="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer">
+                    <button onclick="abrirPanel('panelConfigCookies')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white border border-slate-200 dark:border-white/10 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer">
                         Configurar
                     </button>
-                    <button onclick="rechazarCookiesOpcionales()" class="px-2.5 py-2 text-slate-400 hover:text-white font-bold text-[10px] underline cursor-pointer">
+                    <button onclick="rechazarCookiesOpcionales()" class="px-2.5 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold text-[10px] underline cursor-pointer">
                         Solo Necesarias
                     </button>
                 </div>
@@ -300,17 +305,17 @@ if (!$resultado_viajes) {
         </div>
     </div>
 
-    <!-- MODAL DE CONFIGURACIÓN DE COOKIES -->
+    <!-- MODAL DE CONFIGURACIÓN DE COOKIES CON MODOS CLARO/OSCURO -->
     <div id="panelConfigCookies" onclick="if(event.target === this) cerrarPanel('panelConfigCookies')" class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md opacity-0 pointer-events-none hidden transition-opacity duration-300">
         <div class="modal-isla-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 max-w-xl w-full max-h-[85vh] flex flex-col transform scale-95 transition-transform duration-300 shadow-2xl">
             <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/10">
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-lg">
-                        <i class="fas fa-sliders-h"></i>
+                    <div class="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-500 flex items-center justify-center font-bold text-lg">
+                        <i class="fas fa-cookie-bite"></i>
                     </div>
                     <div>
                         <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Centro de Preferencias de Cookies</h3>
-                        <p class="text-[11px] font-bold text-slate-400">Personaliza tus opciones de privacidad en SGET</p>
+                        <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Personaliza tus opciones de privacidad en SGET</p>
                     </div>
                 </div>
                 <button onclick="cerrarPanel('panelConfigCookies')" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer">
@@ -324,7 +329,7 @@ if (!$resultado_viajes) {
                 <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 space-y-2">
                     <div class="flex items-center justify-between">
                         <span class="font-extrabold text-slate-900 dark:text-white text-sm">Cookies Estrictamente Necesarias</span>
-                        <span class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400">Siempre Activas</span>
+                        <span class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Siempre Activas</span>
                     </div>
                     <p class="text-[11px] text-slate-500 dark:text-slate-400">
                         Indispensables para el inicio de sesión seguro, autenticación del usuario (`PHPSESSID`) y mantenimiento de la sesión activa en SGET. No se pueden desactivar.
@@ -467,9 +472,8 @@ if (!$resultado_viajes) {
         }
 
         function aplicarPreferenciasCookies(prefs) {
-            // Cargar o bloquear scripts opcionales según el consentimiento
             if (!prefs.preferencias) {
-                // Si el usuario no acepta recordar preferencias, se limita el guardado automático
+                // Si el usuario desactiva cookies de preferencias opcionales
             }
         }
 

@@ -5,34 +5,51 @@ class AuthHelper {
 
     /**
      * Verifica si un usuario tiene acceso a un módulo o recurso específico.
-     * Lee la columna 'restricciones' de la tabla 'usuario' (separado por comas).
-     * Retorna false si está restringido (bloqueado), true si está permitido por defecto.
+     * Si es Administrador (rol 1), otorga acceso total por defecto.
+     * Para otros usuarios, consulta la tabla 'usuario_permisos'.
      */
     public static function tieneAcceso($conexion, $idUsuario, $recurso) {
         $idUsuario = intval($idUsuario);
         if ($idUsuario <= 0) return false;
 
-        $sql = "SELECT restricciones FROM usuario WHERE id_usu = ?";
+        // 1. Obtener el rol del usuario
+        $sqlRol = "SELECT id_rol_usu FROM usuario WHERE id_usu = ?";
+        $stmtRol = mysqli_prepare($conexion, $sqlRol);
+        if ($stmtRol) {
+            mysqli_stmt_bind_param($stmtRol, "i", $idUsuario);
+            mysqli_stmt_execute($stmtRol);
+            $resRol = mysqli_stmt_get_result($stmtRol);
+            if ($rowRol = mysqli_fetch_assoc($resRol)) {
+                // SI ES ADMINISTRADOR (id_rol_usu = 1), TIENE ACCESO TOTAL SIEMPRE
+                if (intval($rowRol['id_rol_usu']) === 1) {
+                    mysqli_stmt_close($stmtRol);
+                    return true;
+                }
+            }
+            mysqli_stmt_close($stmtRol);
+        }
+
+        // 2. Para otros roles, verificar si el recurso está bloqueado en 'usuario_permisos'
+        $sql = "SELECT up.permitido 
+                FROM usuario_permisos up
+                INNER JOIN permisos p ON up.id_permiso = p.id_permiso
+                WHERE up.id_usu = ? AND (p.nombre_permiso = ? OR p.modulo = ?)";
+        
         $stmt = mysqli_prepare($conexion, $sql);
         if ($stmt) {
-            mysqli_stmt_bind_param($stmt, "i", $idUsuario);
+            mysqli_stmt_bind_param($stmt, "iss", $idUsuario, $recurso, $recurso);
             mysqli_stmt_execute($stmt);
             $res = mysqli_stmt_get_result($stmt);
             
             if ($row = mysqli_fetch_assoc($res)) {
-                $restriccionesStr = $row['restricciones'] ?? '';
-                if (!empty($restriccionesStr)) {
-                    $denegados = array_map('trim', explode(',', $restriccionesStr));
-                    if (in_array($recurso, $denegados)) {
-                        mysqli_stmt_close($stmt);
-                        return false; 
-                    }
-                }
+                $permitido = intval($row['permitido']);
+                mysqli_stmt_close($stmt);
+                return $permitido === 1; // 1: Permitido, 0: Denegado
             }
             mysqli_stmt_close($stmt);
         }
         
-        return true; // Permitido por defecto si no está restringido
+        return true; // Permitido por defecto si no está explícitamente restricto
     }
 
     /**
@@ -59,7 +76,7 @@ class AuthHelper {
     }
 
     // =========================================================================
-    // MÉTODOS DE COMPATIBILIDAD (Para evitar errores si algún archivo los llama)
+    // MÉTODOS DE COMPATIBILIDAD
     // =========================================================================
     
     public static function tienePermiso($conexion, $idUsuario, $recurso) {
