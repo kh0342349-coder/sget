@@ -30,72 +30,70 @@ $promedio = 0;
 $total_votos = 0;
 $restricciones_actuales = '';
 
-// Consulta para obtener ID y restricciones
-$stmt_user = $conexion->prepare("SELECT id_usu, restricciones FROM usuario WHERE num_doc_usu = ?");
-
-// CONTROL DE ERRORES: Si la consulta falla (p. ej., si falta la columna 'restricciones')
-if (!$stmt_user) {
-    // Intento secundario si la columna 'restricciones' aún no ha sido agregada a la BD
+// CONSULTA SEGURA CON MANEJO DE EXCEPCIONES PARA EVITAR EL CRASH EN MYSQLI
+try {
+    $stmt_user = $conexion->prepare("SELECT id_usu, restricciones FROM usuario WHERE num_doc_usu = ?");
+} catch (mysqli_sql_exception $e) {
+    // Si la columna 'restricciones' no existe en la tabla, consulta solo id_usu sin fallar
     $stmt_user = $conexion->prepare("SELECT id_usu FROM usuario WHERE num_doc_usu = ?");
-    if (!$stmt_user) {
-        die("Error en la consulta a la base de datos: " . $conexion->error);
-    }
 }
 
-$stmt_user->bind_param("s", $documento);
-$stmt_user->execute();
-$result_user = $stmt_user->get_result();
+if ($stmt_user) {
+    $stmt_user->bind_param("s", $documento);
+    $stmt_user->execute();
+    $result_user = $stmt_user->get_result();
 
-if ($result_user && $result_user->num_rows > 0) {
-    $user_data = $result_user->fetch_assoc();
-    $id_conductor = $user_data['id_usu'];
-    $restricciones_actuales = $user_data['restricciones'] ?? '';
+    if ($result_user && $result_user->num_rows > 0) {
+        $user_data = $result_user->fetch_assoc();
+        $id_conductor = $user_data['id_usu'];
+        $restricciones_actuales = $user_data['restricciones'] ?? '';
 
-    // 1. Contar total de viajes
-    $stmt_count = $conexion->prepare("SELECT COUNT(*) as total FROM viaje WHERE id_usu_via = ?");
-    if ($stmt_count) {
-        $stmt_count->bind_param("i", $id_conductor);
-        $stmt_count->execute();
-        $total_viajes = $stmt_count->get_result()->fetch_assoc()['total'];
-        $stmt_count->close();
-    }
-
-    // 2. Obtener promedio de calificación
-    $stmt_cal = $conexion->prepare("SELECT AVG(pun_cal) as promedio, COUNT(id_cal) as total FROM calificacion WHERE id_usu_des = ?");
-    if ($stmt_cal) {
-        $stmt_cal->bind_param("i", $id_conductor);
-        $stmt_cal->execute();
-        $res_cal = $stmt_cal->get_result();
-        if ($res_cal) {
-            $datos_cal = $res_cal->fetch_assoc();
-            $promedio = round($datos_cal['promedio'] ?? 0, 1);
-            $total_votos = $datos_cal['total'] ?? 0;
+        // 1. Contar total de viajes
+        $stmt_count = $conexion->prepare("SELECT COUNT(*) as total FROM viaje WHERE id_usu_via = ?");
+        if ($stmt_count) {
+            $stmt_count->bind_param("i", $id_conductor);
+            $stmt_count->execute();
+            $total_viajes = $stmt_count->get_result()->fetch_assoc()['total'];
+            $stmt_count->close();
         }
-        $stmt_cal->close();
-    }
 
-    // 3. Consulta de viajes recientes
-    $sql_viajes = "SELECT v.*, r.des_rut, ve.pla_veh, ve.mode_veh,
-                    (SELECT COUNT(*) FROM reserva WHERE id_via_res = v.id_via) as num_pasajeros
-                    FROM viaje v 
-                    JOIN rutas r ON v.id_rut_via = r.id_rut 
-                    LEFT JOIN vehiculo ve ON v.id_veh = ve.id_veh 
-                    WHERE v.id_usu_via = ? 
-                    ORDER BY v.fec_via DESC LIMIT 5";
-    
-    $stmt_viajes = $conexion->prepare($sql_viajes);
-    if ($stmt_viajes) {
-        $stmt_viajes->bind_param("i", $id_conductor);
-        $stmt_viajes->execute();
-        $result_viajes = $stmt_viajes->get_result();
+        // 2. Obtener promedio de calificación
+        $stmt_cal = $conexion->prepare("SELECT AVG(pun_cal) as promedio, COUNT(id_cal) as total FROM calificacion WHERE id_usu_des = ?");
+        if ($stmt_cal) {
+            $stmt_cal->bind_param("i", $id_conductor);
+            $stmt_cal->execute();
+            $res_cal = $stmt_cal->get_result();
+            if ($res_cal) {
+                $datos_cal = $res_cal->fetch_assoc();
+                $promedio = round($datos_cal['promedio'] ?? 0, 1);
+                $total_votos = $datos_cal['total'] ?? 0;
+            }
+            $stmt_cal->close();
+        }
+
+        // 3. Consulta de viajes recientes
+        $sql_viajes = "SELECT v.*, r.des_rut, ve.pla_veh, ve.mode_veh,
+                        (SELECT COUNT(*) FROM reserva WHERE id_via_res = v.id_via) as num_pasajeros
+                        FROM viaje v 
+                        JOIN rutas r ON v.id_rut_via = r.id_rut 
+                        LEFT JOIN vehiculo ve ON v.id_veh = ve.id_veh 
+                        WHERE v.id_usu_via = ? 
+                        ORDER BY v.fec_via DESC LIMIT 5";
         
-        while($row = $result_viajes->fetch_assoc()) {
-            $viajes_data[] = $row;
+        $stmt_viajes = $conexion->prepare($sql_viajes);
+        if ($stmt_viajes) {
+            $stmt_viajes->bind_param("i", $id_conductor);
+            $stmt_viajes->execute();
+            $result_viajes = $stmt_viajes->get_result();
+            
+            while($row = $result_viajes->fetch_assoc()) {
+                $viajes_data[] = $row;
+            }
+            $stmt_viajes->close();
         }
-        $stmt_viajes->close();
     }
+    $stmt_user->close();
 }
-$stmt_user->close();
 
 // FUNCIÓN DE VERIFICACIÓN DE RESTRICCIONES EN TIEMPO REAL
 function tiene_acceso($permiso, $cadena_restricciones) {
@@ -237,7 +235,7 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
                                 <th class="px-5 py-3.5 text-center"><?= ($idiomaActual === 'en') ? 'Passengers' : 'Pasajeros' ?></th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-slate-100 dark:divide-white/5 text-slate-800 dark:text-slate-200">
+                        <tbody class="divide-y divide-slate-100 dark:divide-white/5 text-slate-800 dark:text-slate-100">
                             <?php if(!empty($viajes_data)): ?>
                                 <?php foreach($viajes_data as $v): ?>
                                 <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">

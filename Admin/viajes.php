@@ -107,11 +107,11 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
         }
     </script>
 </head>
-    <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
+<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased flex">
 
     <?php include '../includes/sidebar.php'; ?>
 
-    <div id="main-content-wrapper" class="ml-72 flex flex-col min-h-screen flex-1 transition-all duration-300 min-w-0">
+    <div id="main-content-wrapper" class="flex-1 ml-64 lg:ml-72 flex flex-col min-h-screen transition-all duration-300 pr-4">
         
         <?php include '../includes/header.php'; ?>
 
@@ -234,7 +234,6 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                     <select name="id_rut_via" id="select_id_rut_via" required onchange="actualizarPrecioRuta()" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-slate-800 dark:text-white">
                         <option value="">Seleccione ruta...</option>
                         <?php 
-                        // Guardamos los precios en atributos data para usarlos en JavaScript
                         if($rutas_select) { 
                             while($r = $rutas_select->fetch_assoc()) { 
                                 echo '<option value="'.$r['id_rut'].'" data-precio="'.$r['val_rut'].'">'.htmlspecialchars($r['nom_rut']).' ($'.number_format($r['val_rut'], 0, ',', '.').')</option>'; 
@@ -328,7 +327,6 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
 
     <!-- SCRIPTS DE CONTROL -->
     <script>
-        // Función para autocompletar el precio al cambiar la ruta
         function actualizarPrecioRuta() {
             const selectRuta = document.getElementById('select_id_rut_via');
             const inputValVia = document.getElementById('input_val_via');

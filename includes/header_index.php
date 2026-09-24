@@ -18,10 +18,10 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
 
 <!-- HEADER A LO LARGO DE LA PANTALLA CON EFECTO DIFUMINADO -->
 <header class="w-full fixed top-0 left-0 right-0 z-50 py-3 px-6 md:px-12 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border-b border-slate-200/50 dark:border-white/10 transition-colors duration-300">
-    <div class="max-w-7xl mx-auto flex items-center justify-between">
+    <div class="max-w-[1500px] mx-auto flex items-center justify-between relative">
         
         <!-- LOGO (IZQUIERDA) -->
-        <div class="flex items-center">
+        <div class="flex items-center pl-2 md:pl-4">
             <a href="index.php" class="flex items-center group">
                 <!-- Logo Tema Claro -->
                 <img id="logo-header-light" 
@@ -37,8 +37,8 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
             </a>
         </div>
 
-        <!-- ISLA FLOTANTE DE NAVEGACIÓN (CENTRO) -->
-        <nav class="hidden lg:flex items-center gap-1 bg-slate-100/60 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 p-1.5 rounded-full shadow-inner text-xs font-medium">
+        <!-- ISLA FLOTANTE DE NAVEGACIÓN (CENTRO ABSOLUTO) -->
+        <nav class="hidden lg:flex items-center gap-1 bg-slate-100/60 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 p-1.5 rounded-full shadow-inner text-xs font-medium absolute left-1/2 -translate-x-1/2">
             <a href="index.php#inicio" class="px-5 py-2 rounded-full transition-all duration-200 bg-sky-500 text-white font-bold shadow-sm hover:bg-sky-400">
                 Inicio
             </a>
@@ -51,13 +51,14 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
             <a href="#" class="px-4 py-2 rounded-full text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-all duration-200">
                 Nosotros
             </a>
-            <a href="#" class="px-4 py-2 rounded-full text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-all duration-200">
+            <!-- ENLACE DE CONTACTO ACTUALIZADO CON LA ANCLA DEL INDEX -->
+            <a href="index.php#contacto" class="px-4 py-2 rounded-full text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-all duration-200">
                 Contacto
             </a>
         </nav>
 
         <!-- ACCIONES (DERECHA) -->
-        <div class="flex items-center gap-2.5">
+        <div class="flex items-center gap-2.5 pr-2 md:pr-4">
             
             <!-- SELECTOR DE IDIOMA -->
             <select data-sget-language aria-label="Language" title="Seleccionar idioma / Select language" style="min-width: 108px;" class="sget-language-selector h-10 px-2.5 rounded-full bg-slate-100/70 dark:bg-slate-800/70 text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer">

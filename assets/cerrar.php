@@ -1,6 +1,24 @@
 <?php
-// Iniciar la sesión para poder acceder a ella y destruirla
+// Iniciar la sesión para poder acceder a ella y registrar el evento antes de destruirla
 session_start();
+include 'conexion.php';
+require_once '../helpers/Logger.php';
+
+// REGISTRO EN AUDITORÍA: Cierre de Sesión
+if (isset($_SESSION['id_usu']) || isset($_SESSION['nombre_usuario'])) {
+    $id     = $_SESSION['id_usu'] ?? null;
+    $nombre = $_SESSION['nombre_usuario'] ?? $_SESSION['nom_usu'] ?? 'Usuario';
+    $rol    = $_SESSION['nom_rol'] ?? 'Sin Rol';
+
+    Logger::registrar(
+        $conexion, 
+        'LOGOUT', 
+        "El usuario '{$nombre}' cerró su sesión en SGET.", 
+        $id, 
+        $nombre, 
+        $rol
+    );
+}
 
 // 1. Limpiar todas las variables de sesión
 $_SESSION = array();

@@ -29,6 +29,9 @@ if (isset($payload['email'])) {
     $email     = mysqli_real_escape_string($conexion, $payload['email']);
     $nombre    = mysqli_real_escape_string($conexion, $payload['name'] ?? 'Usuario Google');
     $google_id = mysqli_real_escape_string($conexion, $payload['sub']);
+    
+    // EXTRAER LA URL DE LA FOTO DEL PAYLOAD DE GOOGLE
+    $foto      = mysqli_real_escape_string($conexion, $payload['picture'] ?? '');
 
     // 4. Buscar usuario por correo o google_id
     $sql_check = "SELECT * FROM usuario WHERE corre_usu = '$email' OR google_id = '$google_id'";
@@ -41,6 +44,7 @@ if (isset($payload['email'])) {
         $id_rol     = (int)$usuario['id_rol_usu'];
         $nombre_db  = $usuario['nom_usu'];
 
+        // Actualizar google_id si aún no estaba vinculado
         if (empty($usuario['google_id'])) {
             mysqli_query($conexion, "UPDATE usuario SET google_id = '$google_id' WHERE id_usu = $id_usuario");
         }
@@ -62,11 +66,12 @@ if (isset($payload['email'])) {
         }
     }
 
-    // 5. Variables de sesión idénticas a validar.php
+    // 5. VARIABLES DE SESIÓN (SE AGREGA LA FOTO DE GOOGLE)
     $_SESSION['id_usu']         = $id_usuario;
     $_SESSION['documento']      = $num_doc;
     $_SESSION['nombre_usuario'] = $nombre_db;
     $_SESSION['rol']            = $id_rol;
+    $_SESSION['foto_usuario']   = $payload['picture'] ?? ''; // <-- AQUÍ SE GUARDA LA FOTO EN SESIÓN
 
     // 6. Asignar ruta de redirección según el rol
     switch ($id_rol) {

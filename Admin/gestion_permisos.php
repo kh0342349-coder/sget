@@ -6,92 +6,84 @@ session_start();
 include '../assets/conexion.php';
 require_once '../helpers/AuthHelper.php';
 
-// Verificación de seguridad (Solo Admin)
+// Verificacion de seguridad (Solo Admin)
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
     header("Location: ../index.php");
     exit();
 }
 
 // BLOQUEO DE SEGURIDAD POR RESTRICCIONES
-$idUsuarioActual = $_SESSION['id_usu'] ?? 0;
-AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'gestion_permisos');
+$idUsuarioActual =$_SESSION['id_usu'] ?? 0;
+AuthHelper::requerirAcceso($conexion,$idUsuarioActual, 'gestion_permisos');
 
-$nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
+$nombreReal =$_SESSION['nombre_usuario'] ?? "Administrador";
 
-// Asegurar tabla de restricciones para administradores
+// Asegurar existencia de la tabla restricciones si no se ha migrado
 $conexion->query("CREATE TABLE IF NOT EXISTS restricciones (
     id_res INT AUTO_INCREMENT PRIMARY KEY,
     id_usu INT NOT NULL,
     modulo VARCHAR(50) NOT NULL
 )");
 
-// Módulos controlables por cada rol
+// Modulos controlables por cada rol
 $modulosAdmin = [
     'admin' => 'Dashboard General',
     'asignaciones' => 'Asignaciones y Recaudo',
-    'gestion_permisos' => 'Gestión de Permisos',
+    'gestion_permisos' => 'Gestion de Permisos',
     'ranking_conductores' => 'Ranking de Conductores',
-    'reportes' => 'Reportes Analíticos',
-    'rutas' => 'Gestión de Rutas',
-    'usuarios' => 'Gestión de Usuarios',
-    'vehiculos' => 'Control de Vehículos',
+    'reportes' => 'Reportes Analiticos',
+    'rutas' => 'Gestion de Rutas',
+    'usuarios' => 'Gestion de Usuarios',
+    'vehiculos' => 'Control de Vehiculos',
     'viajes' => 'Despacho de Viajes'
 ];
 
 $modulosConductor = [
     'ver_rutas' => 'Mis Viajes (Rutas asignadas)',
-    'ver_ranking' => 'Mis Reseñas y Calificaciónes'
+    'ver_ranking' => 'Mis Resenas y Calificaciones'
 ];
 
 $modulosPasajero = [
     'ver_viajes' => 'Ver Viajes Disponibles',
     'historial' => 'Historial de Reservas',
-    'calificar' => 'Módulo de Calificaciónes'
+    'calificar' => 'Modulo de Calificaciones'
 ];
 
 // PROCESAR GUARDADO DE PERMISOS DESDE EL DRAWER LATERAL
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['accion'] === 'guardar_permisos') {
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) &&$_POST['accion'] === 'guardar_permisos') {
     $id_usu_permiso = intval($_POST['id_usu']);
     $rol_usuario_permiso = intval($_POST['rol_usuario']);
     $filtro_rol_actual = intval($_POST['filtro_rol_actual'] ?? 1);
-    $modulos_permitidos = $_POST['modulos'] ?? []; // Módulos que SÍ tienen acceso
+    $modulos_permitidos =$_POST['modulos'] ?? []; // Modulos que SI tienen acceso
 
     // REGLA DE SEGURIDAD: Un admin no puede modificar sus propios permisos
-    if ($id_usu_permiso == $idUsuarioActual) {
+    if ($id_usu_permiso ==$idUsuarioActual) {
         header("Location: gestion_permisos.php?rol=" . $filtro_rol_actual . "&status=self_error");
         exit();
     }
 
+    // Definir los modulos pertenecientes al rol a modificar
+    $modulosRol = [];
     if ($rol_usuario_permiso == 1) {
-        // Administrador: se almacena en la tabla restricciones
-        $del = $conexion->prepare("DELETE FROM restricciones WHERE id_usu = ?");
-        if ($del) {
-            $del->bind_param("i", $id_usu_permiso);
-            $del->execute();
-        }
-        $stmtIns = $conexion->prepare("INSERT INTO restricciones (id_usu, modulo) VALUES (?, ?)");
-        if ($stmtIns) {
-            foreach ($modulosAdmin as $keyMod => $nombreMod) {
-                if (!in_array($keyMod, $modulos_permitidos)) {
-                    $stmtIns->bind_param("is", $id_usu_permiso, $keyMod);
-                    $stmtIns->execute();
-                }
-            }
-        }
+        $modulosRol =$modulosAdmin;
+    } elseif ($rol_usuario_permiso == 2) {
+        $modulosRol =$modulosConductor;
     } else {
-        // Conductor o Pasajero: se guardan los módulos denegados separados por coma en la columna restricciones
-        $modulosDisponiblesRol = ($rol_usuario_permiso == 2) ? $modulosConductor : $modulosPasajero;
-        $denegados = [];
-        foreach ($modulosDisponiblesRol as $keyMod => $nombreMod) {
-            if (!in_array($keyMod, $modulos_permitidos)) {
-                $denegados[] = $keyMod;
+        $modulosRol =$modulosPasajero;
+    }
+
+    // Limpiar restricciones previas del usuario
+    $del =$conexion->prepare("DELETE FROM restricciones WHERE id_usu = ?");
+    if ($del) {$del->bind_param("i", $id_usu_permiso);$del->execute();
+    }
+
+    // Insertar solo los modulos que NO fueron seleccionados (modulos restringidos)
+    $stmtIns =$conexion->prepare("INSERT INTO restricciones (id_usu, modulo) VALUES (?, ?)");
+    if ($stmtIns) {
+        foreach ($modulosRol as $keyMod =>$nombreMod) {
+            if (!in_array($keyMod,$modulos_permitidos)) {
+                $stmtIns->bind_param("is", $id_usu_permiso, $keyMod);$stmtIns->execute();
             }
-        }
-        $strRestricciones = implode(',', $denegados);
-        $stmtUpd = $conexion->prepare("UPDATE usuario SET restricciones = ? WHERE id_usu = ?");
-        if ($stmtUpd) {
-            $stmtUpd->bind_param("si", $strRestricciones, $id_usu_permiso);
-            $stmtUpd->execute();
         }
     }
 
@@ -102,15 +94,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion']) && $_POST['a
 // Filtro de rol seleccionado (1: Admin, 2: Conductor, 3: Pasajero, 0: Todos)
 $filtro_rol = isset($_GET['rol']) ? intval($_GET['rol']) : 1;
 $whereRol = ($filtro_rol > 0) ? "WHERE id_rol_usu = $filtro_rol AND estado = 1" : "WHERE estado = 1";
-$query_usuarios = "SELECT id_usu, nom_usu, corre_usu, id_rol_usu, IFNULL(restricciones, '') as restricciones FROM usuario $whereRol ORDER BY id_usu DESC";
+
+// Consulta a la tabla usuario ajustada (sin columna inexistente)
+$query_usuarios = "SELECT id_usu, nom_usu, corre_usu, id_rol_usu FROM usuario $whereRol ORDER BY id_usu DESC";
 $resultado_usuarios = $conexion->query($query_usuarios);
 
-// Obtener mapa de restricciones de administradores
-$restriccionesAdminMap = [];
-$resRest = $conexion->query("SELECT id_usu, modulo FROM restricciones");
+// Obtener mapa general de restricciones almacenadas por usuario
+$restriccionesMap = [];
+$resRest =$conexion->query("SELECT id_usu, modulo FROM restricciones");
 if ($resRest) {
-    while ($row = $resRest->fetch_assoc()) {
-        $restriccionesAdminMap[$row['id_usu']][] = $row['modulo'];
+    while ($row = $resRest->fetch_assoc()) {$restriccionesMap[$row['id_usu']][] =$row['modulo'];
     }
 }
 
@@ -126,7 +119,7 @@ $nombresRoles = [
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SGET - Gestión de Permisos y Restricciones</title>
+    <title>SGET - Gestion de Permisos y Restricciones</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -156,18 +149,17 @@ $nombresRoles = [
 
         <main class="space-y-8 flex-grow pb-12 relative z-10 p-8 max-w-[1600px] w-auto mx-auto w-full">
             
-            <!-- ENCABEZADO CON BOTÓN DE AYUDA -->
+            <!-- ENCABEZADO CON BOTON DE AYUDA -->
             <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 dark:bg-white/[0.02] p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-md">
                 <div>
                     <div class="flex items-center gap-2.5">
-                        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Gestión de Permisos y Restricciones</h1>
+                        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Gestion de Permisos y Restricciones</h1>
                         
-                        <!-- BOTÓN DE AYUDA DEL SISTEMA -->
-                        <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
+                        <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guia del modulo">
                             <i class="fas fa-question text-[10px]"></i>
                         </button>
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Configure los accesos y restricciones por módulo para cada cuenta de usuario en SGET.</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Configure los accesos y restricciones por modulo para cada cuenta de usuario en SGET.</p>
                 </div>
             </div>
 
@@ -181,20 +173,19 @@ $nombresRoles = [
                 <?php elseif ($_GET['status'] == 'self_error'): ?>
                     <div class="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center gap-3 backdrop-blur-md shadow-lg">
                         <i class="fas fa-shield-alt text-lg"></i>
-                        <span class="text-xs font-semibold">Acción no permitida: Un administrador no puede modificar sus propios permisos.</span>
+                        <span class="text-xs font-semibold">Accion no permitida: Un administrador no puede modificar sus propios permisos.</span>
                     </div>
                 <?php elseif ($_GET['status'] == 'error'): ?>
                     <div class="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 flex items-center gap-3 backdrop-blur-md shadow-lg">
                         <i class="fas fa-exclamation-triangle text-lg"></i>
-                        <span class="text-xs font-semibold">Ocurrió un error al intentar guardar los cambios de permisos.</span>
+                        <span class="text-xs font-semibold">Ocurrio un error al intentar guardar los cambios de permisos.</span>
                     </div>
                 <?php endif; ?>
             <?php endif; ?>
 
-            <!-- Panel de Administración de Permisos -->
+            <!-- Panel de Administracion de Permisos -->
             <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl space-y-6">
                 
-                <!-- Pestañas de Filtrado por Rol -->
                 <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 dark:border-white/5 pb-5">
                     <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
                         <i class="fas fa-user-shield text-sky-400"></i> Matriz de Control de Acceso por Rol
@@ -214,14 +205,14 @@ $nombresRoles = [
                             <tr class="border-b border-slate-100 dark:border-white/5 text-[10px] text-slate-400 uppercase font-bold">
                                 <th class="pb-3 px-3">ID Usuario</th>
                                 <th class="pb-3 px-3">Nombre Completo</th>
-                                <th class="pb-3 px-3">Correo Electrónico</th>
+                                <th class="pb-3 px-3">Correo Electronico</th>
                                 <th class="pb-3 px-3 text-center">Rol</th>
                                 <th class="pb-3 px-3 text-center">Configurar Restricciones</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-white/5">
-                            <?php if($resultado_usuarios && $resultado_usuarios->num_rows > 0): ?>
-                                <?php while($usr = $resultado_usuarios->fetch_assoc()): ?>
+                            <?php if($resultado_usuarios &&$resultado_usuarios->num_rows > 0): ?>
+                                <?php while($usr =$resultado_usuarios->fetch_assoc()): ?>
                                 <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                                     <td class="py-3.5 px-3 font-mono text-slate-400">#<?php echo $usr['id_usu']; ?></td>
                                     <td class="py-3.5 px-3 font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
@@ -237,15 +228,15 @@ $nombresRoles = [
                                         </span>
                                     </td>
                                     <td class="py-3.5 px-3 text-center">
-                                        <?php if ($usr['id_usu'] == $idUsuarioActual): ?>
+                                        <?php if ($usr['id_usu'] ==$idUsuarioActual): ?>
                                             <span class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 text-amber-400 font-bold text-[10px] uppercase tracking-wider rounded-xl border border-amber-500/20">
                                                 <i class="fas fa-shield-alt text-xs"></i> Tu cuenta (No editable)
                                             </span>
                                         <?php else: ?>
                                             <button type="button" 
-                                                    onclick="abrirDrawerPermisos(<?php echo $usr['id_usu']; ?>, '<?php echo htmlspecialchars($usr['nom_usu'], ENT_QUOTES); ?>', <?php echo $usr['id_rol_usu']; ?>, '<?php echo htmlspecialchars($usr['restricciones'], ENT_QUOTES); ?>')"
+                                                    onclick="abrirDrawerPermisos(<?php echo $usr['id_usu']; ?>, '<?php echo htmlspecialchars($usr['nom_usu'], ENT_QUOTES); ?>', <?php echo$usr['id_rol_usu']; ?>)"
                                                     class="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-sky-500/10 hover:bg-sky-500 text-sky-400 hover:text-slate-950 font-bold text-[10px] uppercase tracking-wider rounded-xl border border-sky-500/20 transition-all shadow-sm cursor-pointer">
-                                                <i class="fas fa-sliders-h text-xs"></i> Modificar Módulos
+                                                <i class="fas fa-sliders-h text-xs"></i> Modificar Modulos
                                             </button>
                                         <?php endif; ?>
                                     </td>
@@ -284,11 +275,10 @@ $nombresRoles = [
             <input type="hidden" name="filtro_rol_actual" value="<?php echo $filtro_rol; ?>">
 
             <div class="p-6 flex-1 overflow-y-auto space-y-4">
-                <p class="text-xs text-slate-400">Selecciona los módulos a los cuales este usuario tendrá acceso habilitado:</p>
+                <p class="text-xs text-slate-400">Selecciona los modulos a los cuales este usuario tendra acceso habilitado:</p>
                 
-                <!-- CONTENEDOR DINÁMICO DE CHECKBOXES SEGÚN EL ROL -->
                 <div id="contenedorModulos" class="space-y-2.5">
-                    <!-- Se llena automáticamente con JavaScript -->
+                    <!-- Checkboxes dinamicos -->
                 </div>
             </div>
 
@@ -299,24 +289,24 @@ $nombresRoles = [
         </form>
     </aside>
 
-    <!-- MODAL DE AYUDA DEL MÓDULO -->
+    <!-- MODAL DE AYUDA -->
     <div id="overlayAyuda" onclick="cerrarModalAyuda()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300"></div>
     <div id="modalAyuda" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
                 <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                    <i class="fas fa-info-circle text-sky-400"></i> Guía de Permisos y Restricciones
+                    <i class="fas fa-info-circle text-sky-400"></i> Guia de Permisos y Restricciones
                 </h3>
                 <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"><i class="fas fa-times text-xs"></i></button>
             </div>
             <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                 <li class="flex items-start gap-2">
                     <i class="fas fa-shield-alt text-amber-400 mt-0.5"></i>
-                    <span><b>Seguridad de Cuenta:</b> Por seguridad y prevención, ningún administrador puede modificar sus propios permisos ni restricciones.</span>
+                    <span><b>Seguridad de Cuenta:</b> Ningun administrador puede modificar sus propios permisos ni restricciones.</span>
                 </li>
                 <li class="flex items-start gap-2">
                     <i class="fas fa-sliders-h text-emerald-400 mt-0.5"></i>
-                    <span><b>Modificar Módulos:</b> Gestiona los accesos de las demás cuentas de administradores, conductores y pasajeros del sistema.</span>
+                    <span><b>Modificar Modulos:</b> Gestiona los accesos de administradores, conductores y pasajeros en el sistema.</span>
                 </li>
             </ul>
             <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
@@ -330,9 +320,9 @@ $nombresRoles = [
         const modulosAdmin = <?php echo json_encode($modulosAdmin); ?>;
         const modulosConductor = <?php echo json_encode($modulosConductor); ?>;
         const modulosPasajero = <?php echo json_encode($modulosPasajero); ?>;
-        const restriccionesAdminMap = <?php echo json_encode($restriccionesAdminMap); ?>;
+        const restriccionesMap = <?php echo json_encode($restriccionesMap); ?>;
 
-        function abrirDrawerPermisos(idUsuario, nombreUsuario, rolUsuario, restriccionesStr) {
+        function abrirDrawerPermisos(idUsuario, nombreUsuario, rolUsuario) {
             document.getElementById('input_id_usu_permiso').value = idUsuario;
             document.getElementById('input_rol_usuario').value = rolUsuario;
             document.getElementById('drawerTituloPermisos').innerHTML = '<i class="fas fa-sliders-h text-sky-400"></i> Permisos: ' + nombreUsuario;
@@ -341,18 +331,15 @@ $nombresRoles = [
             container.innerHTML = '';
 
             let modulosObjetivo = {};
-            let restringidosArray = [];
-
             if (rolUsuario == 1) {
                 modulosObjetivo = modulosAdmin;
-                restringidosArray = restriccionesAdminMap[idUsuario] || [];
             } else if (rolUsuario == 2) {
                 modulosObjetivo = modulosConductor;
-                restringidosArray = restriccionesStr ? restriccionesStr.split(',') : [];
             } else if (rolUsuario == 3) {
                 modulosObjetivo = modulosPasajero;
-                restringidosArray = restriccionesStr ? restriccionesStr.split(',') : [];
             }
+
+            const restringidosArray = restriccionesMap[idUsuario] || [];
 
             for (const [key, label] of Object.entries(modulosObjetivo)) {
                 const estaHabilitado = !restringidosArray.includes(key);

@@ -1,6 +1,7 @@
 <?php
 session_start();
 include 'assets/conexion.php';
+require_once 'helpers/Logger.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
@@ -63,6 +64,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $stmt_insert->bind_param("sssssiiis", $tip_doc, $num_doc, $nombre, $correo, $hash_clave, $id_rol, $estado, $acepta_politica, $fecha_actual);
 
     if ($stmt_insert->execute()) {
+        $nuevo_id = $conexion->insert_id;
+
+        // REGISTRO EN AUDITORÍA
+        Logger::registrar(
+            $conexion, 
+            'CREAR_USUARIO', 
+            "Auto-registro de nuevo Pasajero: '{$nombre}' (Doc: {$num_doc}).", 
+            $nuevo_id, 
+            $nombre, 
+            'Pasajero'
+        );
+
         // ÉXITO: envía mensaje exitoso y abre directamente el modal de LOGIN
         $_SESSION['msg_success_login'] = "¡Cuenta creada exitosamente! Ya puedes ingresar con tu documento.";
         $_SESSION['abrir_login'] = true;

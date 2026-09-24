@@ -1,9 +1,21 @@
 <?php
 date_default_timezone_set('America/Bogota');
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+// Cargar diccionario según idioma de la sesión
+$idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
+$archivoIdioma = __DIR__ . '/../lang/' . $idiomaActual . '.php';
+if (file_exists($archivoIdioma)) {
+    require_once $archivoIdioma;
+} else {
+    require_once __DIR__ . '/../lang/es.php';
+}
+
 include '../assets/conexion.php'; 
 
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
+if (!isset($_SESSION['documento']) || ($_SESSION['rol'] ?? 0) != 3) {
     header("Location: ../index.php");
     exit();
 }
@@ -45,7 +57,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
     <title>SGET - Panel Pasajero</title>
     <!-- Script para prevenir parpadeo de tema oscuro al cargar -->
     <script>
-        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
             document.documentElement.classList.add('dark');
         } else {
             document.documentElement.classList.remove('dark');
@@ -87,19 +99,19 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
         }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
+<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased flex">
 
     <!-- INCLUSIÓN DIRECTA DEL SIDEBAR FIJO -->
     <?php include '../includes/sidebar.php'; ?>
 
-    <!-- MAIN CON MARGEN IZQUIERDO (ml-64) PARA ALINEARSE AL SIDEBAR -->
-    <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
+    <!-- MAIN CON MARGEN IZQUIERDO CORREGIDO PARA ALINEACIÓN PERFECTA (ml-64 lg:ml-72) -->
+    <div id="main-content-wrapper" class="flex-1 ml-64 lg:ml-72 flex flex-col min-h-screen min-w-0 transition-all duration-300 pr-4">
 
         <!-- HEADER MODULAR -->
         <?php include '../includes/header.php'; ?>
 
         <!-- CONTENIDO DEL DASHBOARD -->
-        <div class="p-8 space-y-8 flex-1 min-w-0">
+        <main class="p-4 sm:p-6 lg:p-8 space-y-8 flex-1 min-w-0 max-w-[1600px] w-full mx-auto">
             
             <!-- Alerta de Calificación Exitosa -->
             <?php if (isset($_GET['res']) && $_GET['res'] == 'ok'): ?>
@@ -114,13 +126,13 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                 </div>
             <?php endif; ?>
 
-            <!-- Bienvenida con Título, Botón de Ayuda (?) y Botón Reserva (+) -->
+            <!-- Bienvenida con Título y Botón de Ayuda (?) (Botón superior de reservar eliminado) -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-[#1e293b]/50 p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm max-w-6xl">
                 <div>
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">¡Hola, <?php echo explode(' ', $nombreReal)[0]; ?>!</h1>
                         
-                        <!-- 1. BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
+                        <!-- BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
                         <div class="relative group">
                             <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
                                 <i class="fas fa-question text-[10px]"></i>
@@ -132,8 +144,8 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                 </p>
                                 <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
                                     <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-plus-circle text-blue-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Book a Seat (＋):</b> Busca rutas activas y reserva tu transporte al instante.</span>
+                                        <i class="fas fa-search text-blue-500 mt-0.5 shrink-0"></i>
+                                        <span><b>Buscar Rutas:</b> Consulta rutas activas desde el banner inferior para viajar.</span>
                                     </li>
                                     <li class="flex items-start gap-1.5">
                                         <i class="fas fa-star text-amber-400 mt-0.5 shrink-0"></i>
@@ -145,11 +157,6 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Gestiona tus reservas de transporte y califica tus trayectos.</p>
                 </div>
-
-                <!-- BOTÓN PRINCIPAL ACCIÓN CON MODAL DRAWER (+) -->
-                <button onclick="abrirModalReserva()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto">
-                    <i class="fas fa-plus-circle text-sm"></i> Reservar Viaje
-                </button>
             </div>
 
             <!-- Grid de Tarjetas de Métricas -->
@@ -166,7 +173,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                 </div>
             </div>
 
-            <!-- Tabla de Historial de Viajes con scrollbar horizontal -->
+            <!-- Tabla de Historial de Viajes -->
             <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/5 p-6 rounded-2xl shadow-xl max-w-6xl transition-colors duration-300">
                 <h3 class="font-bold text-slate-900 dark:text-white text-base mb-4 tracking-tight flex items-center gap-2">
                     <i class="fas fa-history text-slate-400 dark:text-slate-500 text-sm"></i> Mis últimos viajes
@@ -253,13 +260,13 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                     <i class="fas fa-bus"></i>
                 </div>
             </div>
-        </div>
-    </main>
+        </main>
+    </div>
 
     <!-- OVERLAY GENERAL PARA MODALES Y DRAWER -->
     <div id="overlayPasajero" onclick="cerrarTodosModales()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-    <!-- 2. MODAL POP-UP DE CALIFICACIÓN INTERACTIVA -->
+    <!-- MODAL POP-UP DE CALIFICACIÓN INTERACTIVA -->
     <div id="modalCalificarPasajero" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300" id="modalCalificarBox">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
@@ -298,7 +305,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
                 <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Comentario del Viaje</label>
-                    <textarea name="com_cal" rows="3" placeholder="¿Cómo fue tu experiencia en el recorrido?" data-i18n-placeholder-es="¿Cómo fue tu experiencia en el recorrido?" data-i18n-placeholder-en="How was your experience on the trip?" class="w-full p-3 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-xs transition-all resize-none"></textarea>
+                    <textarea name="com_cal" rows="3" placeholder="¿Cómo fue tu experiencia en el recorrido?" class="w-full p-3 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-xs transition-all resize-none"></textarea>
                 </div>
 
                 <div class="flex gap-3 pt-2">
@@ -313,7 +320,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
         </div>
     </div>
 
-    <!-- 3. PANEL LATERAL DESLIZANTE (DRAWER (+)) DE RESERVA Y BÚSQUEDA -->
+    <!-- PANEL LATERAL DESLIZANTE (DRAWER) DE BÚSQUEDA Y RESERVA -->
     <aside id="drawerReservaPasajero" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-neon-morado"></div>
@@ -365,7 +372,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
         </div>
     </aside>
 
-    <!-- CONTROLADORES JAVASCRIPT Y CAMBIO DE TEMA -->
+    <!-- CONTROLADORES JAVASCRIPT MODALES Y AYUDA -->
     <script>
         function abrirModalReserva() {
             const drawer = document.getElementById('drawerReservaPasajero');
@@ -446,43 +453,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             cerrarModalDrawer();
             cerrarModalCalificar();
         }
-
-        // Script global de cambio de tema
-        const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
-        const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
-
-        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            if (themeToggleLightIcon) themeToggleLightIcon.classList.remove('hidden');
-        } else {
-            if (themeToggleDarkIcon) themeToggleDarkIcon.classList.remove('hidden');
-        }
-
-        const themeToggleBtn = document.getElementById('theme-toggle');
-
-        if (themeToggleBtn) {
-            themeToggleBtn.addEventListener('click', function() {
-                if (themeToggleDarkIcon) themeToggleDarkIcon.classList.toggle('hidden');
-                if (themeToggleLightIcon) themeToggleLightIcon.classList.toggle('hidden');
-
-                if (localStorage.getItem('color-theme')) {
-                    if (localStorage.getItem('color-theme') === 'light') {
-                        document.documentElement.classList.add('dark');
-                        localStorage.setItem('color-theme', 'dark');
-                    } else {
-                        document.documentElement.classList.remove('dark');
-                        localStorage.setItem('color-theme', 'light');
-                    }
-                } else {
-                    if (document.documentElement.classList.contains('dark')) {
-                        document.documentElement.classList.remove('dark');
-                        localStorage.setItem('color-theme', 'light');
-                    } else {
-                        document.documentElement.classList.add('dark');
-                        localStorage.setItem('color-theme', 'dark');
-                    }
-                }
-            });
-        }
     </script>
+    <script src="../js/inactividad.js"></script>
 </body>
 </html>

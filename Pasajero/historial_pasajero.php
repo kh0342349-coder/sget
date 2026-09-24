@@ -79,15 +79,18 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
         }
     </style>
 </head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
+<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased flex">
     
+    <!-- INCLUSIÓN DIRECTA DEL SIDEBAR -->
     <?php include '../includes/sidebar.php'; ?>
 
-    <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
+    <!-- MAIN CON ID Y MARGENES DINAMICOS -->
+    <main id="main-content-wrapper" class="flex-1 ml-64 lg:ml-72 flex flex-col min-h-screen min-w-0 transition-all duration-300 pr-4">
 
+        <!-- HEADER MODULAR -->
         <?php include '../includes/header.php'; ?>
 
-        <div class="p-8 flex-1 min-w-0 space-y-6">
+        <div class="p-4 sm:p-6 lg:p-8 flex-1 min-w-0 space-y-6">
             
             <!-- ENCABEZADO DE PÁGINA CON BOTÓN GUÍA Y PROGRAMACIÓN (+) -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-[#1e293b]/50 p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm max-w-6xl">
@@ -95,7 +98,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Historial de Viajes</h1>
                         
-                        <!-- 1. BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
+                        <!-- BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
                         <div class="relative group">
                             <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
                                 <i class="fas fa-question text-[10px]"></i>
@@ -139,7 +142,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                         <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
                             <i class="fas fa-search text-xs"></i>
                         </span>
-                        <input type="text" id="inputBuscador" placeholder="Buscar por ruta, estado o fecha..." data-i18n-placeholder-es="Buscar por ruta, estado o fecha..." data-i18n-placeholder-en="Search by route, status, or date..." 
+                        <input type="text" id="inputBuscador" placeholder="Buscar por ruta, estado o fecha..." 
                                class="w-full pl-9 pr-4 py-2 text-xs bg-slate-100 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
                     </div>
                 </div>
@@ -255,7 +258,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
     <!-- OVERLAY GENERAL PARA MODALES -->
     <div id="overlayHistorial" onclick="cerrarTodosModales()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-    <!-- 2. MODAL POP-UP DE FICHA DE RESERVA DE HISTORIAL -->
+    <!-- MODAL POP-UP DE FICHA DE RESERVA DE HISTORIAL -->
     <div id="modalFichaHistorial" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300" id="modalFichaHistorialBox">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
@@ -302,7 +305,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
         </div>
     </div>
 
-    <!-- 3. MODAL POP-UP DE CALIFICACIÓN INTERACTIVA -->
+    <!-- MODAL POP-UP DE CALIFICACIÓN INTERACTIVA -->
     <div id="modalCalificarHistorial" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300" id="modalCalificarHistorialBox">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
@@ -340,7 +343,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
                 <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Comentario del Viaje</label>
-                    <textarea name="com_cal" rows="3" placeholder="¿Cómo fue tu experiencia en el recorrido?" data-i18n-placeholder-es="¿Cómo fue tu experiencia en el recorrido?" data-i18n-placeholder-en="How was your experience on the trip?" class="w-full p-3 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-xs transition-all resize-none"></textarea>
+                    <textarea name="com_cal" rows="3" placeholder="¿Cómo fue tu experiencia en el recorrido?" class="w-full p-3 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-xs transition-all resize-none"></textarea>
                 </div>
 
                 <div class="flex gap-3 pt-2">
@@ -355,7 +358,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
         </div>
     </div>
 
-    <!-- 4. PANEL LATERAL DESLIZANTE (DRAWER (+)) DE RESERVA Y BÚSQUEDA -->
+    <!-- PANEL LATERAL DESLIZANTE (DRAWER (+)) DE RESERVA Y BÚSQUEDA -->
     <aside id="drawerReservaHistorial" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-neon-morado"></div>
@@ -538,43 +541,6 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             cerrarModalFichaHistorial();
             cerrarModalCalificarHistorial();
             cerrarModalDrawerHistorial();
-        }
-
-        // Alternador de tema
-        const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
-        const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
-
-        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            if (themeToggleLightIcon) themeToggleLightIcon.classList.remove('hidden');
-        } else {
-            if (themeToggleDarkIcon) themeToggleDarkIcon.classList.remove('hidden');
-        }
-
-        const themeToggleBtn = document.getElementById('theme-toggle');
-
-        if (themeToggleBtn) {
-            themeToggleBtn.addEventListener('click', function() {
-                if (themeToggleDarkIcon) themeToggleDarkIcon.classList.toggle('hidden');
-                if (themeToggleLightIcon) themeToggleLightIcon.classList.toggle('hidden');
-
-                if (localStorage.getItem('color-theme')) {
-                    if (localStorage.getItem('color-theme') === 'light') {
-                        document.documentElement.classList.add('dark');
-                        localStorage.setItem('color-theme', 'dark');
-                    } else {
-                        document.documentElement.classList.remove('dark');
-                        localStorage.setItem('color-theme', 'light');
-                    }
-                } else {
-                    if (document.documentElement.classList.contains('dark')) {
-                        document.documentElement.classList.remove('dark');
-                        localStorage.setItem('color-theme', 'light');
-                    } else {
-                        document.documentElement.classList.add('dark');
-                        localStorage.setItem('color-theme', 'dark');
-                    }
-                }
-            });
         }
     </script>
 </body>

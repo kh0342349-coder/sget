@@ -257,13 +257,83 @@ if (!$resultado_viajes) {
             </div>
         </section>
 
+        <div class="max-w-7xl mx-auto px-6"><div class="divider-glow"></div></div>
+
+        <!-- SECCIÓN 4: CONTACTO -->
+        <section id="contacto" class="py-20 px-6 max-w-7xl mx-auto space-y-12">
+            <div class="text-center max-w-2xl mx-auto space-y-3">
+                <span class="text-xs font-extrabold text-sky-500 uppercase tracking-widest flex items-center justify-center gap-2">
+                    <i class="fas fa-envelope-open-text"></i> ATENCIÓN AL CLIENTE Y SOPORTE
+                </span>
+                <h2 class="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white">¿Tienes alguna pregunta? Contáctanos</h2>
+                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">Estamos a tu disposición para resolver cualquier inquietud sobre reservas, rutas o alianzas corporativas.</p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                
+                <!-- Tarjetas de Información de Contacto -->
+                <div class="lg:col-span-5 space-y-4">
+                    <div class="card-glass p-6 rounded-3xl border border-slate-200/60 dark:border-white/10 flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center text-xl shrink-0">
+                            <i class="fas fa-phone-alt"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-extrabold text-slate-900 dark:text-white text-sm">Teléfonos de Contacto</h4>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">+57 (601) 800-0000 / +57 300 000 0000</p>
+                        </div>
+                    </div>
+
+                    <div class="card-glass p-6 rounded-3xl border border-slate-200/60 dark:border-white/10 flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-500 flex items-center justify-center text-xl shrink-0">
+                            <i class="fas fa-envelope"></i>
+                        </div>
+                        <div>
+                            <h4 class="font-extrabold text-slate-900 dark:text-white text-sm">Correo Electrónico</h4>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">soporte@sget.com.co</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulario de Mensaje -->
+                <div class="lg:col-span-7 card-glass p-8 sm:p-10 rounded-3xl border border-slate-200/60 dark:border-white/10 shadow-xl">
+                    <form onsubmit="event.preventDefault(); alert('¡Gracias por contactarnos! Tu mensaje ha sido enviado correctamente.'); this.reset();" class="space-y-5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                            <div class="space-y-1 text-left">
+                                <label class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Nombre Completo</label>
+                                <input type="text" required placeholder="Ej. Juan Pérez" class="w-full px-4 py-3 rounded-2xl bg-slate-100/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 transition-all">
+                            </div>
+                            <div class="space-y-1 text-left">
+                                <label class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Correo Electrónico</label>
+                                <input type="email" required placeholder="ejemplo@correo.com" class="w-full px-4 py-3 rounded-2xl bg-slate-100/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 transition-all">
+                            </div>
+                        </div>
+
+                        <div class="space-y-1 text-left">
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Asunto</label>
+                            <input type="text" required placeholder="Consulta sobre rutas, reservas, etc." class="w-full px-4 py-3 rounded-2xl bg-slate-100/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 transition-all">
+                        </div>
+
+                        <div class="space-y-1 text-left">
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Mensaje</label>
+                            <textarea rows="4" required placeholder="Escribe tu mensaje detallado aquí..." class="w-full px-4 py-3 rounded-2xl bg-slate-100/70 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 transition-all resize-none"></textarea>
+                        </div>
+
+                        <button type="submit" class="w-full py-3.5 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-slate-950 font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg transition-all cursor-pointer">
+                            <i class="fas fa-paper-plane mr-2"></i> ENVIAR MENSAJE
+                        </button>
+                    </form>
+                </div>
+
+            </div>
+        </section>
+
     </main>
 
     <!-- FOOTER CON ENLACE LEGAL Y COOKIES -->
     <footer class="p-6 text-center text-slate-500 dark:text-slate-400 text-xs font-semibold border-t border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0b0f19]/80 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto w-full gap-4">
         <p>&copy; 2026 SGET - Sistema de Gestión de Transporte. Todos los derechos reservados.</p>
         <div class="flex items-center gap-4">
-            <button onclick="abrirPanel('panelConfigCookies')" class="hover:text-amber-600 dark:hover:text-amber-400 underline transition-colors cursor-pointer flex items-center gap-1.5">
+            <button onclick="abrirDrawerCookies()" class="hover:text-amber-600 dark:hover:text-amber-400 underline transition-colors cursor-pointer flex items-center gap-1.5">
                 <i class="fas fa-cookie-bite text-amber-700 dark:text-amber-500"></i> Configuración de Cookies
             </button>
             <span>•</span>
@@ -273,99 +343,9 @@ if (!$resultado_viajes) {
         </div>
     </footer>
 
-    <!-- INCLUSIÓN DEL MODAL AUTENTICACIÓN -->
+    <!-- INCLUSIÓN DE COMPONENTES MODULARES -->
     <?php include 'modal_auth.php'; ?>
-
-    <!-- BANNER FLOTANTE DE AVISO DE COOKIES CON GALLETA CAFÉ Y SOPORTE CLARO/OSCURO -->
-    <div id="cookieBanner" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md bg-white/95 dark:bg-[#0f172a]/95 text-slate-800 dark:text-white p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl z-[100] backdrop-blur-md hidden transition-all duration-300">
-        <div class="flex items-start gap-3.5">
-            <!-- Contenedor con la Galleta Café -->
-            <div class="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                <i class="fas fa-cookie-bite text-xl"></i>
-            </div>
-            <div class="space-y-2">
-                <h4 class="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
-                    Aviso de Privacidad y Cookies
-                </h4>
-                <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed font-medium">
-                    Utilizamos cookies técnicas necesarias para el funcionamiento seguro de SGET y cookies opcionales para recordar tus preferencias de navegación.
-                </p>
-                <div class="flex flex-wrap items-center gap-2 pt-1">
-                    <button onclick="aceptarTodasCookies()" class="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-lg shadow-sky-500/20">
-                        Aceptar Todas
-                    </button>
-                    <button onclick="abrirPanel('panelConfigCookies')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white border border-slate-200 dark:border-white/10 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer">
-                        Configurar
-                    </button>
-                    <button onclick="rechazarCookiesOpcionales()" class="px-2.5 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold text-[10px] underline cursor-pointer">
-                        Solo Necesarias
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL DE CONFIGURACIÓN DE COOKIES CON MODOS CLARO/OSCURO -->
-    <div id="panelConfigCookies" onclick="if(event.target === this) cerrarPanel('panelConfigCookies')" class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md opacity-0 pointer-events-none hidden transition-opacity duration-300">
-        <div class="modal-isla-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 max-w-xl w-full max-h-[85vh] flex flex-col transform scale-95 transition-transform duration-300 shadow-2xl">
-            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/10">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-500 flex items-center justify-center font-bold text-lg">
-                        <i class="fas fa-cookie-bite"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-white">Centro de Preferencias de Cookies</h3>
-                        <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Personaliza tus opciones de privacidad en SGET</p>
-                    </div>
-                </div>
-                <button onclick="cerrarPanel('panelConfigCookies')" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer">
-                    <i class="fas fa-times text-sm"></i>
-                </button>
-            </div>
-
-            <!-- OPCIONES DE CONFIGURACIÓN -->
-            <div class="my-4 overflow-y-auto pr-2 space-y-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed text-left">
-                <!-- 1. Estrictamente Necesarias -->
-                <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 space-y-2">
-                    <div class="flex items-center justify-between">
-                        <span class="font-extrabold text-slate-900 dark:text-white text-sm">Cookies Estrictamente Necesarias</span>
-                        <span class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Siempre Activas</span>
-                    </div>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                        Indispensables para el inicio de sesión seguro, autenticación del usuario (`PHPSESSID`) y mantenimiento de la sesión activa en SGET. No se pueden desactivar.
-                    </p>
-                </div>
-
-                <!-- 2. Preferencias / Funcionales -->
-                <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 space-y-2">
-                    <div class="flex items-center justify-between">
-                        <label for="chkCookiePreferencias" class="font-extrabold text-slate-900 dark:text-white text-sm cursor-pointer">Cookies de Preferencias</label>
-                        <input type="checkbox" id="chkCookiePreferencias" checked class="w-4 h-4 rounded text-sky-500 focus:ring-sky-400 dark:bg-slate-900 cursor-pointer">
-                    </div>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                        Permiten recordar tus selecciones personalizadas, como el idioma elegido (Español/Inglés) y el tema de la interfaz (Claro/Oscuro).
-                    </p>
-                </div>
-
-                <!-- 3. Rendimiento / Analítica -->
-                <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 space-y-2">
-                    <div class="flex items-center justify-between">
-                        <label for="chkCookieAnalitica" class="font-extrabold text-slate-900 dark:text-white text-sm cursor-pointer">Cookies de Rendimiento y Analítica</label>
-                        <input type="checkbox" id="chkCookieAnalitica" class="w-4 h-4 rounded text-sky-500 focus:ring-sky-400 dark:bg-slate-900 cursor-pointer">
-                    </div>
-                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                        Nos ayudan a recopilar información anónima sobre el uso del sistema para optimizar los tiempos de carga y mejorar el control de rutas.
-                    </p>
-                </div>
-            </div>
-
-            <div class="pt-4 border-t border-slate-100 dark:border-white/10 flex flex-wrap gap-2 justify-end">
-                <button onclick="guardarConfiguracionCookies()" class="px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs uppercase tracking-wider transition-all shadow-lg cursor-pointer">
-                    Guardar Preferencias
-                </button>
-            </div>
-        </div>
-    </div>
+    <?php include 'includes/cookies.php'; ?>
 
     <!-- MODAL POLÍTICA DE TRATAMIENTO DE DATOS -->
     <div id="panelPolitica" onclick="if(event.target === this) cerrarPanel('panelPolitica')" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md opacity-0 pointer-events-none hidden transition-opacity duration-300">
@@ -427,58 +407,23 @@ if (!$resultado_viajes) {
         </div>
     </div>
 
-    <!-- SCRIPTS DE CONTROL DEL MODAL, COOKIES Y GOOGLE SIGN-IN -->
+    <!-- SCRIPTS DE CONTROL DEL MODAL Y GOOGLE SIGN-IN -->
     <script>
-        // --- GESTIÓN DE COOKIES Y PREFERENCIAS ---
-        document.addEventListener('DOMContentLoaded', () => {
-            const consent = localStorage.getItem('sget_cookies_consent');
-            if (!consent) {
-                const banner = document.getElementById('cookieBanner');
-                if (banner) banner.classList.remove('hidden');
-            } else {
-                aplicarPreferenciasCookies(JSON.parse(consent));
-            }
-        });
-
-        function aceptarTodasCookies() {
-            const prefs = { necesarias: true, preferencias: true, analitica: true };
-            localStorage.setItem('sget_cookies_consent', JSON.stringify(prefs));
-            ocultarBannerYModalesCookies();
-            aplicarPreferenciasCookies(prefs);
-        }
-
-        function rechazarCookiesOpcionales() {
-            const prefs = { necesarias: true, preferencias: false, analitica: false };
-            localStorage.setItem('sget_cookies_consent', JSON.stringify(prefs));
-            ocultarBannerYModalesCookies();
-            aplicarPreferenciasCookies(prefs);
-        }
-
-        function guardarConfiguracionCookies() {
-            const prefs = {
-                necesarias: true,
-                preferencias: document.getElementById('chkCookiePreferencias')?.checked ?? true,
-                analitica: document.getElementById('chkCookieAnalitica')?.checked ?? false
-            };
-            localStorage.setItem('sget_cookies_consent', JSON.stringify(prefs));
-            cerrarPanel('panelConfigCookies');
-            ocultarBannerYModalesCookies();
-            aplicarPreferenciasCookies(prefs);
-        }
-
-        function ocultarBannerYModalesCookies() {
-            const banner = document.getElementById('cookieBanner');
-            if (banner) banner.classList.add('hidden');
-        }
-
-        function aplicarPreferenciasCookies(prefs) {
-            if (!prefs.preferencias) {
-                // Si el usuario desactiva cookies de preferencias opcionales
-            }
-        }
-
         // --- LÓGICA DE MODALES Y GOOGLE SIGN-IN ---
         window.inicializarBotonGoogle = function(panel) {
+            // Verificar las preferencias guardadas en cookies
+            const consent = localStorage.getItem('sget_cookies_consent');
+            const prefs = consent ? JSON.parse(consent) : null;
+            
+            // Si el usuario rechazó las cookies opcionales, oculta el botón de Google
+            if (prefs && !prefs.funcionalidad && !prefs.redesSociales) {
+                let googleContainer = panel.querySelector('.g_id_signin');
+                let googleWrapper = panel.querySelector('.google-auth-wrapper');
+                if (googleContainer) googleContainer.style.display = 'none';
+                if (googleWrapper) googleWrapper.style.display = 'none';
+                return;
+            }
+
             if (window.google && google.accounts && google.accounts.id) {
                 google.accounts.id.initialize({
                     client_id: "916674198156-4uh6adhaklk2bpsvli6hnmrgg0bgktlp.apps.googleusercontent.com",
@@ -486,12 +431,13 @@ if (!$resultado_viajes) {
                 });
 
                 let googleContainer = panel.querySelector('.g_id_signin');
+                let googleWrapper = panel.querySelector('.google-auth-wrapper');
                 
                 if (!googleContainer) {
                     const form = panel.querySelector('form');
                     if (form) {
                         const divisor = document.createElement('div');
-                        divisor.className = 'relative flex py-2 items-center my-4';
+                        divisor.className = 'google-auth-wrapper relative flex py-2 items-center my-4';
                         divisor.innerHTML = `
                             <div class="flex-grow border-t border-slate-200 dark:border-white/10"></div>
                             <span data-i18n-text class="flex-shrink mx-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">O INICIA CON</span>
@@ -504,6 +450,9 @@ if (!$resultado_viajes) {
                         form.parentNode.insertBefore(divisor, form.nextSibling);
                         form.parentNode.insertBefore(googleContainer, divisor.nextSibling);
                     }
+                } else {
+                    if (googleWrapper) googleWrapper.style.display = '';
+                    googleContainer.style.display = '';
                 }
 
                 if (googleContainer) {
@@ -560,24 +509,26 @@ if (!$resultado_viajes) {
             cerrarPanel('panelLogin');
             cerrarPanel('panelRegistro');
             cerrarPanel('panelPolitica');
-            cerrarPanel('panelConfigCookies');
             setTimeout(() => { abrirPanel(idDestino); }, 200);
         }
 
         // Cerrar con la tecla ESC
         document.addEventListener('keydown', function(event) {
             if (event.key === 'Escape') {
-                ['panelPolitica', 'panelLogin', 'panelRegistro', 'panelConfigCookies'].forEach(id => {
+                ['panelPolitica', 'panelLogin', 'panelRegistro'].forEach(id => {
                     const panel = document.getElementById(id);
                     if (panel && !panel.classList.contains('hidden')) {
                         cerrarPanel(id);
                     }
                 });
+                if (typeof cerrarDrawerCookies === 'function') {
+                    cerrarDrawerCookies();
+                }
             }
         });
 
         document.addEventListener("DOMContentLoaded", function () {
-            <?php if (isset($_SESSION['abrir_login']) && $_SESSION['abrir_login'] === true): ?>
+            <?php if (isset($_SESSION['abrir_login']) &&$_SESSION['abrir_login'] === true): ?>
                 abrirPanel('panelLogin');
                 <?php unset($_SESSION['abrir_login']); ?>
             <?php endif; ?>

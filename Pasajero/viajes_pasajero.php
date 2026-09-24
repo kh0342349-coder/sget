@@ -4,12 +4,12 @@ session_start();
 include '../assets/conexion.php'; 
 require_once '../helpers/AuthHelper.php';
 
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
+if (!isset($_SESSION['documento']) ||$_SESSION['rol'] != 3) {
     header("Location: ../index.php");
     exit();
 }
 
-$nombreReal = $_SESSION['nombre_usuario'] ?? "Pasajero";
+$nombreReal =$_SESSION['nombre_usuario'] ?? "Pasajero";
 
 // 1. Filtramos por est_via = 'Activo'
 // 2. Calculamos los cupos en tiempo real: (capacidad del vehículo - reservas hechas)
@@ -62,19 +62,19 @@ $res = $conexion->query($sql);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../css/style.css">
 </head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
+<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased flex">
     
     <!-- INCLUSIÓN DIRECTA DEL SIDEBAR -->
     <?php include '../includes/sidebar.php'; ?>
 
-    <!-- MAIN CON MARGEN IZQUIERDO PARA ALINEARSE AL SIDEBAR FIJO -->
-    <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
+    <!-- MAIN CON ID Y TRANSICIONES CORREGIDAS PARA AJUSTARSE AL SIDEBAR -->
+    <main id="main-content-wrapper" class="flex-1 ml-64 lg:ml-72 flex flex-col min-h-screen min-w-0 transition-all duration-300 pr-4">
         
         <!-- HEADER ESTANDARIZADO MODULAR -->
         <?php include '../includes/header.php'; ?>
 
         <!-- CONTENIDO DE VIAJES DISPONIBLES -->
-        <div class="p-8 space-y-8 flex-1 min-w-0">
+        <div class="p-4 sm:p-6 lg:p-8 space-y-8 flex-1 min-w-0">
             
             <!-- ENCABEZADO CON BOTÓN DE AYUDA (?) -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-[#1e293b]/50 p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm max-w-7xl">
@@ -82,7 +82,7 @@ $res = $conexion->query($sql);
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Reserva tu cupo</h1>
                         
-                        <!-- 1. MODAL GUÍA GENERAL EN BOTÓN DE AYUDA (?) -->
+                        <!-- MODAL GUÍA GENERAL EN BOTÓN DE AYUDA (?) -->
                         <div class="relative group">
                             <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
                                 <i class="fas fa-question text-[10px]"></i>
@@ -111,11 +111,11 @@ $res = $conexion->query($sql);
 
             <!-- GRID DE VIAJES -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl">
-                <?php if ($res && $res->num_rows > 0): ?>
-                    <?php while($v = $res->fetch_assoc()): 
-                        $cupos_totales = $v['cap_veh'] ?? 0;
-                        $ocupados = $v['ocupados'] ?? 0;
-                        $disponibles = $cupos_totales - $ocupados;
+                <?php if ($res &&$res->num_rows > 0): ?>
+                    <?php while($v =$res->fetch_assoc()): 
+                        $cupos_totales =$v['cap_veh'] ?? 0;
+                        $ocupados =$v['ocupados'] ?? 0;
+                        $disponibles = $cupos_totales -$ocupados;
                         $jsonViaje = htmlspecialchars(json_encode($v, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
                     ?>
                         <div class="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-white/10 transition-all duration-300 p-6 group relative overflow-hidden flex flex-col justify-between">
@@ -130,7 +130,7 @@ $res = $conexion->query($sql);
                                             Activo
                                         </span>
                                         <span class="text-[10px] font-black <?php echo ($disponibles <= 2) ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'; ?> px-2.5 py-0.5 rounded-md uppercase tracking-tight">
-                                            <?php echo $disponibles; ?> Available Seats
+                                            <?php echo $disponibles; ?> Asientos libres
                                         </span>
                                     </div>
                                 </div>
@@ -169,7 +169,7 @@ $res = $conexion->query($sql);
                                     </button>
 
                                     <!-- Botón Reservar -->
-                                    <button type="button" onclick="abrirPanelReserva(<?php echo $v['id_via']; ?>, '<?php echo htmlspecialchars($v['nom_rut'], ENT_QUOTES); ?>', <?php echo $v['val_via']; ?>, <?php echo $disponibles; ?>, '<?php echo $v['fec_via']; ?>', '<?php echo date("h:i A", strtotime($v['hor_sal_via'])); ?>')"
+                                    <button type="button" onclick="abrirPanelReserva(<?php echo $v['id_via']; ?>, '<?php echo htmlspecialchars($v['nom_rut'], ENT_QUOTES); ?>', <?php echo$v['val_via']; ?>, <?php echo $disponibles; ?>, '<?php echo$v['fec_via']; ?>', '<?php echo date("h:i A", strtotime($v['hor_sal_via'])); ?>')"
                                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all duration-200 shadow-md shadow-blue-600/10 cursor-pointer">
                                         RESERVAR
                                     </button>
@@ -193,7 +193,7 @@ $res = $conexion->query($sql);
     <!-- OVERLAY GENERAL PARA MODALES -->
     <div id="overlayPasajeroGlobal" onclick="cerrarTodosModales()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-    <!-- 2. MODAL POP-UP DETALLES DE LA RUTA / FICHA TÉCNICA -->
+    <!-- MODAL POP-UP DETALLES DE LA RUTA / FICHA TÉCNICA -->
     <div id="modalFichaViajePasajero" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300" id="modalFichaPasajeroBox">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
@@ -240,7 +240,7 @@ $res = $conexion->query($sql);
         </div>
     </div>
 
-    <!-- 3. PANEL DESLIZANTE DERECHO (DRAWER (+)) PARA RESERVA Y PAGO -->
+    <!-- PANEL DESLIZANTE DERECHO (DRAWER (+)) PARA RESERVA Y PAGO -->
     <div id="panel-reserva" class="fixed inset-0 z-50 overflow-hidden hidden">
         <div id="panel-backdrop" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity opacity-0" onclick="cerrarPanelReserva()"></div>
 
@@ -313,7 +313,7 @@ $res = $conexion->query($sql);
         </div>
     </div>
 
-    <!-- SCRIPT CONTROLADORES JAVASCRIPT Y SINCRONIZACIÓN -->
+    <!-- SCRIPT CONTROLADORES JAVASCRIPT -->
     <script>
         let precioUnitarioGlobal = 0;
         let maxDisponiblesGlobal = 0;
@@ -417,54 +417,7 @@ $res = $conexion->query($sql);
         }
 
         document.getElementById('modal_puestos').addEventListener('input', calcularTotalModal);
-
-        document.addEventListener('DOMContentLoaded', function() {
-            const themeToggleBtn = document.getElementById('theme-toggle');
-            const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
-            const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
-
-            function sincronizarInterfaz(esOscuro) {
-                if (esOscuro) {
-                    document.documentElement.classList.add('dark');
-                    if (themeToggleLightIcon) themeToggleLightIcon.classList.remove('hidden');
-                    if (themeToggleDarkIcon) themeToggleDarkIcon.classList.add('hidden');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                    if (themeToggleDarkIcon) themeToggleDarkIcon.classList.remove('hidden');
-                    if (themeToggleLightIcon) themeToggleLightIcon.classList.add('hidden');
-                }
-            }
-
-            function obtenerEstadoGuardado() {
-                const v1 = localStorage.getItem('color-theme');
-                const v2 = localStorage.getItem('theme');
-
-                if (v1 === 'dark' || v2 === 'dark') return true;
-                if (v1 === 'light' || v2 === 'light') return false;
-
-                return window.matchMedia('(prefers-color-scheme: dark)').matches;
-            }
-
-            sincronizarInterfaz(obtenerEstadoGuardado());
-
-            if (themeToggleBtn) {
-                themeToggleBtn.addEventListener('click', function() {
-                    const actualmenteOscuro = document.documentElement.classList.contains('dark');
-                    const nuevoEstado = !actualmenteOscuro;
-
-                    localStorage.setItem('color-theme', nuevoEstado ? 'dark' : 'light');
-                    localStorage.setItem('theme', nuevoEstado ? 'dark' : 'light');
-
-                    sincronizarInterfaz(nuevoEstado);
-                });
-            }
-
-            window.addEventListener('storage', function(e) {
-                if (e.key === 'color-theme' || e.key === 'theme') {
-                    sincronizarInterfaz(e.newValue === 'dark');
-                }
-            });
-        });
     </script>
+    <script src="../js/inactividad.js"></script>
 </body>
 </html>

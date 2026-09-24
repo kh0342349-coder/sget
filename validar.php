@@ -4,13 +4,14 @@ session_set_cookie_params([
     'lifetime' => 0,         // Persiste durante la sesión activa del navegador
     'path'     => '/',
     'domain'   => '',        // Asigna automáticamente el dominio/host actual
-    'secure'   => true,      // Tridente defensivo: Transmisión exclusiva mediante HTTPS
-    'httponly' => true,      // Tridente defensivo: Inaccesible mediante JS/document.cookie (Anti-XSS)
-    'samesite' => 'Lax'      // Tridente defensivo: Protección contra ataques CSRF
+    'secure'   => true,      // Transmisión exclusiva mediante HTTPS
+    'httponly' => true,      // Inaccesible mediante JS/document.cookie (Anti-XSS)
+    'samesite' => 'Lax'      // Protección contra ataques CSRF
 ]);
 
 session_start();
 include 'assets/conexion.php';
+require_once 'helpers/Logger.php'; // Helper de auditoría
 
 // 1. Validar presencia del token de reCAPTCHA
 if (!isset($_POST['g-recaptcha-response']) || empty($_POST['g-recaptcha-response'])) {
@@ -75,6 +76,15 @@ if ($result->num_rows > 0) {
 
     if ($es_valida) {
         if ($estado == 0) {
+            // REGISTRO EN AUDITORÍA: Intento de ingreso en cuenta inactiva
+            Logger::registrar(
+                $conexion, 
+                'LOGIN_BLOQUEADO', 
+                "Intento de inicio de sesión en cuenta desactivada (Doc: {$doc}).", 
+                $data_user['id_usu'], 
+                $data_user['nom_usu']
+            );
+
             $_SESSION['msg'] = "Su cuenta está desactivada. Contacte al administrador.";
             $_SESSION['abrir_login'] = true;
             $stmt->close();
@@ -84,15 +94,35 @@ if ($result->num_rows > 0) {
 
         session_regenerate_id(true);
 
-        $_SESSION['id_usu'] = $data_user['id_usu'];
-        $_SESSION['documento'] = $data_user['num_doc_usu'];
+        $_SESSION['id_usu']         = $data_user['id_usu'];
+        $_SESSION['documento']      = $data_user['num_doc_usu'];
         $_SESSION['nombre_usuario'] = $data_user['nom_usu'];
-        $_SESSION['rol'] = $data_user['id_rol_usu'];
+        $_SESSION['nom_usu']        = $data_user['nom_usu'];
+        $_SESSION['rol']            = $data_user['id_rol_usu'];
+
+        // Determinar nombre del rol para guardar en la auditoría
+        $nombre_rol = match((int)$data_user['id_rol_usu']) {
+            1 => 'Administrador',
+            2 => 'Conductor',
+            3 => 'Pasajero',
+            default => 'Sin Rol'
+        };
+        $_SESSION['nom_rol'] = $nombre_rol;
 
         $_SESSION['restricciones'] = '';
 
         $rol = $data_user['id_rol_usu'];
         $stmt->close();
+
+        // REGISTRO EN AUDITORÍA: Inicio de sesión exitoso
+        Logger::registrar(
+            $conexion, 
+            'LOGIN', 
+            "El usuario '{$data_user['nom_usu']}' (Doc: {$doc}) inició sesión exitosamente.",
+            $data_user['id_usu'],
+            $data_user['nom_usu'],
+            $nombre_rol
+        );
 
         switch ($rol) {
             case 1: header('Location: Admin/admin.php'); break;
@@ -102,6 +132,13 @@ if ($result->num_rows > 0) {
         }
         exit();
     } else {
+        // REGISTRO EN AUDITORÍA: Clave incorrecta
+        Logger::registrar(
+            $conexion, 
+            'LOGIN_FALLIDO', 
+            "Contraseña errónea para el usuario con documento: {$doc}."
+        );
+
         $_SESSION['msg'] = "Error al ingresar la contraseña del usuario";
         $_SESSION['abrir_login'] = true;
         $stmt->close();
@@ -109,6 +146,13 @@ if ($result->num_rows > 0) {
         exit();
     }
 } else {
+    // REGISTRO EN AUDITORÍA: Usuario no existente
+    Logger::registrar(
+        $conexion, 
+        'LOGIN_FALLIDO', 
+        "Intento de ingreso con documento no registrado: {$doc}."
+    );
+
     $_SESSION['msg'] = "El usuario no está registrado";
     $_SESSION['abrir_login'] = true;
     $stmt->close();

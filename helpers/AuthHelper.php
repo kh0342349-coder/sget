@@ -4,11 +4,63 @@
 class AuthHelper {
 
     /**
+     * Inicia la sesión de forma segura y verifica si el tiempo de inactividad
+     * ha sido superado.
+     *
+     * @param int $minutosInactividad Tiempo límite en minutos (por defecto 15).
+     */
+    public static function verificarInactividad($minutosInactividad = 15) {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $idUsuario = $_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 0;
+
+        // Si hay una sesión activa, verificamos el tiempo transcurrido
+        if ($idUsuario > 0) {
+            $tiempoLimiteSegundos = $minutosInactividad * 60;
+
+            if (isset($_SESSION['ultimo_acceso'])) {
+                $tiempoTranscurrido = time() - $_SESSION['ultimo_acceso'];
+
+                if ($tiempoTranscurrido > $tiempoLimiteSegundos) {
+                    // Guardar la URL donde se encontraba el usuario
+                    $_SESSION['url_redirect'] = $_SERVER['REQUEST_URI'];
+                    
+                    // Marcar estado de inactividad
+                    $_SESSION['sesion_bloqueada'] = true;
+
+                    // Si la solicitud es mediante AJAX / JSON
+                    if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest' || strpos($_SERVER['CONTENT_TYPE'] ?? '', 'application/json') !== false) {
+                        header('Content-Type: application/json; charset=utf-8');
+                        echo json_encode([
+                            'status' => 'bloqueado',
+                            'mensaje' => 'La sesión ha sido bloqueada por inactividad.',
+                            'redirect' => '/desbloquear_sesion.php?inactivo=1'
+                        ]);
+                        exit();
+                    }
+
+                    // Redirección tradicional
+                    header("Location: /desbloquear_sesion.php?inactivo=1");
+                    exit();
+                }
+            }
+
+            // Actualizar timestamp del último acceso activo
+            $_SESSION['ultimo_acceso'] = time();
+        }
+    }
+
+    /**
      * Verifica si un usuario tiene acceso a un módulo o recurso específico.
      * Si es Administrador (rol 1), otorga acceso total por defecto.
      * Para otros usuarios, consulta la tabla 'usuario_permisos'.
      */
     public static function tieneAcceso($conexion, $idUsuario, $recurso) {
+        // Verificar tiempo de inactividad previo a cualquier consulta
+        self::verificarInactividad();
+
         $idUsuario = intval($idUsuario);
         if ($idUsuario <= 0) return false;
 

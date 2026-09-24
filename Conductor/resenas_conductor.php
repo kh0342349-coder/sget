@@ -77,18 +77,18 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../css/style.css">
 </head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
+<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased flex">
     <!-- Carga Sidebar -->
     <?php include '../includes/sidebar.php'; ?>
 
-    <!-- Contenedor Principal (ml-64 para respetar sidebar fixed) -->
-    <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
+    <!-- Contenedor Principal (ml-64 lg:ml-72 para respetar sidebar fixed) -->
+    <div id="main-content-wrapper" class="flex-1 ml-64 lg:ml-72 flex flex-col min-h-screen min-w-0 transition-all duration-300 pr-4">
         
        <!-- INCLUSIÓN DEL HEADER DEL CONDUCTOR -->
         <?php include '../includes/header.php'; ?>
 
         <!-- Cuerpo principal -->
-        <div class="p-8 space-y-6 flex-1 min-w-0">
+        <main class="p-8 space-y-6 flex-1 min-w-0">
             
             <!-- ENCABEZADO DE PÁGINA CON TITULO, AYUDA (?) Y BOTÓN (+) -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-[#1e293b]/50 p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
@@ -195,8 +195,8 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE
                     </div>
                 <?php endif; ?>
             </div>
-        </div>
-    </main>
+        </main>
+    </div>
 
     <!-- OVERLAY GENERAL PARA MODALES -->
     <div id="overlayResenas" onclick="cerrarTodosModales()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
@@ -383,54 +383,6 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE
             cerrarModalDrawer();
             cerrarModalResena();
         }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            const themeToggleBtn = document.getElementById('theme-toggle');
-            const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
-            const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
-
-            function sincronizarInterfaz(esOscuro) {
-                if (esOscuro) {
-                    document.documentElement.classList.add('dark');
-                    if (themeToggleLightIcon) themeToggleLightIcon.classList.remove('hidden');
-                    if (themeToggleDarkIcon) themeToggleDarkIcon.classList.add('hidden');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                    if (themeToggleDarkIcon) themeToggleDarkIcon.classList.remove('hidden');
-                    if (themeToggleLightIcon) themeToggleLightIcon.classList.add('hidden');
-                }
-            }
-
-            function obtenerEstadoGuardado() {
-                const v1 = localStorage.getItem('color-theme');
-                const v2 = localStorage.getItem('theme');
-
-                if (v1 === 'dark' || v2 === 'dark') return true;
-                if (v1 === 'light' || v2 === 'light') return false;
-
-                return window.matchMedia('(prefers-color-scheme: dark)').matches;
-            }
-
-            sincronizarInterfaz(obtenerEstadoGuardado());
-
-            if (themeToggleBtn) {
-                themeToggleBtn.addEventListener('click', function() {
-                    const actualmenteOscuro = document.documentElement.classList.contains('dark');
-                    const nuevoEstado = !actualmenteOscuro;
-
-                    localStorage.setItem('color-theme', nuevoEstado ? 'dark' : 'light');
-                    localStorage.setItem('theme', nuevoEstado ? 'dark' : 'light');
-
-                    sincronizarInterfaz(nuevoEstado);
-                });
-            }
-
-            window.addEventListener('storage', function(e) {
-                if (e.key === 'color-theme' || e.key === 'theme') {
-                    sincronizarInterfaz(e.newValue === 'dark');
-                }
-            });
-        });
     </script>
 </body>
 </html>

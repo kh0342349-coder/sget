@@ -1,10 +1,14 @@
 <?php
 date_default_timezone_set('America/Bogota');
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 include '../assets/conexion.php';
+require_once '../helpers/Logger.php';
 
 // 1. Validación de Sesión y Rol de Conductor (Rol 2)
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 2) {
+if (!isset($_SESSION['documento']) || ($_SESSION['rol'] ?? 0) != 2) {
     header("Location: ../index.php");
     exit();
 }
@@ -12,6 +16,7 @@ if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 2) {
 if (isset($_GET['id']) && !empty($_GET['id'])) {
     $id_viaje = (int)$_GET['id'];
     $documento_conductor = $_SESSION['documento'];
+    $nombre_conductor = $_SESSION['nombre_usuario'] ?? 'Conductor';
     $hor_lleg_via = date('Y-m-d H:i:s'); // Hora exacta de finalización
 
     // Iniciar Transacción
@@ -67,14 +72,21 @@ if (isset($_GET['id']) && !empty($_GET['id'])) {
             $stmt_veh->close();
         }
 
-        // Confirmar la transacción
+        // 6. REGISTRO DE AUDITORÍA (AUDIT LOG)
+        Logger::registrar(
+            $conexion, 
+            'ESTADO_VIAJE', 
+            "El conductor '{$nombre_conductor}' finalizó con éxito el viaje ID #{$id_viaje} y se liberaron los cupos/vehículo."
+        );
+
+        // Confirmar la transacción en la BD
         $conexion->commit();
         
         header("Location: viajes_conductor.php?status=success");
         exit();
 
     } catch (Exception $e) {
-        // Revertir cambios si hay error
+        // Revertir cambios en la BD si ocurre algún fallo
         $conexion->rollback();
         header("Location: viajes_conductor.php?status=error&msg=" . urlencode($e->getMessage()));
         exit();

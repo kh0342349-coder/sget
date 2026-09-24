@@ -7,6 +7,48 @@ if (!isset($conexion)) {
     include_once __DIR__ . '/../assets/conexion.php';
 }
 
+// PROCESAR ACTUALIZACIÓN DEL PERFIL DE USUARIO
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion_perfil']) && $_POST['accion_perfil'] === 'actualizar_configuracion') {$id_usuario_config = intval($_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 0);
+    $nuevo_nombre = trim($_POST['nom_usu'] ?? '');
+    $nuevo_correo = trim($_POST['corre_usu'] ?? '');
+    $nuevo_pass   = trim($_POST['pass_usu'] ?? '');
+
+    if ($id_usuario_config > 0 && !empty($nuevo_nombre) && !empty($nuevo_correo)) {
+        if (!empty($nuevo_pass)) {
+            // Se encripta la nueva contraseña
+            $pass_hash = password_hash($nuevo_pass, PASSWORD_DEFAULT);
+            $stmtUpdUser =$conexion->prepare("UPDATE usuario SET nom_usu = ?, corre_usu = ?, pass_usu = ? WHERE id_usu = ?");
+            if ($stmtUpdUser) {$stmtUpdUser->bind_param("sssi", $nuevo_nombre,$nuevo_correo, $pass_hash,$id_usuario_config);
+                $stmtUpdUser->execute();$stmtUpdUser->close();
+            }
+        } else {
+            // Se actualiza únicamente el nombre y el correo
+            $stmtUpdUser =$conexion->prepare("UPDATE usuario SET nom_usu = ?, corre_usu = ? WHERE id_usu = ?");
+            if ($stmtUpdUser) {
+                $stmtUpdUser->bind_param("ssi", $nuevo_nombre, $nuevo_correo,$id_usuario_config);
+                $stmtUpdUser->execute();$stmtUpdUser->close();
+            }
+        }
+
+        // Actualizar datos de la sesión actual
+        $_SESSION['nombre_usuario'] =$nuevo_nombre;
+        $_SESSION['corre_usu'] =$nuevo_correo;
+
+        // Recargar la página actual conservando los parámetros GET
+        $redirectUrl =$_SERVER['PHP_SELF'];
+        if (!empty($_SERVER['QUERY_STRING'])) {
+            parse_str($_SERVER['QUERY_STRING'],$queryParams);
+            unset($queryParams['config_status']);$queryParams['config_status'] = 'success';
+            $redirectUrl .= '?' . http_build_query($queryParams);
+        } else {
+            $redirectUrl .= '?config_status=success';
+        }
+
+        echo "<script>window.location.href = '" . $redirectUrl . "';</script>";
+        exit();
+    }
+}
+
 if (isset($_POST['idioma']) && in_array($_POST['idioma'], ['es', 'en'], true)) {
     $_SESSION['sget_idioma'] =$_POST['idioma'];
 }
@@ -20,8 +62,25 @@ if ($idiomaActual === 'en') {
 require_once __DIR__ . '/../helpers/AuthHelper.php';
 
 $rolUsuario = $_SESSION['rol'] ?? $_SESSION['id_rol_usu'] ?? 0;
-$idUsuarioSesión = $_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 0;
-$nombreRealHeader = htmlspecialchars($_SESSION['nombre_usuario'] ?? 'Usuario SGET', ENT_QUOTES, 'UTF-8');$inicialUsuario = !empty($nombreRealHeader) ? strtoupper(substr($nombreRealHeader, 0, 1)) : 'U';
+$idUsuarioSesión = intval($_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 0);
+
+// Obtener datos actualizados del usuario desde MySQL
+$user_nombre_header =$_SESSION['nombre_usuario'] ?? 'Usuario SGET';
+$user_correo_header =$_SESSION['corre_usu'] ?? '';
+
+if ($idUsuarioSesión > 0 && isset($conexion) &&$conexion) {
+    $resUserHeader =$conexion->query("SELECT nom_usu, corre_usu FROM usuario WHERE id_usu = $idUsuarioSesión");
+    if ($resUserHeader &&$resUserHeader->num_rows > 0) {
+        $rowHeader =$resUserHeader->fetch_assoc();
+        $user_nombre_header =$rowHeader['nom_usu'];
+        $user_correo_header =$rowHeader['corre_usu'];
+    }
+}
+
+$nombreRealHeader = htmlspecialchars($user_nombre_header, ENT_QUOTES, 'UTF-8');$inicialUsuario = !empty($nombreRealHeader) ? strtoupper(substr($nombreRealHeader, 0, 1)) : 'U';
+
+// OBTENER LA FOTO DE PERFIL DESDE LA SESIÓN
+$fotoPerfilUsuario =$_SESSION['foto_usuario'] ?? '';
 
 $pagina_titulo = basename($_SERVER['PHP_SELF'], '.php');$submoduloTexto = "Inicio";
 
@@ -127,6 +186,11 @@ foreach ($catalogoOpciones as$opcion) {
             <i id="themeIcon" class="fas fa-moon text-base"></i>
         </button>
 
+        <!-- TUERCA DE CONFIGURACIÓN DE CUENTA -->
+        <button type="button" onclick="abrirModalConfigCuenta()" class="w-10 h-10 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-sky-500 hover:rotate-45 bg-slate-200/50 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 rounded-2xl transition-all border border-slate-300/50 dark:border-white/10 text-sm cursor-pointer" title="Configurar Cuenta">
+            <i class="fas fa-cog text-base"></i>
+        </button>
+
         <div class="hidden md:block text-right">
             <p class="text-xs font-extrabold text-slate-900 dark:text-white leading-tight"><?php echo $nombreRealHeader; ?></p>
             <p class="text-[9px] <?php echo $colorRolHeader; ?> font-black uppercase tracking-widest flex items-center justify-end gap-1 mt-0.5">
@@ -134,9 +198,17 @@ foreach ($catalogoOpciones as$opcion) {
             </p>
         </div>
         
-        <div class="w-10 h-10 bg-gradient-to-tr from-sky-400 via-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-slate-950 font-black text-sm shadow-md shadow-sky-500/20 shrink-0">
-            <?php echo $inicialUsuario; ?>
-        </div>
+        <!-- FOTO DE PERFIL / INICIAL DEL USUARIO -->
+        <?php if (!empty($fotoPerfilUsuario)): ?>
+            <img src="<?php echo htmlspecialchars($fotoPerfilUsuario, ENT_QUOTES, 'UTF-8'); ?>" 
+                 alt="Foto de perfil" 
+                 referrerpolicy="no-referrer"
+                 class="w-10 h-10 rounded-2xl object-cover shadow-md border border-sky-500/30 shrink-0">
+        <?php else: ?>
+            <div class="w-10 h-10 bg-gradient-to-tr from-sky-400 via-blue-500 to-purple-600 rounded-2xl flex items-center justify-center text-slate-950 font-black text-sm shadow-md shadow-sky-500/20 shrink-0">
+                <?php echo $inicialUsuario; ?>
+            </div>
+        <?php endif; ?>
 
         <a href="../assets/cerrar.php" class="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-red-500 bg-slate-200/50 dark:bg-white/5 hover:bg-red-500/10 rounded-2xl transition-all border border-slate-300/50 dark:border-white/10 text-sm" title="Cerrar Sesión">
             <i class="fas fa-sign-out-alt text-base"></i> 
@@ -144,38 +216,92 @@ foreach ($catalogoOpciones as$opcion) {
     </div>
 </header>
 
-<!-- MODAL BLOQUEO POR INACTIVIDAD -->
-<div id="inactivityModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
-    <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 rounded-[32px] max-w-sm w-full p-6 shadow-2xl text-center space-y-4">
-        <div class="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto text-xl">
-            <i class="fas fa-lock"></i>
-        </div>
-        <h4 class="text-base font-black text-slate-900 dark:text-white">Sesión Bloqueada por Inactividad</h4>
-        <p class="text-xs text-slate-500 dark:text-slate-400">Presiona el botón para desbloquear la sesión temporalmente.</p>
+<!-- NOTIFICACIÓN DE ÉXITO -->
+<?php if (isset($_GET['config_status']) &&$_GET['config_status'] === 'success'): ?>
+<div id="toastConfigSuccess" class="fixed bottom-6 right-6 z-[120] bg-emerald-500 text-slate-950 font-black text-xs px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 transition-all">
+    <i class="fas fa-check-circle text-base"></i>
+    <span>¡Información de la cuenta actualizada correctamente!</span>
+</div>
+<script>
+    setTimeout(() => {
+        const toast = document.getElementById('toastConfigSuccess');
+        if (toast) toast.remove();
+    }, 4000);
+</script>
+<?php endif; ?>
+
+<!-- MODAL DE CONFIGURACIÓN DE CUENTA FUNCIONAL -->
+<div id="overlayConfigCuenta" onclick="cerrarModalConfigCuenta()" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
+    <div onclick="event.stopPropagation()" class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 rounded-[32px] max-w-md w-full p-6 shadow-2xl space-y-5 relative">
         
-        <div id="timerContainer" class="text-xs font-bold text-red-500 dark:text-red-400 bg-red-500/10 py-2 px-3 rounded-2xl border border-red-500/20 font-mono">
-            Suspensión automática en: <span id="countdownTimer" class="font-extrabold text-sm">60</span> seg
+        <div class="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-4">
+            <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
+                <i class="fas fa-user-cog text-sky-500"></i> Configuración de Cuenta
+            </h3>
+            <button type="button" onclick="cerrarModalConfigCuenta()" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer">
+                <i class="fas fa-times text-xs"></i>
+            </button>
         </div>
 
-        <div id="mensajeErrorModal" class="text-[11px] font-bold text-red-500 hidden bg-red-500/10 p-2 rounded-xl border border-red-500/20"></div>
+        <form action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>" method="POST" class="space-y-4">
+            <input type="hidden" name="accion_perfil" value="actualizar_configuracion">
 
-        <div class="space-y-1 text-left">
-            <input type="password" id="passwordConfirm" placeholder="Contraseña (Opcional)" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs text-slate-900 dark:text-white focus:outline-none focus:border-sky-500 transition-all">
-        </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Nombre Completo</label>
+                <div class="relative">
+                    <i class="fas fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" name="nom_usu" value="<?php echo htmlspecialchars($user_nombre_header, ENT_QUOTES, 'UTF-8'); ?>" required class="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-white">
+                </div>
+            </div>
 
-        <button id="btnContinuar" class="w-full py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs uppercase tracking-wider rounded-2xl transition-all shadow-lg cursor-pointer">
-            Desbloquear Sesión
-        </button>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Correo Electrónico</label>
+                <div class="relative">
+                    <i class="fas fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="email" name="corre_usu" value="<?php echo htmlspecialchars($user_correo_header, ENT_QUOTES, 'UTF-8'); ?>" required class="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-white">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Nueva Contraseña <span class="text-slate-400 font-normal">(Opcional)</span></label>
+                <div class="relative">
+                    <i class="fas fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="password" name="pass_usu" placeholder="Déjala en blanco para mantener la actual" class="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-white">
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-200 dark:border-white/10 flex gap-3">
+                <button type="button" onclick="cerrarModalConfigCuenta()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-200 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer">Cancelar</button>
+                <button type="submit" class="flex-1 py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 transition-all cursor-pointer">Guardar Cambios</button>
+            </div>
+        </form>
     </div>
 </div>
 
-<!-- SCRIPT GENERAL: CAMBIO DE TEMA, INACTIVIDAD Y BUSCADOR -->
+<!-- INCLUSIÓN DEL COMPONENTE DE INACTIVIDAD CENTRALIZADO Y SEGURO -->
+<?php @include_once __DIR__ . '/modal_inactividad.php'; ?>
+
+<!-- SCRIPT GENERAL DE CONFIGURACIÓN, CAMBIO DE TEMA Y BUSCADOR -->
 <script>
+    function abrirModalConfigCuenta() {
+        const modal = document.getElementById('overlayConfigCuenta');
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+    }
+
+    function cerrarModalConfigCuenta() {
+        const modal = document.getElementById('overlayConfigCuenta');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         
-        // --------------------------------------------------
         // 1. MANEJADOR DEL BOTÓN DE TEMA (MODO OSCURO / CLARO)
-        // --------------------------------------------------
         const themeToggleBtn = document.getElementById('themeToggle');
         const themeIcon = document.getElementById('themeIcon');
 
@@ -203,105 +329,7 @@ foreach ($catalogoOpciones as$opcion) {
             });
         }
 
-        // --------------------------------------------------
-        // 2. BLOQUEO POR INACTIVIDAD (DESBLOQUEO LOCAL LIBRE)
-        // --------------------------------------------------
-        let timeOutInactivity; 
-        let countdownInterval;
-        let isLocked = false;
-        let timeLeft = 60;
-        
-        const modal = document.getElementById('inactivityModal');
-        const timerContainer = document.getElementById('timerContainer');
-        const btnContinuar = document.getElementById('btnContinuar');
-        const passwordInput = document.getElementById('passwordConfirm');
-        const mensajeError = document.getElementById('mensajeErrorModal');
-
-        function resetTimer() {
-            if (isLocked) return;
-            clearTimeout(timeOutInactivity);
-            timeOutInactivity = setTimeout(showInactivityModal, 60000);
-        }
-
-        function showInactivityModal() {
-            if (!modal) return;
-            isLocked = true;
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            
-            if (passwordInput) {
-                passwordInput.value = '';
-                passwordInput.focus();
-            }
-            if (mensajeError) {
-                mensajeError.classList.add('hidden');
-            }
-
-            iniciarCuentaRegresiva(60);
-        }
-
-        function iniciarCuentaRegresiva(segundos) {
-            clearInterval(countdownInterval);
-            timeLeft = segundos;
-
-            if (timerContainer) {
-                timerContainer.className = "text-xs font-bold text-red-500 dark:text-red-400 bg-red-500/10 py-2 px-3 rounded-2xl border border-red-500/20 font-mono transition-all";
-                timerContainer.innerHTML = `Suspensión automática en: <span id="countdownTimer" class="font-extrabold text-sm">${timeLeft}</span> seg`;
-            }
-
-            countdownInterval = setInterval(() => {
-                timeLeft--;
-                const timerSpan = document.getElementById('countdownTimer');
-                if (timerSpan) timerSpan.textContent = timeLeft;
-
-                if (timeLeft <= 0) {
-                    clearInterval(countdownInterval);
-                    window.location.href = '../assets/cerrar.php';
-                }
-            }, 1000);
-        }
-
-        if (passwordInput) {
-            passwordInput.addEventListener('input', () => {
-                if (isLocked) {
-                    iniciarCuentaRegresiva(60);
-                }
-            });
-        }
-
-        // DESBLOQUEO LOCAL INMEDIATO SIN VALIDAR CONTRASEÑA EN SERVIDOR
-        function desbloquearSesion() {
-            clearInterval(countdownInterval);
-            if (modal) {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-            }
-            isLocked = false;
-            resetTimer();
-        }
-
-        if (btnContinuar) {
-            btnContinuar.addEventListener('click', desbloquearSesion);
-        }
-
-        if (passwordInput) {
-            passwordInput.addEventListener('keyup', (e) => {
-                if (e.key === 'Enter') {
-                    desbloquearSesion();
-                }
-            });
-        }
-
-        window.onmousemove = resetTimer;
-        window.onmousedown = resetTimer; 
-        window.onclick = resetTimer;
-        window.onscroll = resetTimer;
-        window.onkeypress = resetTimer;
-        resetTimer();
-
-        // --------------------------------------------------
-        // 3. BUSCADOR INTEGRADO EN HEADER
-        // --------------------------------------------------
+        // 2. BUSCADOR INTEGRADO EN HEADER
         const inputBuscador = document.getElementById('inputBuscadorHeader');
         const contenedorResultados = document.getElementById('resultadosBusquedaHeader');
         const btnLimpiar = document.getElementById('btnLimpiarBuscador');
@@ -330,7 +358,7 @@ foreach ($catalogoOpciones as$opcion) {
                     item.descripcion.toLowerCase().includes(query)
                 ) : [];
 
-                    contenedorResultados.innerHTML = '';
+                contenedorResultados.innerHTML = '';
                 if (coincidencias.length === 0) {
                     contenedorResultados.innerHTML = `<div class="p-4 text-center text-xs text-slate-400">Sin resultados</div>`;
                 } else {

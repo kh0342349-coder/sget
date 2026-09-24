@@ -45,7 +45,6 @@ if ($parametros_validos) {
 // 2. VIAJES PENDIENTES POR CALIFICAR
 $viajes_pendientes = [];
 if ($id_pasajero > 0 && !$parametros_validos) {
-    // Consulta sin la columna v.fech_via para evitar errores SQL
     $sql_pendientes = "SELECT v.id_via, v.id_usu_via AS id_cond, u.nom_usu AS nombre_conductor, r.nom_rut
                        FROM reserva res
                        INNER JOIN viaje v ON res.id_via_res = v.id_via
@@ -126,13 +125,18 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
+<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased flex">
+    
+    <!-- INCLUSIÓN DIRECTA DEL SIDEBAR -->
     <?php include '../includes/sidebar.php'; ?>
 
-    <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
+    <!-- MAIN CON ID Y MARGENES DINÁMICOS CORREGIDOS -->
+    <main id="main-content-wrapper" class="flex-1 ml-64 lg:ml-72 flex flex-col min-h-screen min-w-0 transition-all duration-300 pr-4">
+        
+        <!-- HEADER MODULAR -->
         <?php include '../includes/header.php'; ?>
 
-        <div class="flex-1 max-w-5xl w-full mx-auto p-6 md:p-8 space-y-8 min-w-0">
+        <div class="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-8 min-w-0">
             
             <!-- ENCABEZADO DE LA SECCIÓN -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-[#1e293b]/50 p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
@@ -147,7 +151,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
                             <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
                                 <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
-                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía de Calificaciónes
+                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía de Calificaciones
                                 </p>
                                 <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
                                     <li class="flex items-start gap-1.5">
@@ -201,7 +205,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
                             <div>
                                 <label class="text-[10px] font-black uppercase text-slate-400 mb-2 ml-2 block tracking-widest">¿Algo que destacar?</label>
-                                <textarea name="comentario" rows="3" placeholder="Ej.: Muy puntual y amable..." data-i18n-placeholder-es="Ej.: Muy puntual y amable..." data-i18n-placeholder-en="e.g. Very punctual and friendly..." class="w-full bg-slate-100 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3.5 text-xs font-medium text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-blue-500 transition resize-none"></textarea>
+                                <textarea name="comentario" rows="3" placeholder="Ej.: Muy puntual y amable..." class="w-full bg-slate-100 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-3.5 text-xs font-medium text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-blue-500 transition resize-none"></textarea>
                             </div>
 
                             <div class="flex flex-col gap-2 pt-2">
@@ -270,7 +274,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                             <i class="fas fa-history"></i>
                         </div>
                         <div>
-                            <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Mis Calificaciónes Realizadas</h2>
+                            <h2 class="text-lg font-black text-slate-900 dark:text-white tracking-tight">Mis Calificaciones Realizadas</h2>
                             <p class="text-slate-500 dark:text-slate-400 text-xs">Historial de las opiniones que has enviado a tus conductores</p>
                         </div>
                     </div>
@@ -489,54 +493,6 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             cerrarModalOpinion();
             cerrarModalDrawerCalificación();
         }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            const themeToggleBtn = document.getElementById('theme-toggle');
-            const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
-            const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
-
-            function sincronizarInterfaz(esOscuro) {
-                if (esOscuro) {
-                    document.documentElement.classList.add('dark');
-                    if (themeToggleLightIcon) themeToggleLightIcon.classList.remove('hidden');
-                    if (themeToggleDarkIcon) themeToggleDarkIcon.classList.add('hidden');
-                } else {
-                    document.documentElement.classList.remove('dark');
-                    if (themeToggleDarkIcon) themeToggleDarkIcon.classList.remove('hidden');
-                    if (themeToggleLightIcon) themeToggleLightIcon.classList.add('hidden');
-                }
-            }
-
-            function obtenerEstadoGuardado() {
-                const v1 = localStorage.getItem('color-theme');
-                const v2 = localStorage.getItem('theme');
-
-                if (v1 === 'dark' || v2 === 'dark') return true;
-                if (v1 === 'light' || v2 === 'light') return false;
-
-                return window.matchMedia('(prefers-color-scheme: dark)').matches;
-            }
-
-            sincronizarInterfaz(obtenerEstadoGuardado());
-
-            if (themeToggleBtn) {
-                themeToggleBtn.addEventListener('click', function() {
-                    const actualmenteOscuro = document.documentElement.classList.contains('dark');
-                    const nuevoEstado = !actualmenteOscuro;
-
-                    localStorage.setItem('color-theme', nuevoEstado ? 'dark' : 'light');
-                    localStorage.setItem('theme', nuevoEstado ? 'dark' : 'light');
-
-                    sincronizarInterfaz(nuevoEstado);
-                });
-            }
-
-            window.addEventListener('storage', function(e) {
-                if (e.key === 'color-theme' || e.key === 'theme') {
-                    sincronizarInterfaz(e.newValue === 'dark');
-                }
-            });
-        });
     </script>
 </body>
 </html>
