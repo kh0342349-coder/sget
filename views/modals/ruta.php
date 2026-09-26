@@ -80,7 +80,9 @@ $v = fn(string $k, $def = '') => htmlspecialchars((string)($__rutaModal[$k] ?? $
                     <div class="sget-field" data-campo="dis_rut">
                         <label class="sget-label" for="ruta_dis">Distancia (km) <span class="sget-label__opt">(opc.)</span></label>
                         <input type="number" id="ruta_dis" name="dis_rut" class="sget-input sget-input--mono"
-                               step="0.1" min="0" max="99999" placeholder="0.0" value="<?= $v('dis_rut') ?>">
+                               step="0.1" min="0" max="99999" placeholder="0.0"
+                               data-estimar-duracion
+                               value="<?= $v('dis_rut') ?>">
                         <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
                     </div>
 
@@ -89,7 +91,7 @@ $v = fn(string $k, $def = '') => htmlspecialchars((string)($__rutaModal[$k] ?? $
                             <i class="fas fa-clock"></i> Hora de salida <span class="sget-label__opt">(opc.)</span>
                         </label>
                         <input type="time" id="ruta_hora" name="hora_salida" class="sget-input sget-input--mono"
-                               value="<?= $v('hora_salida') ? htmlspecialchars(Fecha::soloHora($__rutaModal['hora_salida'] ?? ''), ENT_QUOTES, 'UTF-8') : '' ?>">
+                               value="<?= htmlspecialchars(Fecha::soloHora($__rutaModal['hora_salida'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                         <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
                     </div>
 
@@ -101,10 +103,30 @@ $v = fn(string $k, $def = '') => htmlspecialchars((string)($__rutaModal[$k] ?? $
                     </div>
                 </div>
 
-                <p class="sget-help" style="margin-top:.5rem">
-                    <i class="fas fa-circle-info"></i>
-                    La hora de salida se usa para prellenar el formulario de viajes de esta ruta; la fecha se elige viaje por viaje.
-                </p>
+                <!-- DURACIÓN DEL TRAYECTO: define cuándo termina cada viaje ------->
+                <div class="sget-field" data-campo="duracion_min" style="margin-top:1rem">
+                    <label class="sget-label" for="ruta_dur">
+                        <i class="fas fa-hourglass-half"></i>
+                        Duración estimada del trayecto <span class="sget-label__req">*</span>
+                    </label>
+                    <div style="display:flex;gap:.5rem;align-items:stretch">
+                        <input type="number" id="ruta_dur" name="duracion_min" class="sget-input sget-input--mono"
+                               min="5" max="2880" step="5" required
+                               data-sget-default="<?= (int)($__rutaModal['duracion_min'] ?? Config::DURACION_VIAJE_MIN_POR_DEFECTO) ?>"
+                               value="<?= (int)($__rutaModal['duracion_min'] ?? Config::DURACION_VIAJE_MIN_POR_DEFECTO) ?>">
+                        <span class="sget-input" style="display:grid;place-items:center;flex-shrink:0;min-width:5.5rem;background:var(--sget-superficie);color:var(--sget-texto-suave);font-size:.8125rem;font-weight:700"
+                              data-duracion-legible>
+                            <?= RutaService::duracionLegible($__rutaModal['duracion_min'] ?? Config::DURACION_VIAJE_MIN_POR_DEFECTO) ?>
+                        </span>
+                    </div>
+                    <p class="sget-help" style="margin-top:.5rem">
+                        <i class="fas fa-circle-info"></i>
+                        Es el tiempo que dura el viaje. Los viajes de esta ruta se cierran automáticamente
+                        <strong>al cumplirse salida + duración</strong>, no 24 horas después de la salida.
+                        Si escribes la distancia, la duración se estima sola (45 km/h).
+                    </p>
+                    <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
+                </div>
 
                 <!-- Estado ---------------------------------------------------------->
                 <div class="sget-field" data-campo="estado" style="margin-top:1rem">

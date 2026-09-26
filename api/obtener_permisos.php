@@ -4,7 +4,6 @@ session_start();
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../assets/conexion.php';
-require_once __DIR__ . '/../helpers/AuthHelper.php';
 
 $idAdmin = $_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 1;
 

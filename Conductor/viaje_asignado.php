@@ -1,10 +1,12 @@
 <?php
 date_default_timezone_set('America/Bogota');
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 include '../assets/conexion.php'; 
 
-// 1. Verificación de seguridad
+// 1. Verificación de seguridad (Solo Conductor - Rol 2)
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 2) {
     header("Location: ../index.php");
     exit();
@@ -92,18 +94,15 @@ if ($viaje) {
 
 // Consultas secundarias para el Drawer (+)
 $rutas_select = $conexion->query("SELECT id_rut, nom_rut, val_rut FROM rutas ORDER BY nom_rut ASC");
-<<<<<<< Updated upstream
-$vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = 1 OR est_veh = 'Activo' ORDER BY pla_veh ASC");
-=======
 $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehiculo WHERE est_veh = 1 ORDER BY pla_veh ASC");
->>>>>>> Stashed changes
 ?>
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reporte de Viaje - SGET</title>
+    <?php include __DIR__ . '/../includes/theme_init.php'; ?>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -116,14 +115,6 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                     }
                 }
             }
-        }
-    </script>
-    <!-- SCRIPT ANTI-FLASHEO -->
-    <script>
-        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
         }
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -150,14 +141,14 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
     <!-- Carga Sidebar -->
     <?php include '../includes/sidebar.php'; ?>
 
-    <!-- Contenedor Principal -->
-    <main class="flex-1 ml-64 flex flex-col min-h-screen min-w-0">
+    <!-- Contenedor Principal Ajustado al Sidebar -->
+    <div id="main-content-wrapper" class="ml-72 flex flex-col min-h-screen min-w-0 transition-all duration-300">
         
         <!-- INCLUSIÓN DEL HEADER DEL CONDUCTOR -->
         <?php include '../includes/header.php'; ?>
 
         <!-- Cuerpo Principal -->
-        <div class="p-8 space-y-6 flex-1 max-w-6xl min-w-0">
+        <main class="p-8 space-y-6 flex-1 max-w-6xl min-w-0">
             
             <!-- ENCABEZADO DE PÁGINA CON TITULO, AYUDA (?) Y BOTÓN (+) -->
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white dark:bg-[#1e293b]/50 p-4 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm">
@@ -165,7 +156,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Reporte de Viaje Asignado</h1>
                         
-                        <!-- 1. BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
+                        <!-- BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
                         <div class="relative group">
                             <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
                                 <i class="fas fa-question text-[10px]"></i>
@@ -236,7 +227,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                         </ul>
                     </div>
 
-                    <!-- 2. Detalles del Viaje y Ruta + BOTÓN INTEGRADO CON MODAL -->
+                    <!-- 2. Detalles del Viaje y Ruta -->
                     <div class="bg-white dark:bg-[#1e293b] p-6 rounded-2xl border border-slate-200 dark:border-white/5 shadow-xl flex flex-col justify-between space-y-4">
                         <div>
                             <div class="flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3 mb-4">
@@ -264,12 +255,12 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                                 </li>
                                 <li class="flex justify-between">
                                     <span class="text-slate-400 dark:text-slate-500">Disponibilidad:</span>
-                                    <span class="font-bold text-amber-500"><?= htmlspecialchars($viaje['cup_dis']) ?> available seats / <?= htmlspecialchars($viaje['cup_tot']) ?> totales</span>
+                                    <span class="font-bold text-amber-500"><?= htmlspecialchars($viaje['cup_dis']) ?> cupos libres / <?= htmlspecialchars($viaje['cup_tot']) ?> totales</span>
                                 </li>
                             </ul>
                         </div>
 
-                        <!-- Botón para detonar el modal de confirmación de finalización -->
+                        <!-- Botón para finalizar viaje -->
                         <div class="pt-4 border-t border-slate-100 dark:border-white/5">
                             <button type="button" 
                                     onclick="confirmarFinalizarReporte(<?= $viaje['id_via'] ?>, '<?= htmlspecialchars($viaje['des_rut'] ?? 'Ruta', ENT_QUOTES, 'UTF-8') ?>')"
@@ -351,13 +342,13 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                 </div>
             <?php endif; ?>
             
-        </div>
-    </main>
+        </main>
+    </div>
 
     <!-- OVERLAY GENERAL PARA MODALES Y DRAWER -->
     <div id="overlayReporte" onclick="cerrarTodosModales()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-    <!-- 2. MODAL POP-UP DE CONFIRMACIÓN PARA FINALIZAR VIAJE -->
+    <!-- MODAL POP-UP DE CONFIRMACIÓN PARA FINALIZAR VIAJE -->
     <div id="modalConfirmarFinReporte" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300 text-center" id="modalConfirmBoxReporte">
             <div class="w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center text-xl mx-auto border border-emerald-500/20">
@@ -380,7 +371,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
         </div>
     </div>
 
-    <!-- 3. PANEL LATERAL DESLIZANTE (DRAWER (+)) DE PROGRAMACIÓN -->
+    <!-- PANEL LATERAL DESLIZANTE (DRAWER (+)) DE PROGRAMACIÓN -->
     <aside id="drawerProgramarReporte" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-neon-morado"></div>
@@ -393,24 +384,29 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                     <p class="text-[11px] text-slate-500 dark:text-slate-400">Despachar ruta para tu vehículo</p>
                 </div>
             </div>
-            <button onclick="cerrarModalDrawer()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-all">
+            <button onclick="cerrarModalDrawer()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-all cursor-pointer">
                 <i class="fas fa-times text-sm"></i>
             </button>
         </div>
 
         <div class="p-6 flex-1 overflow-y-auto space-y-5">
-            <form id="formProgramarReporte" action="guardar_viaje.php" method="POST" class="space-y-4">
-                <input type="hidden" name="id_usu_via" value="<?= $id_conductor ?? ''; ?>">
+            <!-- Envío al API unificado (api/index.php). Antes apuntaba a
+                 Admin/procesar_viaje.php, un adaptador ya retirado. -->
+            <form id="formProgramarReporte" method="POST" class="space-y-4">
+                <?= Auth::campoToken() ?>
+                <input type="hidden" name="modulo" value="viaje">
+                <input type="hidden" name="accion" value="guardar">
+                <input type="hidden" name="id_usu_via" id="inputUsuVia" value="<?= (int)$id_conductor ?>">
 
                 <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Seleccionar Ruta</label>
-                    <select name="id_rut_via" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
+                    <select name="id_rut_via" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all cursor-pointer">
                         <option value="">Selecciona tu ruta...</option>
                         <?php 
                         if($rutas_select) {
                             $rutas_select->data_seek(0);
                             while($r = $rutas_select->fetch_assoc()) {
-                                echo '<option value="'.$r['id_rut'].'">'.htmlspecialchars($r['nom_rut']).'</option>';
+                                echo '<option value="'.$r['id_rut'].'">'.htmlspecialchars($r['nom_rut']).' ($'.number_format($r['val_rut'], 0, ',', '.').')</option>';
                             }
                         }
                         ?>
@@ -419,13 +415,13 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
 
                 <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Vehículo Asignado</label>
-                    <select name="id_veh_via" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
+                    <select name="id_veh_via" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all cursor-pointer">
                         <option value="">Selecciona tu vehículo...</option>
                         <?php 
                         if($vehiculos_select) {
                             $vehiculos_select->data_seek(0);
                             while($v = $vehiculos_select->fetch_assoc()) {
-                                echo '<option value="'.$v['id_veh'].'">Placa: '.htmlspecialchars($v['pla_veh']).'</option>';
+                                echo '<option value="'.$v['id_veh'].'">Placa: '.htmlspecialchars($v['pla_veh']).' ('.htmlspecialchars($v['mode_veh'] ?? 'N/A').')</option>';
                             }
                         }
                         ?>
@@ -457,6 +453,61 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
 
     <!-- CONTROLADORES JAVASCRIPT -->
     <script>
+        /* ------------------------------------------------------------------
+           Envío del despacho al API (api/index.php).
+           Se usa fetch para poder mostrar el error concreto por campo en vez
+           de dejar al conductor frente a un JSON crudo.
+           ------------------------------------------------------------------ */
+        document.getElementById('formProgramarReporte').addEventListener('submit', async function (e) {
+            e.preventDefault();
+            const form = e.target;
+            const btn  = document.querySelector('button[form="formProgramarReporte"]');
+            const original = btn ? btn.innerHTML : '';
+
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Enviando...'; }
+
+            try {
+                const respuesta = await fetch('../api/index.php', {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin'
+                });
+                const json = await respuesta.json();
+
+                if (json.status === 'ok') {
+                    alert(json.mensaje || 'Despacho programado correctamente.');
+                    window.location.href = '../Conductor/viaje_asignado.php?ok=1';
+                    return;
+                }
+
+                // Pintar el error en el campo concreto
+                if (json.errores) {
+                    for (const [campo, mensaje] of Object.entries(json.errores)) {
+                        const input = form.querySelector('[name="' + campo + '"]');
+                        if (input) {
+                            input.style.borderColor = 'var(--sget-rojo)';
+                            input.setAttribute('aria-invalid', 'true');
+                        }
+                        const caja = form.querySelector('[data-campo="' + campo + '"]');
+                        if (caja) {
+                            const err = document.createElement('span');
+                            err.className = 'sget-error';
+                            err.setAttribute('data-visible', '1');
+                            err.style.display = 'flex';
+                            err.innerHTML = '<i class="fas fa-circle-exclamation"></i><span>' + mensaje + '</span>';
+                            caja.appendChild(err);
+                        }
+                    }
+                }
+                alert(json.mensaje || 'No se pudo programar el despacho.');
+            } catch (error) {
+                alert('Error de conexión con el servidor. Inténtalo de nuevo.');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = original; }
+            }
+        });
+
         function abrirModalSolicitar() {
             const drawer = document.getElementById('drawerProgramarReporte');
             const overlay = document.getElementById('overlayReporte');
@@ -542,32 +593,19 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                 }
             }
 
-            function obtenerEstadoGuardado() {
-                const v1 = localStorage.getItem('color-theme');
-                const v2 = localStorage.getItem('theme');
-
-                if (v1 === 'dark' || v2 === 'dark') return true;
-                if (v1 === 'light' || v2 === 'light') return false;
-
-                return window.matchMedia('(prefers-color-scheme: dark)').matches;
-            }
-
-            sincronizarInterfaz(obtenerEstadoGuardado());
+            sincronizarInterfaz(window.SGETTheme.get() === 'dark');
 
             if (themeToggleBtn) {
                 themeToggleBtn.addEventListener('click', function() {
-                    const actualmenteOscuro = document.documentElement.classList.contains('dark');
-                    const nuevoEstado = !actualmenteOscuro;
-
-                    localStorage.setItem('color-theme', nuevoEstado ? 'dark' : 'light');
-                    localStorage.setItem('theme', nuevoEstado ? 'dark' : 'light');
-
-                    sincronizarInterfaz(nuevoEstado);
+                    const nuevoTema = window.SGETTheme.get() === 'dark' ? 'light' : 'dark';
+                    window.SGETTheme.set(nuevoTema);
+                    sincronizarInterfaz(nuevoTema === 'dark');
                 });
             }
 
             window.addEventListener('storage', function(e) {
-                if (e.key === 'color-theme' || e.key === 'theme') {
+                if (e.key === 'theme' && (e.newValue === 'dark' || e.newValue === 'light')) {
+                    window.SGETTheme.set(e.newValue);
                     sincronizarInterfaz(e.newValue === 'dark');
                 }
             });

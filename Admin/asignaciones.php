@@ -3,7 +3,6 @@
 date_default_timezone_set('America/Bogota');
 session_start();
 include '../assets/conexion.php';
-require_once '../helpers/AuthHelper.php';
 
 // 1. Seguridad y Rol[cite: 3]
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
@@ -13,7 +12,7 @@ if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
 
 // BLOQUEO DE SEGURIDAD POR RESTRICCIONES[cite: 3]
 $idUsuarioActual = $_SESSION['id_usu'] ?? 0;
-AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'asignaciones');
+Auth::requerirAcceso('asignaciones');
 
 $mensaje = "";
 

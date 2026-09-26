@@ -19,7 +19,6 @@ if ($idiomaActual === 'en') {
 }
 
 require_once __DIR__ . '/../assets/conexion.php';
-require_once __DIR__ . '/../helpers/AuthHelper.php';
 
 // Verificación de seguridad para Administrador (Rol 1)
 $rolSesion = $_SESSION['rol'] ?? $_SESSION['id_rol_usu'] ?? 0;
@@ -29,7 +28,7 @@ if (!isset($_SESSION['documento']) || $rolSesion != 1) {
 }
 
 $idUsuarioActual = $_SESSION['id_usu'] ?? 0;
-AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'admin');
+Auth::requerirAcceso('admin');
 
 $nombreReal = $_SESSION['nombre_usuario'] ?? 'Administrador';
 

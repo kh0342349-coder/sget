@@ -294,19 +294,82 @@ sql_mode="STRICT_ALL_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_Z
 
 ---
 
+## 7b. Ciclo de vida de un viaje y cierre automático
+
+La regla vigente (sustituye al antiguo "24 horas después de la salida"):
+
+```
+instante_salida = viaje.fec_via  +  viaje.hor_sal_via
+instante_fin    = instante_salida  +  duracion_del_trayecto  +  margen
+```
+
+| Momento | Qué hace el sistema |
+|---|---|
+| `ahora < salida` | El viaje queda **Programado** y muestra la cuenta regresiva |
+| `salida ≤ ahora < fin` | Pasa solo a **En curso** y se marca `salio = 1` |
+| `ahora ≥ fin` | Se cierra como **Finalizado** y libera conductor y vehículo |
+
+La duración del trayecto se resuelve en este orden:
+
+1. `viaje.hor_lleg_via` menos `hora de salida` (si el conductor definió la llegada)
+2. `rutas.duracion_min` (la que se define en el modal de rutas)
+3. `Config::DURACION_VIAJE_MIN_POR_DEFECTO` (120 min)
+
+Todo esto vive en `ViajeService::sincronizarEstado()`, que es **idempotente**:
+se ejecuta en cada carga de las páginas que muestran viajes y no duplica
+efectos aunque se llame mil veces.
+
+> **Por qué importa.** Con la regla anterior, un viaje que salía a las 07:00 se
+> cerraba a las 07:00 del día siguiente, hubiera durado 2 o 20 horas. Con un
+> trayecto de 2 h 30 min, el sistema lo cierra a las 09:30 del mismo día.
+
+---
+
+## 7c. Transiciones entre módulos
+
+`assets/css/07-transiciones.css` + `assets/js/sget-transicion.js` dan continuidad
+al navegar: el contenido entra con un escalonado sutil y, al pulsar un enlace,
+sale con un velo antes de cambiar de página.
+
+Se **interceptan solo los enlaces que son seguros de animar**:
+
+| No se anima | Motivo |
+|---|---|
+| `target`, `download`, `rel=external` | El navegador los gestiona de otra forma |
+| Ctrl / Cmd / Shift / botón central | El usuario quiere abrir en otra pestaña |
+| Otros orígenes, `mailto:`, `tel:` | Fuera del sistema |
+| Anclas `#seccion` | No hay cambio de módulo |
+| `api/`, `assets/` | No son páginas |
+| Envíos de formulario | Los gestiona el propio formulario |
+| `prefers-reduced-motion: reduce` | Accesibilidad: menos movimiento, cero animación |
+
+La barra de progreso superior comunica que la navegación está en marcha, y hay
+un temporizador de seguridad de 1,5 s que navega pase lo que pase: la interfaz
+no puede quedar congelada por una animación.
+
+---
+
 ## 8. Pruebas
 
 ```bash
 # 1) Datos y reglas de negocio (no necesita servidor)
-php pruebas/smoke.php
+php pruebas/smoke.php                       # 69 comprobaciones
 
-# 2) Renderizado de páginas (necesita servidor)
+# 2-4) Render, API y navegador real (necesitan servidor)
 touch pruebas/.habilitar
-php -S 127.0.0.1:8899 -t .
-php pruebas/render.php
-php pruebas/api.php
-rm pruebas/.habilitar     # ¡bórralo siempre!
+SGET_DEBUG=1 php -S 127.0.0.1:8899 -t .    # en Windows: set SGET_DEBUG=1 && php -S ...
+php pruebas/render.php                     # 92 · todas las páginas de los 3 roles
+php pruebas/api.php                        # 10 · CSRF, validaciones, auth, exportación
+node pruebas/modal-visual.js               # 65 · modales de la landing (Chrome)
+node pruebas/transicion-visual.js          # 18 · transiciones entre módulos
+node pruebas/cancelacion-visual.js         # 39 · cancelación de viaje (Chrome)
+rm pruebas/.habilitar                      # ¡bórralo siempre!
 ```
+
+Las sondas de navegador (`pruebas/*.js` + `pruebas/_*_probe.html`) no se
+limitan a inspeccionar el HTML: cargan la página real en Chrome headless y
+miden con `getComputedStyle` lo que el usuario ve de verdad (display, opacidad,
+tamaño, foco, bloqueo de scroll).
 
 - `smoke.php` — 42 comprobaciones: integridad de fechas, estados, validación,
   alta real de ruta y viaje, cancelación con notificación.
@@ -329,6 +392,7 @@ rm pruebas/.habilitar     # ¡bórralo siempre!
 | `04-modales.css` | Overlays, modales, drawers, confirmaciones | *¿Por qué el modal no cierra?* |
 | `05-tablas.css` | Tabla de datos + modo tarjeta en móvil | *¿Por qué la tabla no cabe en el móvil?* |
 | `06-responsive.css` | Breakpoints, objetivos táctiles, impresión | *¿En qué tamaño se rompe?* |
+| `07-transiciones.css` | Entrada/salida al cambiar de módulo | *¿Por qué la página "salta"?* |
 | `index.css` | **Solo la landing page** | *¿Dónde busco los estilos del sitio público?* |
 
 Todos los componentes usan el prefijo `sget-`, así que no dependen de utilidades
@@ -342,14 +406,20 @@ escritorio · `1536` grande.
 ## 10. Pendientes recomendados
 
 1. **Carpeta `SGET/` duplicada** — hay una copia completa de 31 MB de la
-   aplicación dentro del webroot (además es un submódulo git que se apunta a sí
-   mismo).debe eliminarse del servidor: duplica rutas, desordena el árbol y
-   multiplica los puntos de entrada accesibles.
+   aplicación dentro del webroot, y además es un submódulo git que se apunta a
+   sí mismo. Debe eliminarse del servidor: duplica rutas, desordena el árbol y
+   multiplica los puntos de entrada accesibles. **No se ha tocado** porque
+   borrarla es una decisión del propietario del repositorio, no del código.
 2. **Migrar páginas restantes** al patrón nuevo: `admin.php`, `asignaciones.php`,
-   `reportes.php`, `logs.php`, `gestion_permisos.php` y todo `Conductor/` y
-   `Pasajero/`.
+   `reportes.php`, `gestion_permisos.php` y todo `Conductor/` y `Pasajero/`
+   (`logs.php` ya está migrado).
 3. **Conectar notificaciones reales**: `NotificacionService` es el único punto
    donde enganchar correo o SMS a los pasajeros.
-4. **Reemplazar `helpers/AuthHelper.php`** por `core/Auth.php` (ya es
-   equivalente y más estricto) y eliminarlo.
-5. **Recuperación de contraseña** y **verificación de correo**: hoy no existen.
+4. **Recuperación de contraseña** y **verificación de correo**: hoy no existen.
+5. **Unificar los dos sistemas de permisos**: `usuario_permisos` (nuevo) y la
+   columna `usuario.restricciones` + tabla `restricciones` (heredado, que usa
+   `Admin/gestion_permisos.php`). Conviven y se contradicen.
+6. **Migrar `Conductor/` y `Pasajero/` al patrón de `Admin/`**: hoy esas páginas
+   siguen con Tailwind en línea, sin motor de modales y sin CSS modular.
+7. **Pruebas de extremo a extremo del login real** (hoy el login se prueba solo
+   indirectamente a través de la sesión simulada de `pruebas/`).

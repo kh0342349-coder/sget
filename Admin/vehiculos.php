@@ -35,39 +35,10 @@ $capacidad  = array_sum(array_map(fn($v) => (int)$v['cap_veh'], $vehiculos));
 $tituloPagina = 'Control de Flota';
 include __DIR__ . '/../views/partials/head.php';
 ?>
-<<<<<<< Updated upstream
-<!DOCTYPE html>
-<html lang="es" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SGET - Control de Vehículos</title>
-
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="style_admin.css">
-    
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        'neon-azul': '#38bdf8',
-                        'neon-morado': '#a855f7'
-                    }
-                }
-            }
-        }
-    </script>
-</head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
-=======
 <?php include __DIR__ . '/../includes/sidebar.php'; ?>
 
 <div class="sget-shell">
     <?php include __DIR__ . '/../includes/header.php'; ?>
->>>>>>> Stashed changes
 
     <main class="sget-main">
         <header class="sget-page-head">
@@ -200,9 +171,6 @@ include __DIR__ . '/../views/partials/head.php';
 
 <?php include __DIR__ . '/../views/modals/vehiculo.php'; ?>
 
-<script>
-    window.__MOTIVOS_VIAJE__ = window.__MOTIVOS_VIAJE__ || [];
-</script>
 <?php
 $jsExtra = ['sget-page.js'];
 include __DIR__ . '/../views/partials/foot.php';

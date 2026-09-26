@@ -38,7 +38,7 @@ exit();
 
 ### 3. Cómo proteger los módulos principales (Ejemplos completos)
 
-Para que el bloqueo surta efecto real, coloca la validación de `AuthHelper` al inicio de cada archivo de módulo principal.
+Para que el bloqueo surta efecto real, coloca la validación de `Auth::requerirAcceso()` al inicio de cada módulo.
 
 #### A. Módulo de Viajes (`Admin/viajes.php`)[cite: 11]
 ```php
@@ -47,7 +47,6 @@ date_default_timezone_set('America/Bogota');
 session_start();
 
 include '../assets/conexion.php'; 
-require_once '../helpers/AuthHelper.php';
 
 // 1. Verificación de seguridad (Solo Admin)[cite: 11]
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
@@ -57,7 +56,7 @@ if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
 
 // 2. BLOQUEO DE SEGURIDAD POR RESTRICCIONES
 $idUsuarioActual = $_SESSION['id_usu'] ?? 0;
-AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'viajes');
+Auth::requerirAcceso('viajes');
 
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
 
@@ -72,7 +71,6 @@ date_default_timezone_set('America/Bogota');
 session_start();
 
 include '../assets/conexion.php';
-require_once '../helpers/AuthHelper.php';
 
 // 1. Verificación de seguridad (Solo Admin)[cite: 8]
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
@@ -82,7 +80,7 @@ if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
 
 // 2. BLOQUEO DE SEGURIDAD POR RESTRICCIONES
 $idUsuarioActual = $_SESSION['id_usu'] ?? 0;
-AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'rutas');
+Auth::requerirAcceso('rutas');
 
 // Consultar rutas registradas
 $sql_rutas = "SELECT * FROM rutas ORDER BY id_rut DESC";
@@ -99,7 +97,6 @@ date_default_timezone_set('America/Bogota');
 session_start();
 
 include '../assets/conexion.php'; 
-require_once '../helpers/AuthHelper.php';
 
 // Verificación de seguridad (Solo Admin)[cite: 10]
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
@@ -109,7 +106,7 @@ if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
 
 // BLOQUEO DE SEGURIDAD POR RESTRICCIONES
 $idUsuarioActual = $_SESSION['id_usu'] ?? 0;
-AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'vehiculos');
+Auth::requerirAcceso('vehiculos');
 
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
 

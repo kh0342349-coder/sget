@@ -204,7 +204,7 @@ if (!$resultado_viajes) {
                                 </div>
 
                                 <!-- Botón Reservar -->
-                                <button onclick="abrirPanel('panelLogin')" class="w-full py-3 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-slate-950 font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer group-hover:shadow-sky-500/30">
+                                <button data-sget-modal="panelLogin" class="w-full py-3 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-slate-950 font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer group-hover:shadow-sky-500/30">
                                     <i class="fas fa-ticket-alt"></i> RESERVAR PASAJE
                                 </button>
                             </div>
@@ -263,11 +263,11 @@ if (!$resultado_viajes) {
     <footer class="p-6 text-center text-slate-500 dark:text-slate-400 text-xs font-semibold border-t border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0b0f19]/80 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto w-full gap-4">
         <p>&copy; 2026 SGET - Sistema de Gestión de Transporte. Todos los derechos reservados.</p>
         <div class="flex items-center gap-4">
-            <button onclick="abrirPanel('panelConfigCookies')" class="hover:text-amber-600 dark:hover:text-amber-400 underline transition-colors cursor-pointer flex items-center gap-1.5">
+            <button data-sget-modal="panelConfigCookies" class="hover:text-amber-600 dark:hover:text-amber-400 underline transition-colors cursor-pointer flex items-center gap-1.5">
                 <i class="fas fa-cookie-bite text-amber-700 dark:text-amber-500"></i> Configuración de Cookies
             </button>
             <span>•</span>
-            <button onclick="abrirPanel('panelPolitica')" class="hover:text-sky-500 underline transition-colors cursor-pointer">
+            <button data-sget-modal="panelPolitica" class="hover:text-sky-500 underline transition-colors cursor-pointer">
                 Tratamiento de Datos Personales (Ley 1581)
             </button>
         </div>
@@ -294,7 +294,7 @@ if (!$resultado_viajes) {
                     <button onclick="aceptarTodasCookies()" class="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-lg shadow-sky-500/20">
                         Aceptar Todas
                     </button>
-                    <button onclick="abrirPanel('panelConfigCookies')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white border border-slate-200 dark:border-white/10 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer">
+                    <button data-sget-modal="panelConfigCookies" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white border border-slate-200 dark:border-white/10 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer">
                         Configurar
                     </button>
                     <button onclick="rechazarCookiesOpcionales()" class="px-2.5 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold text-[10px] underline cursor-pointer">
@@ -306,8 +306,11 @@ if (!$resultado_viajes) {
     </div>
 
     <!-- MODAL DE CONFIGURACIÓN DE COOKIES CON MODOS CLARO/OSCURO -->
-    <div id="panelConfigCookies" onclick="if(event.target === this) cerrarPanel('panelConfigCookies')" class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md opacity-0 pointer-events-none hidden transition-opacity duration-300">
-        <div class="modal-isla-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 max-w-xl w-full max-h-[85vh] flex flex-col transform scale-95 transition-transform duration-300 shadow-2xl">
+    <div id="panelConfigCookies"
+         class="sget-modal-wrap fixed inset-0 z-[110] p-4 modal-isla-container"
+         data-sget-capa data-titulo="Preferencias de cookies"
+         role="dialog" aria-modal="true" aria-labelledby="tituloCookies">
+        <div class="sget-modal sget-modal--lg modal-isla-card" data-sget-panel>
             <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/10">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-500 flex items-center justify-center font-bold text-lg">
@@ -318,7 +321,7 @@ if (!$resultado_viajes) {
                         <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Personaliza tus opciones de privacidad en SGET</p>
                     </div>
                 </div>
-                <button onclick="cerrarPanel('panelConfigCookies')" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer">
+                <button type="button" data-sget-cerrar aria-label="Cerrar" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer">
                     <i class="fas fa-times text-sm"></i>
                 </button>
             </div>
@@ -368,8 +371,11 @@ if (!$resultado_viajes) {
     </div>
 
     <!-- MODAL POLÍTICA DE TRATAMIENTO DE DATOS -->
-    <div id="panelPolitica" onclick="if(event.target === this) cerrarPanel('panelPolitica')" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md opacity-0 pointer-events-none hidden transition-opacity duration-300">
-        <div class="modal-isla-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[85vh] flex flex-col transform scale-95 transition-transform duration-300 shadow-2xl">
+    <div id="panelPolitica"
+         class="sget-modal-wrap fixed inset-0 z-50 p-4 modal-isla-container"
+         data-sget-capa data-titulo="Política de tratamiento de datos"
+         role="dialog" aria-modal="true" aria-labelledby="tituloPolitica">
+        <div class="sget-modal sget-modal--lg modal-isla-card" data-sget-panel>
             <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-white/10">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center font-bold text-lg">
@@ -380,7 +386,7 @@ if (!$resultado_viajes) {
                         <p class="text-[11px] font-bold text-slate-400">Cumplimiento Ley 1581 de 2012</p>
                     </div>
                 </div>
-                <button onclick="cerrarPanel('panelPolitica')" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer">
+                <button type="button" data-sget-cerrar aria-label="Cerrar" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer">
                     <i class="fas fa-times text-sm"></i>
                 </button>
             </div>
@@ -420,7 +426,7 @@ if (!$resultado_viajes) {
             </div>
 
             <div class="pt-4 border-t border-slate-100 dark:border-white/10 flex justify-end">
-                <button onclick="cerrarPanel('panelPolitica')" class="px-5 py-2.5 rounded-xl bg-slate-900 text-white dark:bg-sky-500 dark:text-slate-950 font-extrabold text-xs hover:opacity-90 transition-all cursor-pointer">
+                <button data-sget-cerrar class="px-5 py-2.5 rounded-xl bg-slate-900 text-white dark:bg-sky-500 dark:text-slate-950 font-extrabold text-xs hover:opacity-90 transition-all cursor-pointer">
                     Entendido
                 </button>
             </div>
@@ -520,66 +526,79 @@ if (!$resultado_viajes) {
             }
         }
 
+        /* ------------------------------------------------------------------
+           ADAPTADORES DEL MOTOR COMÚN DE MODALES (assets/js/sget-modal.js)
+           ------------------------------------------------------------------
+           Estas tres funciones se conservan porque el HTML las sigue invocando
+           (`onclick="abrirPanel(...)"`), pero ya NO manipulan clases a mano:
+           delegan en SGETModal, que centraliza la animación, el foco, el
+           bloqueo de scroll, el cierre con Escape y el aria-modal.
+           Antes cada panel jugaba con `hidden` + `opacity-0` + `scale-95`, y
+           cualquier hoja de estilos que declarara `display` en el contenedor
+           (como `.modal-isla-container`) los dejaba invisibles pero presentes,
+           bloqueando toda la página.
+           ------------------------------------------------------------------ */
         function abrirPanel(idPanel) {
-            const panel = document.getElementById(idPanel);
-            if (!panel) return;
-            const card = panel.querySelector('.modal-isla-card') || panel.querySelector('> div');
-            
-            panel.classList.remove('hidden');
-            panel.classList.remove('pointer-events-none');
-
-            if (idPanel === 'panelLogin' || idPanel === 'panelRegistro') {
-                setTimeout(() => {
-                    inicializarBotonGoogle(panel);
-                }, 50);
+            if (typeof SGETModal === 'undefined') {
+                // Red de seguridad: si el motor no cargó, al menos se quita
+                // el bloqueo de clics en lugar de dejar la página muerta.
+                const p = document.getElementById(idPanel);
+                if (p) p.classList.remove('hidden', 'pointer-events-none', 'opacity-0');
+                return;
             }
 
-            setTimeout(() => {
-                panel.classList.remove('opacity-0');
-                if (card) {
-                    card.classList.remove('scale-95');
-                    card.classList.add('scale-100');
-                }
-            }, 10);
+            SGETModal.abrir(idPanel);
+
+            // El botón de Google solo puede inicializarse con el panel visible
+            if (idPanel === 'panelLogin' || idPanel === 'panelRegistro') {
+                setTimeout(() => {
+                    const panel = document.getElementById(idPanel);
+                    if (panel && typeof inicializarBotonGoogle === 'function') {
+                        inicializarBotonGoogle(panel);
+                    }
+                }, 120);
+            }
         }
 
         function cerrarPanel(idPanel) {
-            const panel = document.getElementById(idPanel);
-            if (!panel) return;
-            const card = panel.querySelector('.modal-isla-card') || panel.querySelector('> div');
-            if (card) {
-                card.classList.remove('scale-100');
-                card.classList.add('scale-95');
+            if (typeof SGETModal === 'undefined') {
+                const p = document.getElementById(idPanel);
+                if (p) p.classList.add('hidden', 'pointer-events-none', 'opacity-0');
+                return;
             }
-            panel.classList.add('opacity-0');
-            panel.classList.add('pointer-events-none');
-            setTimeout(() => { panel.classList.add('hidden'); }, 300);
+            SGETModal.cerrar(idPanel, false);
         }
 
         function cambiarAPanel(idDestino) {
-            cerrarPanel('panelLogin');
-            cerrarPanel('panelRegistro');
-            cerrarPanel('panelPolitica');
-            cerrarPanel('panelConfigCookies');
-            setTimeout(() => { abrirPanel(idDestino); }, 200);
+            ['panelLogin', 'panelRegistro', 'panelPolitica', 'panelConfigCookies'].forEach(cerrarPanel);
+            setTimeout(() => abrirPanel(idDestino), 220);
         }
 
-        // Cerrar con la tecla ESC
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                ['panelPolitica', 'panelLogin', 'panelRegistro', 'panelConfigCookies'].forEach(id => {
-                    const panel = document.getElementById(id);
-                    if (panel && !panel.classList.contains('hidden')) {
-                        cerrarPanel(id);
-                    }
-                });
-            }
+        /* ------------------------------------------------------------------------
+           COMPORTAMIENTO ADICIONAL DE LA LANDING
+           ------------------------------------------------------------------------ */
+        // Escape ya lo resuelve el motor común (cierra la capa superior).
+
+        // Navegación interna entre modales (login <-> registro, política)
+        document.addEventListener('click', function (event) {
+            const enlace = event.target.closest('[data-sget-ir-a]');
+            if (!enlace) return;
+            event.preventDefault();
+            cambiarAPanel(enlace.dataset.sgetIrA);
+        });
+
+        // Menú hamburguesa de la cabecera en móvil
+        document.addEventListener('click', function (event) {
+            const burger = event.target.closest('[data-sget-burger]');
+            if (!burger) return;
+            const nav = document.querySelector('.landing-nav');
+            if (nav) nav.dataset.abierto = nav.dataset.abierto === '1' ? '0' : '1';
         });
 
         document.addEventListener("DOMContentLoaded", function () {
-            <?php if (isset($_SESSION['abrir_login']) && $_SESSION['abrir_login'] === true): ?>
+            <?php if (!empty($_SESSION['abrir_login']) || !empty($_SESSION['msg_success_login'])): ?>
                 abrirPanel('panelLogin');
-                <?php unset($_SESSION['abrir_login']); ?>
+                <?php unset($_SESSION['abrir_login'], $_SESSION['msg_success_login']); ?>
             <?php endif; ?>
         });
     </script>

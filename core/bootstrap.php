@@ -5,7 +5,7 @@
  * UNICO punto de entrada. Todo script del sistema debe comenzar con:
  *     require_once __DIR__ . '/../core/bootstrap.php';
  *
- * Carga: config, BD, helpers, servicios legacy (Logger/AuthHelper) y
+ * Carga: config, BD, sesión, servicios, Logger y normaliza el $conexion (mysqli)
  * normaliza la variable $conexion (mysqli) usada por el codigo antiguo.
  * -----------------------------------------------------------------------------
  */
@@ -24,11 +24,11 @@ require_once dirname(__DIR__) . '/services/RutaService.php';
 require_once dirname(__DIR__) . '/services/VehiculoService.php';
 require_once dirname(__DIR__) . '/services/UsuarioService.php';
 require_once dirname(__DIR__) . '/services/NotificacionService.php';
+require_once dirname(__DIR__) . '/services/LogService.php';
 require_once dirname(__DIR__) . '/services/ViajeService.php';
 
 // --- Legado (se mantienen hasta migrar pagina por pagina) ---------------
 require_once dirname(__DIR__) . '/helpers/Logger.php';
-require_once dirname(__DIR__) . '/helpers/AuthHelper.php';
 
 // --- Sesión --------------------------------------------------------------
 Auth::iniciar();
@@ -77,8 +77,37 @@ function sget_redirigir(string $url, int $codigo = 302): void
 }
 
 /**
- * Convierte los errores PHP en una respuesta clara en modo desarrollo.
+ * Configuración de errores.
+ *
+ * En PRODUCCIÓN los errores nunca se muestran al usuario: van al log del
+ * servidor. Eso es lo correcto, pero durante el desarrollo produce páginas en
+ * blanco sin ninguna pista (pasó con un `number_format()` mal escrito en
+ * Admin/logs.php: pantalla vacía y ni un error en pantalla).
+ *
+ * Por eso, si la variable de entorno SGET_DEBUG está activa, los errores SÍ se
+ * muestran y además se inyecta un comentario al final del HTML con el mensaje,
+ * de modo que una pantalla vacía sea fácil de diagnosticar.
+ *
+ *   Linux/macOS:  SGET_DEBUG=1 php -S 127.0.0.1:8899 -t .
+ *   Windows:      set SGET_DEBUG=1 && php -S 127.0.0.1:8899 -t .
  */
+$sgetDebug = in_array(getenv('SGET_DEBUG'), ['1', 'true', 'on'], true);
+define('SGET_DEBUG', $sgetDebug);
+
 error_reporting(E_ALL);
-ini_set('display_errors', '0'); // nunca al usuario final; se registra en el log
+ini_set('display_errors', $sgetDebug ? '1' : '0');
 ini_set('log_errors', '1');
+
+if ($sgetDebug) {
+    register_shutdown_function(static function (): void {
+        $e = error_get_last();
+        if ($e === null || !in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+            return;
+        }
+        echo "\n<!-- ============================================================ -->\n"
+           . "<!-- ERROR PHP: " . htmlspecialchars((string)($e['message'] ?? ''), ENT_QUOTES, 'UTF-8') . "\n"
+           . "     Archivo:  " . htmlspecialchars((string)($e['file'] ?? ''), ENT_QUOTES, 'UTF-8')
+           . ':' . (int)($e['line'] ?? 0) . "\n"
+           . "     ============================================================ -->\n";
+    });
+}

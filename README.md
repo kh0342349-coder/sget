@@ -7,6 +7,10 @@ reservas de transporte terrestre.
 estructura por capas, el error de datos que se corrigió y cómo trabajar sobre
 el proyecto sin volver a introducirlo.
 
+📖 **[Ver `docs/COMO-HACER-COMMITS.md`](docs/COMO-HACER-COMMITS.md)** — si el
+repositorio vuelve a romperse, ahí está la causa explicada, con los comandos
+exactos para arreglarla y las reglas para que no se repita.
+
 ---
 
 ## Puesta en marcha
@@ -35,16 +39,22 @@ el proyecto sin volver a introducirlo.
 ## Pruebas
 
 ```bash
-# Reglas de negocio y datos (no necesita servidor)
+# 1) Reglas de negocio y datos (no necesita servidor)
 php pruebas/smoke.php
 
-# Renderizado y errores PHP de todas las páginas (necesita servidor)
+# 2-4) Render, API y navegador real (necesitan servidor)
 touch pruebas/.habilitar
-php -S 127.0.0.1:8899 -t .
-php pruebas/render.php
-php pruebas/api.php
-rm pruebas/.habilitar      # ¡bórralo siempre!
+SGET_DEBUG=1 php -S 127.0.0.1:8899 -t .      # en Windows: set SGET_DEBUG=1 && php -S ...
+php pruebas/render.php        # 92 · páginas de los 3 roles + módulo de auditoría
+php pruebas/api.php           # 10 · CSRF, errores por campo, auth, exportación
+node pruebas/modal-visual.js  # 65 · modales de la landing (Chrome headless)
+node pruebas/transicion-visual.js  # 18 · transiciones entre módulos
+node pruebas/cancelacion-visual.js  # 39 · flujo de cancelación de viaje
+rm pruebas/.habilitar        # ¡bórralo siempre!
 ```
+
+`SGET_DEBUG=1` hace visibles los errores PHP. **Sin él, un error fatal deja
+la página en blanco sin explicación**: por eso está en el comando.
 
 ---
 

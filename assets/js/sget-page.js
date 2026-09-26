@@ -27,6 +27,9 @@
 
     var API = '../api/index.php';
 
+    /* Utilidades compartidas por los módulos */
+    var SGET = {};
+
     /* ------------------------------------------------------------------ */
     /* Utilidades                                                          */
     /* ------------------------------------------------------------------ */
@@ -48,6 +51,42 @@
     }
 
     function recargarEn(ms) { setTimeout(function () { location.reload(); }, ms || 750); }
+
+    /* ================================================================== */
+    /* DURACIÓN DEL TRAYECTO → cuándo se cierra cada viaje                  */
+    /* ================================================================== */
+
+    /**
+     * Al escribir la distancia se estima la duración (45 km/h) y se muestra
+     * en formato legible. Si el usuario escribe la duración a mano, se respeta.
+     */
+    SGET.initDuracionRuta = function () {
+        var dis      = document.getElementById('ruta_dis');
+        var dur      = document.getElementById('ruta_dur');
+        var legible  = document.querySelector('[data-duracion-legible]');
+        if (!dis || !dur || !legible) return;
+
+        var tocadoDuracion = false;
+        dur.addEventListener('input', function () { tocadoDuracion = true; });
+
+        function pintar() {
+            var m = parseInt(dur.value, 10);
+            if (isNaN(m) || m <= 0) { legible.textContent = 'Sin definir'; return; }
+            var h = Math.floor(m / 60), r = m % 60;
+            legible.textContent = h === 0 ? (r + ' min') : (r === 0 ? (h + ' h') : (h + ' h ' + r + ' min'));
+        }
+
+        dis.addEventListener('input', function () {
+            var km = parseFloat(dis.value);
+            if (!isNaN(km) && km > 0 && !tocadoDuracion) {
+                dur.value = Math.max(30, Math.round((km / 45) * 60));
+            }
+            pintar();
+        });
+
+        dur.addEventListener('input', pintar);
+        pintar();
+    };
 
     /* ================================================================== */
     /* APERTURA DE MODALES                                                */
@@ -105,9 +144,21 @@
 
             form.addEventListener('submit', function (e) {
                 e.preventDefault();
+
+                // Reglas de negocio del diálogo de cancelación, antes de enviar.
+                if (form.dataset.sgetAnotacionObligatoria === '1') {
+                    var errores = validarCancelacion(form);
+                    if (Object.keys(errores).length) {
+                        window.SGETModal.errores(errores, form);
+                        window.SGETModal.toast('Revisa los campos marcados en rojo.', 'error');
+                        return;
+                    }
+                }
+
                 enviar(new FormData(form), function (j) {
                     if (j.status === 'ok') {
                         if (form.dataset.sgetCerrarAlGuardar) window.SGETModal.cerrar(form.dataset.sgetCerrarAlGuardar);
+                        window.SGETModal.toast(j.mensaje, 'exito');
                         recargarEn();
                     } else {
                         if (j.errores) window.SGETModal.errores(j.errores, form);
@@ -115,6 +166,24 @@
                     }
                 });
             });
+
+            // Contador y aviso en vivo de la anotación obligatoria
+            var area = form.querySelector('[data-anotacion]');
+            var contador = form.querySelector('[data-contador]');
+            if (area && contador) {
+                var minimo = parseInt(form.dataset.sgetMinAnotacion, 10) || 15;
+                var obligatorio = form.dataset.sgetAnotacionObligatoria === '1';
+                area.addEventListener('input', function () {
+                    var n = area.value.trim().length;
+                    contador.textContent = n + '/' + minimo;
+                    contador.dataset.ok = (n >= minimo) ? '1' : '0';
+                    area.classList.toggle('sget-textarea--error', obligatorio && n > 0 && n < minimo);
+                    if (n >= minimo) {
+                        var err = form.querySelector('[data-error-anotacion]');
+                        if (err) err.dataset.visible = '0';
+                    }
+                });
+            }
 
             // Ctrl+Enter = guardar
             form.addEventListener('keydown', function (e) {
@@ -217,60 +286,76 @@
             cuerpo.append('id', extra.id);
             enviar(cuerpo, function (j) { aviso(j); if (j.status === 'ok') recargarEn(); });
         },
-
-        /* ============================================================== */
-        /* CANCELAR VIAJE · el flujo crítico del sistema                 */
-        /* ============================================================== */
+        /* CANCELAR VIAJE                                                 */
+        /* El diálogo lo construye views/modals/cancelar-viaje.php y lo envía
+           con data-sget-form (el flujo estándar de formularios). Esta acción
+           solo se limita a abrirlo: no hay una segunda implementación. */
         cancelarViaje: function (el) {
-            var datos = JSON.parse(el.getAttribute('data-sget-dato') || '{}');
-            var idViaje   = datos.id;
-            var instantes = datos.salida || '';
-            var yaSalio   = datos.ya_salio === 1 || datos.ya_salio === true;
-            var pasajeros = parseInt(datos.pasajeros || '0', 10);
+            var capa = document.getElementById('modalCancelarViaje');
+            if (!capa) {
+                console.warn('[SGET] Falta views/modals/cancelar-viaje.php en la página');
+                return;
+            }
 
-            var opciones = '';
-            window.__MOTIVOS_VIAJE__.forEach(function (m) {
-                opciones += '<option value="' + m[0] + '">' + m[1] + '</option>';
+            var d;
+            try { d = JSON.parse(el.getAttribute('data-sget-dato') || '{}'); }
+            catch (e) { console.warn('[SGET] data-sget-dato inválido', el); return; }
+
+            var vencido   = d.vencido === 1 || d.vencido === true;
+            var yaSalio   = d.ya_salio === 1 || d.ya_salio === true;
+            var pasajeros = parseInt(d.pasajeros || '0', 10);
+            var S = function (v) { return v === 0 ? '0' : '1'; };
+
+            var impacto = pasajeros === 0
+                ? 'No hay pasajeros reservados, así que no se enviará ningún aviso.'
+                : (yaSalio
+                    ? 'recibirán el aviso de cierre de esta salida.'
+                    : 'serán notificados de la cancelación y sus reservas quedarán canceladas sin cobro.');
+
+            // Se limpia ANTES de abrir: si se limpiara después, al reabrir el
+            // modal podrían quedar valores del viaje anterior.
+            var formPre = capa.querySelector('[data-sget-panel]');
+            if (formPre) formPre.reset();
+            window.SGETModal.limpiarErrores(formPre);
+            var areaPre = capa.querySelector('[data-anotacion]');
+            if (areaPre) { areaPre.value = ''; areaPre.classList.remove('sget-textarea--error'); }
+            var errPre = capa.querySelector('[data-error-anotacion]');
+            if (errPre) errPre.dataset.visible = '0';
+            var contPre = capa.querySelector('[data-contador]');
+            if (contPre) { contPre.textContent = '0/15'; contPre.dataset.ok = '0'; }
+
+            window.SGETModal.abrir('modalCancelarViaje', {
+                datos: {
+                    id:            d.id,
+                    titulo:        vencido ? ('Viaje #' + d.id + ' vencido') : ('Cancelar viaje #' + d.id),
+                    trayecto:      d.trayecto || '',
+                    salida:        d.salida || 'Sin definir',
+                    vence:         d.vence || 'Sin definir',
+                    duracion:      d.duracion || 'Sin definir',
+                    conductor:     d.conductor || 'Sin asignar',
+                    placa:         d.placa || 'Sin placa',
+                    pasajeros:     pasajeros,
+                    impacto:       impacto,
+                    etiquetaAnotacion: yaSalio
+                        ? 'Anotación para el archivo (opcional)'
+                        : 'Anotación para los pasajeros (obligatoria)',
+                    textoAnotacion: yaSalio
+                        ? 'El viaje ya salió; la anotación se archiva con el cierre para trazabilidad.'
+                        : 'El viaje aún no sale, por lo que SGET <strong>exige</strong> esta anotación y la envía literalmente a cada pasajero reservado.',
+                    // Visibilidad según el estado del viaje
+                    iconoBan:       S(vencido ? 0 : 1),
+                    iconoVencido:   S(vencido ? 1 : 0),
+                    avisoVencido:   S(vencido ? 1 : 0),
+                    zonaFormulario: S(vencido ? 0 : 1),
+                    cajaAnotacion:  S(1),
+                    botonCancelar:  S(vencido ? 0 : 1),
+                    botonEntendido: S(vencido ? 1 : 0),
+                }
             });
 
-            window.SGETModal.confirmarMotivo({
-                titulo: 'Cancelar viaje #' + idViaje,
-                cuerpo: 'Vas a cancelar <strong>' + (datos.trayecto || 'este viaje') + '</strong>' +
-                        (instantes ? ' con salida programada <strong>' + instantes + '</strong>' : '') + '. ' +
-                        'Esta acción no se puede deshacer.',
-                opciones: opciones,
-                minimo: datos.minimo || 15,
-                esCancelacionPrevia: !yaSalio,
-                impacto: pasajeros + (pasajeros === 1 ? ' pasajero' : ' pasajeros'),
-                textoOk: 'Sí, cancelar y notificar',
-                placeholderAnotacion: yaSalio
-                    ? 'Ej.: El viajeCONCLUSION se cerró por cuarto turno del conductor. Queda registrado para el historial.'
-                    : 'Ej.: El vehículo presentó una falla en el motor y no puede cumplir la salida programada. Se reprograma para las 14:00 desde el mismo punto de encuentro.'
-            }).then(function (r) {
-                if (!r) return;
-                var cuerpo = new FormData();
-                cuerpo.append('_token', token());
-                cuerpo.append('modulo', 'viaje');
-                cuerpo.append('accion', 'cancelar');
-                cuerpo.append('id', idViaje);
-                cuerpo.append('motivo', r.motivo);
-                cuerpo.append('anotacion', r.anotacion);
-
-                enviar(cuerpo, function (j) {
-                    if (j.status === 'ok') {
-                        window.SGETModal.confirmar({
-                            tipo: 'peligro',
-                            icono: 'fa-circle-check',
-                            titulo: 'Viaje cancelado',
-                            cuerpo: j.mensaje,
-                            textoOk: 'Entendido'
-                        });
-                    } else {
-                        aviso(j);
-                    }
-                    recargarEn(1000);
-                });
-            });
+            // La obligatoriedad de la anotación depende del momento de la salida
+            var form = capa.querySelector('[data-sget-form]');
+            if (form) form.dataset.sgetAnotacionObligatoria = yaSalio ? '0' : '1';
         },
 
         /* ---------- Marcar notificación como leída ---------- */
@@ -302,6 +387,27 @@
         });
     }
 
+    /** Validación del formulario de cancelación (reglas de negocio). */
+    function validarCancelacion(form) {
+        var errores = {};
+        var minimo  = parseInt(form.dataset.sgetMinAnotacion, 10) || 15;
+
+        var motivo = form.querySelector('[name="motivo"]');
+        if (motivo && !motivo.value) errores.motivo = 'Selecciona el motivo de la cancelación.';
+
+        var anotacion = form.querySelector('[name="anotacion"]');
+        if (anotacion && anotacion.value.trim().length < minimo) {
+            errores.anotacion_cancelacion =
+                'La anotación es obligatoria: escribe al menos ' + minimo +
+                ' caracteres explicando por qué se cancela. Se enviará a los pasajeros.';
+        }
+
+        var confirmo = form.querySelector('[name="confirmo"]');
+        if (confirmo && !confirmo.checked) errores.confirmo = 'Debes confirmar que entiendes la cancelación.';
+
+        return errores;
+    }
+
     /* ================================================================== */
     /* PESTAÑAS                                                           */
     /* ================================================================== */
@@ -326,10 +432,17 @@
     /* ARRANQUE                                                            */
     /* ================================================================== */
     document.addEventListener('DOMContentLoaded', function () {
-        window.__MOTIVOS_VIAJE__ = window.__MOTIVOS_VIAJE__ || [];
         prepararModales();
         prepararFormularios();
         prepararAcciones();
         prepararPestanas();
+        if (typeof SGET.initDuracionRuta === 'function') SGET.initDuracionRuta();
     });
+
+    /* Se exponen las acciones y la API en window para:
+       · depurar desde la consola del navegador
+       · poder invocarlas desde las sondas de prueba (pruebas/*.js)
+       Nada del flujo normal depende de esto. */
+    window.SGETPagina   = { API: API, SGET: SGET };
+    window.SGETAcciones = ACCIONES;
 })(window, document);

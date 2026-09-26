@@ -92,7 +92,7 @@ $modulos = [
     '/Admin/rutas.php'     => ['Gestión de Rutas', 'modalRuta', 'ori_rut', 'des_rut', 'hora_salida', 'dis_rut', '01-base.css', '04-modales.css'],
     '/Admin/vehiculos.php' => ['Control de Flota',   'modalVehiculo', 'pla_veh', 'est_veh', '05-tablas.css'],
     '/Admin/usuarios.php'  => ['Administración de Usuarios', 'modalUsuario', 'id_rol_usu', 'sget-tab'],
-    '/Admin/viajes.php'    => ['Despacho de Viajes', 'modalViaje', 'fec_via', 'hor_sal_via', 'cancelarViaje', 'sget-page.js'],
+    '/Admin/viajes.php'    => ['Despacho de Viajes', 'modalViaje', 'fec_via', 'hor_sal_via', 'sget-page.js', '07-transiciones.css'],
 ];
 
 foreach ($modulos as $ruta => $esperados) {
@@ -110,12 +110,55 @@ foreach ($modulos as $ruta => $esperados) {
 }
 
 /* ========================================================================== */
+echo "\n=== Módulo de auditoría (rol Admin) ===\n";
+iniciarSesion($base, Config::ROL_ADMIN);
+[$lcode, $lhtml] = pedirConCodigo($base . '/Admin/logs.php');
+check('/Admin/logs.php responde 200', $lcode === 200, "código {$lcode}");
+
+if ($lcode === 200) {
+    foreach (['Exportar CSV', 'modalDetalleLog', 'data-sget-fila',
+              'sget-transicion.js', '07-transiciones.css', 'sget-barra-progreso',
+              'Actividad de los últimos 14 días'] as $aguja) {
+        check("/Admin/logs.php contiene «{$aguja}»", str_contains($lhtml, $aguja));
+    }
+    check('/Admin/logs.php no tiene SQL (usa LogService)', !str_contains($lhtml, 'SELECT ')
+                                                     && !str_contains($lhtml, 'FROM sget_logs_auditoria'));
+    check('/Admin/logs.php sin errores PHP', sinErroresPhp($lhtml), detalleError($lhtml));
+
+    // Los filtros deben funcionar por URL
+    foreach (['accion=LOGIN', 'q=LOGIN', 'desde=' . date('Y-m-d', strtotime('-30 days'))] as $qs) {
+        [$c2, $h2] = pedirConCodigo($base . '/Admin/logs.php?' . $qs);
+        check("/Admin/logs.php?{$qs} responde 200", $c2 === 200, "código {$c2}");
+        check("/Admin/logs.php?{$qs} sin errores PHP", $c2 === 200 && sinErroresPhp($h2), detalleError($h2));
+    }
+
+    // La exportación CSV debe devolver un archivo, no HTML.
+    // El token viaja en la URL del botón de exportar.
+    preg_match('/exportar=csv&amp;_token=([a-f0-9]+)/', $lhtml, $tm);
+    $tokenLog = $tm[1] ?? '';
+    check('El botón de exportar lleva token CSRF', $tokenLog !== '');
+    check('La página expone SGET_CSRF a los scripts', str_contains($lhtml, 'window.SGET_CSRF'));
+    if ($tokenLog !== '') {
+        $ch = curl_init($base . '/Admin/logs.php?exportar=csv&_token=' . $tokenLog);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HEADER         => true,
+            CURLOPT_COOKIEJAR      => $jar,
+            CURLOPT_COOKIEFILE     => $jar,
+        ]);
+        $raw = (string)curl_exec($ch);
+        curl_close($ch);
+        check('La exportación CSV responde con un archivo', str_contains($raw, 'text/csv'), substr($raw, 0, 120));
+        check('El CSV trae cabecera y filas', str_contains($raw, 'Fecha y hora') && str_contains($raw, 'Descripci'));
+    }
+}
+
 echo "\n=== Páginas heredadas contra el esquema nuevo (por rol) ===\n";
 
 $porRol = [
     Config::ROL_ADMIN => [
         '/Admin/admin.php', '/Admin/asignaciones.php', '/Admin/gestion_permisos.php',
-        '/Admin/reportes.php', '/Admin/logs.php', '/Admin/ranking_conductores.php',
+        '/Admin/reportes.php', '/Admin/ranking_conductores.php',
         '/Admin/reportes_pasajeros.php',
     ],
     Config::ROL_CONDUCTOR => [

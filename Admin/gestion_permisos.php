@@ -4,7 +4,6 @@ date_default_timezone_set('America/Bogota');
 session_start();
 
 include '../assets/conexion.php';
-require_once '../helpers/AuthHelper.php';
 
 // Verificación de seguridad (Solo Admin)
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
@@ -14,7 +13,7 @@ if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
 
 // BLOQUEO DE SEGURIDAD POR RESTRICCIONES
 $idUsuarioActual = $_SESSION['id_usu'] ?? 0;
-AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'gestion_permisos');
+Auth::requerirAcceso('gestion_permisos');
 
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
 

@@ -218,6 +218,116 @@ echo "\n=== 9. Limpieza de la ruta de prueba ===\n";
 $res2 = RutaService::eliminar($res['id']);
 check('Ruta eliminada', $res2['ok'] === true, (string)$res2['mensaje']);
 
+/* ========================================================================== */
+echo "\n=== 10. DURACIÓN DEL TRAYECTO Y CIERRE AUTOMÁTICO ===\n";
+echo "  (regla: el viaje termina al cumplirse SALIDA + DURACIÓN de la ruta,\n";
+echo "   no 24 horas después de la salida)\n";
+
+/* --- Estimación de duración a partir de la distancia --- */
+check('45 km -> ~1 h',    RutaService::estimarDuracion(45.0) === 60,  (string)RutaService::estimarDuracion(45.0));
+check('90 km -> ~2 h',    RutaService::estimarDuracion(90.0) === 120, (string)RutaService::estimarDuracion(90.0));
+check('0 km  -> defecto', RutaService::estimarDuracion(null) === Config::DURACION_VIAJE_MIN_POR_DEFECTO);
+check('mínimo 30 min',    RutaService::estimarDuracion(1.0) === 30,   (string)RutaService::estimarDuracion(1.0));
+check('150 min legible',  RutaService::duracionLegible(150) === '2 h 30 min', RutaService::duracionLegible(150));
+check('120 min legible',  RutaService::duracionLegible(120) === '2 h',        RutaService::duracionLegible(120));
+check('45 min legible',   RutaService::duracionLegible(45) === '45 min',     RutaService::duracionLegible(45));
+
+/* --- Duración guardada en la BD --- */
+$rutaD = RutaService::guardar([
+    'nom_rut' => 'DUR-' . bin2hex(random_bytes(3)), 'ori_rut' => 'Origen_dur',
+    'des_rut' => 'Destino_dur', 'dis_rut' => '90', 'val_rut' => '5000',
+    'hora_salida' => '07:00', 'duracion_min' => 150,
+]);
+check('Ruta creada con duración 150 min', $rutaD['ok'] === true, json_encode($rutaD));
+$idRutaD = (int)($rutaD['id'] ?? 0);
+$leida   = RutaService::porId($idRutaD);
+check('La duración se guardó en la BD', (int)($leida['duracion_min'] ?? 0) === 150, (string)($leida['duracion_min'] ?? 'NULL'));
+
+/* --- Vencimiento: el caso que el usuario reportó --- */
+$manana7 = date('Y-m-d', strtotime('+1 day')) . ' 07:00:00';
+$vence   = ViajeService::instanteVencimiento(['fec_via' => date('Y-m-d', strtotime('+1 day')), 'hor_sal_via' => '07:00:00', 'duracion_min' => 150]);
+check('Sale mañana 07:00 + 150 min -> vence mañana 09:30',
+      $vence === date('Y-m-d', strtotime('+1 day')) . ' 09:45:00', (string)$vence);
+check('NO vence 24 h después (sería ' . date('Y-m-d', strtotime('+2 days')) . ' 07:15:00)',
+      $vence !== date('Y-m-d', strtotime('+2 days')) . ' 07:15:00', (string)$vence);
+check('Un viaje de mañana no está vencido', !ViajeService::vencio(['fec_via' => date('Y-m-d', strtotime('+1 day')), 'hor_sal_via' => '07:00:00', 'duracion_min' => 150]));
+check('Un viaje de mañana no salió',       !ViajeService::yaSalio(['fec_via' => date('Y-m-d', strtotime('+1 day')), 'hor_sal_via' => '07:00:00', 'duracion_min' => 150]));
+
+/* --- Ya debe vencer: salió hace 4 h con trayecto de 60 min --- */
+$hace4h = date('Y-m-d H:i:s', strtotime('-4 hours'));
+$v4 = [
+    'fec_via'     => date('Y-m-d', strtotime($hace4h)),
+    'hor_sal_via' => date('H:i:s', strtotime($hace4h)),
+    'duracion_min'=> 60,
+];
+check('Salido hace 4 h con trayecto de 60 min -> SÍ está vencido', ViajeService::vencio($v4));
+check('Un viaje de hace 1 h con trayecto de 60 min NO ha vencido',
+      !ViajeService::vencio(['fec_via' => date('Y-m-d', strtotime('-1 hour')), 'hor_sal_via' => date('H:i:s', strtotime('-1 hour')), 'duracion_min' => 60]));
+
+/* --- La duración explícita del viaje manda sobre la de la ruta --- */
+check('Si el viaje trae hor_lleg_via, esa manda',
+      ViajeService::duracionMin(['fec_via' => '2026-09-26', 'hor_sal_via' => '07:00:00', 'hor_lleg_via' => '09:30:00', 'duracion_min' => 150]) === 150);
+check('Si no hay nada, usa el defecto del sistema',
+      ViajeService::duracionMin(['fec_via' => '2026-09-26', 'hor_sal_via' => '07:00:00']) === Config::DURACION_VIAJE_MIN_POR_DEFECTO);
+
+/* --- Fases --- */
+check('Fase "programado" para un viaje de mañana',
+      ViajeService::fase(['fec_via' => date('Y-m-d', strtotime('+1 day')), 'hor_sal_via' => '07:00:00', 'duracion_min' => 60])['clave'] === 'programado');
+check('Fase "en_curso" para uno de hace 1 h con trayecto de 60 min',
+      ViajeService::fase(['fec_via' => date('Y-m-d', strtotime('-1 hour')), 'hor_sal_via' => date('H:i:s', strtotime('-1 hour')), 'duracion_min' => 60])['clave'] === 'en_curso');
+check('Fase "vencido" para uno de hace 4 h con trayecto de 60 min',
+      ViajeService::fase(['fec_via' => date('Y-m-d', strtotime('-4 hours')), 'hor_sal_via' => date('H:i:s', strtotime('-4 hours')), 'duracion_min' => 60])['clave'] === 'vencido');
+
+/* --- Sincronización real en la BD --- */
+if ($conductor && $vehiculo) {
+    // Se liberan los recursos (como en la sección 7)
+    Database::query("UPDATE usuario SET est_con_usu = 1 WHERE id_usu = ?", [(int)$conductor['id_usu']]);
+    Database::query("UPDATE vehiculo SET est_veh = 1 WHERE id_veh = ?", [(int)$vehiculo['id_veh']]);
+    $bloqueantes = Database::all(
+        "SELECT id_via, est_via FROM viaje WHERE est_via IN ('Programado','En curso') AND (id_usu_via = ? OR id_veh = ?)",
+        [(int)$conductor['id_usu'], (int)$vehiculo['id_veh']]
+    );
+    foreach ($bloqueantes as $vb) Database::query("UPDATE viaje SET est_via = 'Finalizado' WHERE id_via = ?", [(int)$vb['id_via']]);
+
+    $pasado = date('Y-m-d H:i:s', strtotime('-3 hours'));
+    // Se inserta directo porque la validación del formulario, correctamente,
+    // no permite programar una salida en el pasado. En producción estos datos
+    // serían de un viaje programado con antelación y ya transcurido.
+    $idVencido = Database::insert(
+        "INSERT INTO viaje (nom_via, id_rut_via, id_usu_via, id_veh, fec_via, hor_sal_via,
+                             val_via, cup_tot, cup_dis, est_via, salio)
+         VALUES ('Viaje de prueba vencido', ?, ?, ?, ?, ?, 5000, 20, 20, 'Programado', 0)",
+        [$idRutaD, (int)$conductor['id_usu'], (int)$vehiculo['id_veh'],
+         date('Y-m-d', strtotime($pasado)), date('H:i:s', strtotime($pasado))]
+    );
+    check('Viaje vencido insertado (hace 3 h, trayecto de 150 min)', $idVencido > 0);
+
+    $fresco = ViajeService::sincronizarEstado(true);
+    check('La sincronización cuenta el cierre automático', $fresco['cerrar'] >= 1, json_encode($fresco));
+    check('El viaje quedó Finalizado',
+        (string) Database::scalar("SELECT est_via FROM viaje WHERE id_via = ?", [$idVencido]) === Config::VIA_FINALIZADO);
+    check('salio = 1 tras la sincronización',
+        (int) Database::scalar("SELECT salio FROM viaje WHERE id_via = ?", [$idVencido]) === 1);
+    check('El conductor quedó LIBERADO al cerrar solo',
+        (int) Database::scalar("SELECT est_con_usu FROM usuario WHERE id_usu = ?", [(int)$conductor['id_usu']]) === Config::CON_DISPONIBLE);
+    check('No se puede cancelar un viaje ya vencido',
+        ViajeService::cancelar($idVencido, 'averia_unidad', 'Anotación perfectamente válida para el sistema.')['ok'] === false);
+
+    // Idempotencia: la segunda pasada no debe volver a cerrar nada
+    $segunda = ViajeService::sincronizarEstado(true);
+    check('La sincronización es idempotente', $segunda['cerrar'] === 0, json_encode($segunda));
+
+    Database::query("DELETE FROM viaje WHERE id_via = ?", [$idVencido]);
+
+    foreach ($bloqueantes as $vb) Database::query("UPDATE viaje SET est_via = ? WHERE id_via = ?", [$vb['est_via'], (int)$vb['id_via']]);
+    Database::query("UPDATE usuario SET est_con_usu = ? WHERE id_usu = ?", [$estadoConductorPrevio, (int)$conductor['id_usu']]);
+    Database::query("UPDATE vehiculo SET est_veh = ? WHERE id_veh = ?", [$estadoVehiculoPrevio, (int)$vehiculo['id_veh']]);
+} else {
+    echo "  (omitido: no hay conductor ni vehículo de prueba)\n";
+}
+
+RutaService::eliminar($idRutaD);
+
 /* -------------------------------------------------------------------------- */
 echo "\n" . str_repeat('=', 60) . "\n";
 echo " RESULTADO: {$ok} correctas, {$fallos} fallidas\n";

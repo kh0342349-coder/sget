@@ -1,0 +1,134 @@
+/* ==========================================================================
+   assets/css/07-transiciones.css
+   ------------------------------------------------------------------------------
+   TRANSICIONES ENTRE MÓDULOS
+   ------------------------------------------------------------------------------
+   Animación de entrada y salida al navegar dentro de la aplicación. Se activa
+   con `html.sget-navegando` (lo pone assets/js/sget-transicion.js).
+
+   Cadena de capas (de atrás hacia delante):
+     · body            velo de salida (fundido a color de marca)
+     · .sget-shell     contenido que se desliza y se atenúa
+     · .sget-sidebar   menú lateral que se retrasa slightly
+     · .sget-main      cuerpo principal (deslizamiento vertical leve)
+
+   Respeta `prefers-reduced-motion`: si el usuario pidió menos movimiento,
+   las transiciones se desactivan por completo.
+   ========================================================================== */
+
+/* -------------------------------------------------------------------------- */
+/* Estado inicial: el contenido entra                                          */
+/* -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+
+    .sget-shell,
+    .sget-shell .sget-main > *,
+    .sget-page-head,
+    .sget-card,
+    .sget-table-box,
+    .sget-grid > * {
+        animation: sget-entrada .42s cubic-bezier(.16, .84, .44, 1) both;
+    }
+
+    /* Escalonado: cada bloque aparece ligeramente después del anterior */
+    .sget-main > *:nth-child(1) { animation-delay: .02s; }
+    .sget-main > *:nth-child(2) { animation-delay: .06s; }
+    .sget-main > *:nth-child(3) { animation-delay: .10s; }
+    .sget-main > *:nth-child(4) { animation-delay: .14s; }
+    .sget-main > *:nth-child(5) { animation-delay: .18s; }
+    .sget-main > *:nth-child(6) { animation-delay: .22s; }
+
+    /* Las tarjetas dentro de una rejilla entran en cascada */
+    .sget-grid > *:nth-child(1) { animation-delay: .06s; }
+    .sget-grid > *:nth-child(2) { animation-delay: .09s; }
+    .sget-grid > *:nth-child(3) { animation-delay: .12s; }
+    .sget-grid > *:nth-child(4) { animation-delay: .15s; }
+    .sget-grid > *:nth-child(5) { animation-delay: .18s; }
+    .sget-grid > *:nth-child(6) { animation-delay: .21s; }
+    .sget-grid > *:nth-child(7) { animation-delay: .24s; }
+    .sget-grid > *:nth-child(8) { animation-delay: .27s; }
+    .sget-grid > *:nth-child(n+9) { animation-delay: .30s; }
+
+    @keyframes sget-entrada {
+        from { opacity: 0; transform: translate3d(0, 14px, 0); }
+        to   { opacity: 1; transform: none; }
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Estado de salida: antes de abandonar la página                               */
+/* -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+
+    html.sget-saliendo body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: var(--sget-z-confirm);
+        background: linear-gradient(135deg, rgba(2, 6, 23, .55), rgba(14, 165, 233, .35));
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        opacity: 0;
+        animation: sget-velo .34s ease forwards;
+    }
+
+    html.sget-saliendo .sget-shell {
+        animation: sget-salida-contenido .30s cubic-bezier(.4, 0, 1, 1) forwards;
+    }
+
+    html.sget-saliendo .sget-shell .sget-main > * {
+        animation: sget-salida-bloque .24s ease forwards;
+    }
+
+    html.sget-saliendo .sget-shell .sget-main > *:nth-child(1) { animation-delay: 0s; }
+    html.sget-saliendo .sget-shell .sget-main > *:nth-child(2) { animation-delay: .02s; }
+    html.sget-saliendo .sget-shell .sget-main > *:nth-child(3) { animation-delay: .04s; }
+    html.sget-saliendo .sget-shell .sget-main > *:nth-child(4) { animation-delay: .06s; }
+    html.sget-saliendo .sget-shell .sget-main > *:nth-child(n+5) { animation-delay: .08s; }
+
+    @keyframes sget-velo {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    @keyframes sget-salida-contenido {
+        from { opacity: 1; transform: none; }
+        to   { opacity: 0; transform: translate3d(0, -10px, 0); }
+    }
+
+    @keyframes sget-salida-bloque {
+        from { opacity: 1; transform: none; }
+        to   { opacity: 0; transform: translate3d(0, -8px, 0); }
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Indicador de progreso en la barra superior                                   */
+/* -------------------------------------------------------------------------- */
+.sget-barra-progreso {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 2px;
+    width: 0;
+    z-index: var(--sget-z-confirm);
+    background: linear-gradient(90deg, var(--sget-azul), var(--sget-morado));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--sget-azul) 70%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: width .3s ease, opacity .2s ease;
+}
+.sget-barra-progreso[data-visible="1"] { opacity: 1; }
+
+/* -------------------------------------------------------------------------- */
+/* Transición del encabezado (se desliza desde arriba)                          */
+/* -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+    .sget-shell .sget-header {
+        animation: sget-entrada-cabecera .45s cubic-bezier(.16, .84, .44, 1) both;
+    }
+    @keyframes sget-entrada-cabecera {
+        from { opacity: 0; transform: translate3d(0, -12px, 0); }
+        to   { opacity: 1; transform: none; }
+    }
+}

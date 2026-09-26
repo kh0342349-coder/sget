@@ -1,23 +1,46 @@
 <?php
-// Iniciar la sesión para poder acceder a ella y destruirla
-session_start();
+/**
+ * assets/cerrar.php
+ * -----------------------------------------------------------------------------
+ * CIERRE DE SESIÓN
+ * -----------------------------------------------------------------------------
+ * Registra el evento en la auditoría antes de destruir la sesión (si el
+ * usuario venía de un bloqueo por inactividad, el motivo queda explícito).
+ *
+ *   assets/cerrar.php                     → cierre manual
+ *   assets/cerrar.php?motivo=inactividad  → cierre forzado por inactividad
+ *   assets/cerrar.php?volver=Admin/rutas.php
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-// 1. Limpiar todas las variables de sesión
-$_SESSION = array();
+require_once dirname(__DIR__) . '/core/bootstrap.php';
 
-// 2. Destruir la cookie de sesión en el navegador si existe
-if (ini_get("session.use_cookies")) {
-    $params = session_get_cookie_params();
-    setcookie(session_name(), '', time() - 42000,
-        $params["path"], $params["domain"],
-        $params["secure"], $params["httponly"]
+$motivo = (string)($_GET['motivo'] ?? $_POST['motivo'] ?? 'manual');
+$motivos = [
+    'manual'        => 'Cierre de sesión voluntary.',
+    'inactividad'   => 'Cierre de sesión por inactividad: la contraseña no se confirmó a tiempo.',
+    'expirada'      => 'La sesión expiró por seguridad.',
+];
+
+$descripcion = $motivos[$motivo] ?? $motivos['manual'];
+
+if (Auth::estaLogueado()) {
+    Logger::registrar(
+        Database::pdo(),
+        'LOGOUT',
+        sprintf('%s Usuario: %s.', $descripcion, Auth::nombre())
     );
 }
 
-// 3. Destruir la sesión en el servidor
-session_destroy();
+// Destino permitido: solo rutas internas relativas, para no crear un
+// redirector abierto.
+$destino = (string)($_GET['volver'] ?? $_POST['volver'] ?? '');
+if ($destino === '' || !preg_match('#^[a-zA-Z0-9_\-]+\.php$#', basename($destino)) || str_contains($destino, '..')) {
+    $destino = 'index.php';
+}
 
-// 4. Redirigir al login (index.php que está un nivel arriba)
-header("Location: ../index.php");
-exit();
-?>
+Auth::cerrar();
+
+header('Location: ' . Config::basePath() . '/' . $destino);
+exit;

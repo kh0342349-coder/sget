@@ -96,6 +96,18 @@ final class Config
     /** Minutos de inactividad antes de bloquear la sesion. */
     public const MINUTOS_INACTIVIDAD = 15;
 
+    /** Segundos de gracia para escribir la contraseña antes de expirar. */
+    public const SEGUNDOS_GRACIA_INACTIVIDAD = 60;
+
+    /* ------------------------------------------------------------------ */
+    /* Duración de los viajes                                              */
+    /* ------------------------------------------------------------------ */
+    /** Minutos de trayecto por defecto si la ruta no define duración. */
+    public const DURACION_VIAJE_MIN_POR_DEFECTO = 120;
+
+    /** Minutos de margen antes de cerrar automáticamente un viaje vencido. */
+    public const MARGEN_CIERRE_AUTOMATICO_MIN = 15;
+
     /** Longitud minima (caracteres) de la anotacion obligatoria de cancelacion. */
     public const MIN_ANOTACION_CANCELACION = 15;
 

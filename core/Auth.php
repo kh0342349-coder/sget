@@ -154,16 +154,32 @@ final class Auth
             $minutos = Config::MINUTOS_INACTIVIDAD;
         }
 
-        $limite = $minutos * 60;
-        $ultimo = $_SESSION['ultimo_acceso'] ?? null;
+        $limite  = $minutos * 60;
+        $ultimo  = $_SESSION['ultimo_acceso'] ?? null;
+        $vence   = $ultimo !== null && (time() - (int) $ultimo) > $limite;
 
-        if ($ultimo !== null && (time() - (int) $ultimo) > $limite) {
-            $_SESSION['url_redirect']  = $_SERVER['REQUEST_URI'] ?? Config::basePath();
-            $_SESSION['sesion_bloqueada'] = true;
-            self::bloquear();
+        // Conserva el instante original del bloqueo para que recargar la
+        // página no reinicie el temporizador de 60 s del modal.
+        if ($vence && empty($_SESSION['inactividad_bloqueada_en'])) {
+            $_SESSION['inactividad_bloqueada_en'] = time();
         }
 
-        $_SESSION['ultimo_acceso'] = time();
+        if ($vence) {
+            $_SESSION['sesion_bloqueada'] = true;
+            $_SESSION['url_redirect']    = $_SERVER['REQUEST_URI'] ?? '';
+
+            // Una petición AJAX/JSON no puede mostrar un modal: se corta aquí.
+            if (self::peticionAjax()) {
+                self::bloquear();
+            }
+            // En navegación normal se continúa: el modal de inactividad que
+            // incluye includes/header.php bloquea la pantalla y pide la
+            // contraseña. Redirigir a un endpoint JSON sería inútil.
+        } else {
+            $_SESSION['ultimo_acceso'] = time();
+            unset($_SESSION['sesion_bloqueada']);
+        }
+
         self::$verificada = true;
     }
 
@@ -173,11 +189,69 @@ final class Auth
             self::json([
                 'status'   => 'bloqueado',
                 'mensaje'  => 'La sesion ha sido bloqueada por inactividad.',
-                'redirect' => Config::basePath() . '/desbloquear_sesion.php?inactivo=1',
+                'redirect' => Config::basePath() . '/index.php',
             ], 401);
         }
-        header('Location: ' . Config::basePath() . '/desbloquear_sesion.php?inactivo=1');
-        exit;
+        // Navegación normal: se marca y el modal hace el resto.
+        $_SESSION['sesion_bloqueada'] = true;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Desbloqueo por inactividad                                           */
+    /* ------------------------------------------------------------------ */
+
+    /** ¿La sesión está bloqueada en este momento? */
+    public static function estaBloqueada(): bool
+    {
+        return !empty($_SESSION['sesion_bloqueada']);
+    }
+
+    /**
+     * Comprueba la contraseña del usuario en sesión y desbloquea.
+     * Devuelve [bool $ok, string $mensaje].
+     */
+    public static function desbloquear(string $password): array
+    {
+        $password = trim($password);
+        if ($password === '') {
+            return [false, 'Por favor ingresa tu contraseña.'];
+        }
+
+        $id = self::id();
+        if ($id <= 0) {
+            self::cerrar();
+            return [false, 'La sesión expiró. Inicia sesión nuevamente.'];
+        }
+
+        $hash = Database::scalar("SELECT pass_usu FROM usuario WHERE id_usu = ?", [$id]);
+        if ($hash === null) {
+            return [false, 'No se encontró la cuenta. Inicia sesión nuevamente.'];
+        }
+
+        // Soporta cuentas heredadas en texto plano o con md5, y las nuevas en
+        // password_hash(). Al validar una legacy se migra al vuelo.
+        $ok = password_verify($password, (string)$hash)
+           || hash_equals((string)$hash, md5($password))
+           || hash_equals((string)$hash, $password);
+
+        if (!$ok) {
+            Logger::registrar(Database::pdo(), 'DESBLOQUEO_FALLIDO',
+                "Intento fallido de desbloqueo por inactividad del usuario #{$id}.");
+            return [false, 'Contraseña incorrecta. Inténtalo de nuevo.'];
+        }
+
+        if (!password_get_info((string)$hash)['algo']) {
+            Database::query("UPDATE usuario SET pass_usu = ? WHERE id_usu = ?",
+                [password_hash($password, PASSWORD_DEFAULT), $id]);
+        }
+
+        unset($_SESSION['sesion_bloqueada'], $_SESSION['inactividad_bloqueada_en'],
+              $_SESSION['inactividad_temporizador_inicia_en'], $_SESSION['inactividad_cierra_en']);
+        $_SESSION['ultimo_acceso'] = time();
+
+        Logger::registrar(Database::pdo(), 'DESBLOQUEO', "Sesión desbloqueada por el usuario #{$id}.");
+
+        return [true, 'Sesión desbloqueada correctamente.'];
     }
 
     /* ------------------------------------------------------------------ */

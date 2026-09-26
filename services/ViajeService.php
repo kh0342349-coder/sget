@@ -43,7 +43,7 @@ final class ViajeService
         if (!empty($filtros['conductor'])){ $where[] = 'v.id_usu_via = ?'; $params[] = (int)$filtros['conductor']; }
 
         $sql = "SELECT v.*,
-                       r.nom_rut, r.ori_rut, r.des_rut, r.dis_rut, r.img_rut, r.hora_salida AS hora_ruta,
+                       r.nom_rut, r.ori_rut, r.des_rut, r.dis_rut, r.img_rut, r.duracion_min,
                        u.nom_usu  AS conductor,
                        ve.pla_veh, ve.mode_veh, ve.cap_veh,
                        (SELECT COUNT(*) FROM reserva re WHERE re.id_via_res = v.id_via
@@ -61,7 +61,7 @@ final class ViajeService
     public static function porId(int $id): ?array
     {
         return Database::one(
-            "SELECT v.*, r.nom_rut, r.ori_rut, r.des_rut, r.img_rut, r.hora_salida AS hora_ruta,
+            "SELECT v.*, r.nom_rut, r.ori_rut, r.des_rut, r.img_rut, r.duracion_min,
                     u.nom_usu AS conductor, ve.pla_veh, ve.mode_veh
                FROM viaje v
                LEFT JOIN rutas r     ON r.id_rut  = v.id_rut_via
@@ -289,6 +289,7 @@ final class ViajeService
         }
 
         [$yaSalio, $instante] = Fecha::yaSalio($viaje['fec_via'], $viaje['hor_sal_via'], Config::TOLERANCIA_SALIDA_MIN);
+        $vencio = self::vencio($viaje);
 
         // --- Validacion de la anotacion segun el momento de la salida --------
         $motivo    = trim($motivo);
@@ -302,6 +303,14 @@ final class ViajeService
                 'Este viaje aún no sale (%s). Debes escribir una anotación de al menos %d caracteres explicando la cancelación; se enviará a los pasajeros.',
                 Fecha::legible($instante),
                 Config::MIN_ANOTACION_CANCELACION
+            )];
+        }
+
+        // Si ya venció la duración del trayecto, el viaje se cerró solo.
+        if ($vencio) {
+            return ['ok' => false, 'mensaje' => sprintf(
+                'El viaje #%d ya cumplió su duración de trayecto (terminó el %s) y se cerró automáticamente, por lo que ya no se puede cancelar.',
+                $idViaje, Fecha::legible(self::instanteVencimiento($viaje))
             )];
         }
 
@@ -394,32 +403,164 @@ final class ViajeService
     }
 
     /* ================================================================== */
-    /* Cierre automatico de viajes vencidos                                */
+    /* CICLO DE VIDA TEMPORAL: salida real, llegada esperada y vencimiento */
     /* ================================================================== */
 
     /**
-     * Cierra viajes cuya salida+hasta supero el plazo operativo.
-     * Ejecuta al cargar el panel de viajes; devuelve cuantos cerro.
+     * Duración del trayecto en minutos.
+     * Prioridad: la hora de llegada del viaje → la duración de la ruta →
+     * el valor por defecto del sistema. Nunca devuelve null ni 0.
+     */
+    public static function duracionMin(array $viaje): int
+    {
+        $salida  = Fecha::instanteSalida($viaje['fec_via'] ?? null, $viaje['hor_sal_via'] ?? null);
+        $llegada = Fecha::soloHora($viaje['hor_lleg_via'] ?? '');
+
+        if ($llegada !== '' && $salida !== null) {
+            $dif = (strtotime($llegada) - strtotime($salida)) / 60;
+            if ($dif > 0) return (int) round($dif);
+        }
+
+        if (isset($viaje['duracion_min']) && (int)$viaje['duracion_min'] > 0) {
+            return (int)$viaje['duracion_min'];
+        }
+
+        return Config::DURACION_VIAJE_MIN_POR_DEFECTO;
+    }
+
+    /**
+     * Instante en el que el viaje DEBERÍA haber terminado:
+     *     hora de salida + duración del trayecto (+ margen de cortesía).
+     *
+     * Sustituye al antiguo "24 horas después de la salida", que cerraba viajes
+     * a destiempo o los dejaba abiertos días enteros.
+     */
+    public static function instanteVencimiento(array $viaje, ?int $margenMin = null): ?string
+    {
+        $salida = Fecha::instanteSalida($viaje['fec_via'] ?? null, $viaje['hor_sal_via'] ?? null);
+        if ($salida === null) return null;
+
+        $margen = $margenMin ?? Config::MARGEN_CIERRE_AUTOMATICO_MIN;
+        $fin    = strtotime($salida) + (self::duracionMin($viaje) * 60) + ($margen * 60);
+
+        return date(Fecha::FMT_MYSQL, $fin);
+    }
+
+    /** ¿Ya pasó la hora de salida? */
+    public static function yaSalio(array $viaje): bool
+    {
+        $salida = Fecha::instanteSalida($viaje['fec_via'] ?? null, $viaje['hor_sal_via'] ?? null);
+        return $salida !== null && strtotime($salida) <= time();
+    }
+
+    /** ¿Ya se cumplió salida + duración? */
+    public static function vencio(array $viaje, ?int $margenMin = null): bool
+    {
+        $fin = self::instanteVencimiento($viaje, $margenMin);
+        return $fin !== null && strtotime($fin) <= time();
+    }
+
+    /** Fase legible del viaje para la interfaz. */
+    public static function fase(array $viaje): array
+    {
+        $salida = Fecha::instanteSalida($viaje['fec_via'] ?? null, $viaje['hor_sal_via'] ?? null);
+
+        if ($salida === null) {
+            return ['clave' => 'sin_fecha', 'etiqueta' => 'Sin fecha', 'clase' => 'sget-badge--neutro', 'icono' => 'fa-circle-question'];
+        }
+        if (!self::yaSalio($viaje)) {
+            return ['clave' => 'programado', 'etiqueta' => 'Programado', 'clase' => 'sget-badge--info', 'icono' => 'fa-calendar-check'];
+        }
+        if (self::vencio($viaje)) {
+            return ['clave' => 'vencido', 'etiqueta' => 'Vencido', 'clase' => 'sget-badge--aviso', 'icono' => 'fa-hourglass-end'];
+        }
+        return ['clave' => 'en_curso', 'etiqueta' => 'En curso', 'clase' => 'sget-badge--exito', 'icono' => 'fa-truck-fast'];
+    }
+
+    /* ================================================================== */
+    /* Sincronizacion automatica con el reloj                              */
+    /* ================================================================== */
+
+    /**
+     * Sincroniza el estado de los viajes abiertos con el reloj:
+     *   1. los que ya pasaron su hora de salida quedan «En curso» (salio = 1);
+     *   2. los que cumplieron salida + duración se cierran como «Finalizado»
+     *      y liberan conductor y vehículo.
+     *
+     * Es idempotente: se puede ejecutar en cada carga sin duplicar efectos.
+     *
+     * @return array{marcar:int, cerrar:int, viajes:array<int,int>}
+     */
+    public static function sincronizarEstado(bool $cierraAutomatico = true): array
+    {
+        $defecto = Config::DURACION_VIAJE_MIN_POR_DEFECTO;
+        $margen  = Config::MARGEN_CIERRE_AUTOMATICO_MIN;
+
+        $abiertos = Database::all(
+            "SELECT v.id_via, v.fec_via, v.hor_sal_via, v.hor_lleg_via, v.est_via, v.salio,
+                    v.id_usu_via, v.id_veh, v.nom_via,
+                    COALESCE(r.duracion_min, ?) AS duracion_min
+               FROM viaje v
+               LEFT JOIN rutas r ON r.id_rut = v.id_rut_via
+              WHERE v.est_via IN ('Programado', 'En curso')
+                AND v.fec_via IS NOT NULL
+                AND v.hor_sal_via IS NOT NULL",
+            [$defecto]
+        );
+
+        $marcados  = 0;
+        $cerrados  = [];
+        $idsMarcar = [];
+        $idsCerrar = [];
+
+        foreach ($abiertos as $v) {
+            $salio = self::yaSalio($v);
+
+            if ($salio) {
+                $marcados++;
+                if ((int)$v['salio'] === 0) {
+                    $idsMarcar[] = (int)$v['id_via'];
+                }
+                if ($v['est_via'] === Config::VIA_PROGRAMADO) {
+                    Database::query("UPDATE viaje SET est_via = ?, salio = 1 WHERE id_via = ?",
+                        [Config::VIA_EN_CURSO, (int)$v['id_via']]);
+                }
+            }
+
+            if ($cierraAutomatico && self::vencio($v, $margen)) {
+                $idsCerrar[] = (int)$v['id_via'];
+            }
+        }
+
+        if ($idsMarcar) {
+            Database::query(
+                'UPDATE viaje SET salio = 1 WHERE id_via IN (' . implode(',', array_map('intval', $idsMarcar)) . ')'
+            );
+        }
+
+        foreach ($idsCerrar as $id) {
+            $v = null;
+            foreach ($abiertos as $c) {
+                if ((int)$c['id_via'] === $id) { $v = $c; break; }
+            }
+            if (!$v) continue;
+
+            Database::query("UPDATE viaje SET est_via = ? WHERE id_via = ?", [Config::VIA_FINALIZADO, $id]);
+            self::_liberarConductor((int)$v['id_usu_via']);
+            self::_liberarVehiculo((int)($v['id_veh'] ?? 0));
+            $cerrados[] = $id;
+        }
+
+        return ['marcar' => $marcados, 'cerrar' => count($cerrados), 'viajes' => $cerrados];
+    }
+
+    /**
+     * Atajo legacy: devuelve cuántos viajes se cerraron automáticamente.
+     * @deprecated Usa sincronizarEstado()['cerrar'].
      */
     public static function cerrarVencidos(int $horas = 24): int
     {
-        $filas = Database::all(
-            "SELECT id_via, id_usu_via, id_veh
-               FROM viaje
-              WHERE est_via IN ('Programado','En curso')
-                AND fec_via IS NOT NULL
-                AND hor_sal_via IS NOT NULL
-                AND TIMESTAMP(fec_via, hor_sal_via) <= (NOW() - INTERVAL ? HOUR)",
-            [$horas]
-        );
-
-        foreach ($filas as $f) {
-            Database::query("UPDATE viaje SET est_via = ? WHERE id_via = ?", [Config::VIA_FINALIZADO, (int)$f['id_via']]);
-            self::_liberarConductor((int)$f['id_usu_via']);
-            self::_liberarVehiculo((int)($f['id_veh'] ?? 0));
-        }
-
-        return count($filas);
+        return self::sincronizarEstado(true)['cerrar'];
     }
 
     /* ================================================================== */

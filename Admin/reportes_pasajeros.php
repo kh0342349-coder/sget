@@ -1,7 +1,6 @@
 <?php
 session_start();
 include '../assets/conexion.php';
-require_once '../helpers/AuthHelper.php';
 
 // Seguridad
 if (!isset($_SESSION['rol']) || $_SESSION['rol'] != 1) {

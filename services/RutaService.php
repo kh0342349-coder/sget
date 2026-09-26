@@ -68,7 +68,8 @@ final class RutaService
             ->requerido('val_rut', 'Tarifa base')
             ->decimal('val_rut', 'La tarifa base', 1, 99999999)
             ->decimal('dis_rut', 'La distancia', 0, 99999)
-            ->hora('hora_salida', 'La hora de salida', false);
+            ->hora('hora_salida', 'La hora de salida', false)
+            ->entero('duracion_min', 'La duración del trayecto', 5, 2880);
 
         // Regla de negocio: origen y destino deben ser distintos
         $ori = trim((string)($post['ori_rut'] ?? ''));
@@ -83,6 +84,13 @@ final class RutaService
         if ($nom !== '' && self::existeNombre($nom, $id > 0 ? $id : null)) {
             $v->agrega('nom_rut', 'Ya existe una ruta registrada con ese nombre.');
         }
+
+        // Si la hora de llegada del viaje se deriva de la duración, avisar
+        $v->agregaSi(
+            (int)($post['duracion_min'] ?? 0) > 1440,
+            'duracion_min',
+            'Una duración mayor a 24 horas no corresponde a un trayecto terrestre. Revisa el valor.'
+        );
 
         return $v;
     }
@@ -101,14 +109,22 @@ final class RutaService
             return ['ok' => false, 'errores' => $validador->errores(), 'mensaje' => $validador->primerError()];
         }
 
-        $id    = (int)($post['id_rut'] ?? 0);
-        $ori   = trim((string)$post['ori_rut']);
-        $des   = trim((string)$post['des_rut']);
-        $nom   = trim((string)$post['nom_rut']);
-        $dis   = isset($post['dis_rut']) && $post['dis_rut'] !== '' ? (float)$post['dis_rut'] : null;
-        $val   = (float)$post['val_rut'];
-        $hora  = Fecha::hora($post['hora_salida'] ?? null, 'hora de salida', false);
+        $id     = (int)($post['id_rut'] ?? 0);
+        $ori    = trim((string)$post['ori_rut']);
+        $des    = trim((string)$post['des_rut']);
+        $nom    = trim((string)$post['nom_rut']);
+        $dis    = isset($post['dis_rut']) && $post['dis_rut'] !== '' ? (float)$post['dis_rut'] : null;
+        $val    = (float)$post['val_rut'];
+        $hora   = Fecha::hora($post['hora_salida'] ?? null, 'hora de salida', false);
         $estado = isset($post['estado']) ? (int)$post['estado'] : 1;
+
+        // Duración estimada del trayecto. Si no se envía, se estima a partir
+        // de la distancia asumiendo 45 km/h de velocidad media.
+        $duracion = (int)($post['duracion_min'] ?? 0);
+        if ($duracion <= 0) {
+            $duracion = self::estimarDuracion($dis);
+        }
+        $duracion = max(5, min(2880, $duracion));
 
         // --- Imagen (opcional) -------------------------------------------
         $imgActual = trim((string)($post['img_actual'] ?? ''));
@@ -131,12 +147,12 @@ final class RutaService
 
             if ($id > 0) {
                 $sql = "UPDATE rutas SET nom_rut = ?, ori_rut = ?, des_rut = ?, dis_rut = ?, val_rut = ?,
-                                           hora_salida = ?, estado = ?, img_rut = ? WHERE id_rut = ?";
-                Database::query($sql, [$nom, $ori, $des, $dis, $val, $hora, $estado, $img, $id]);
+                                           hora_salida = ?, duracion_min = ?, estado = ?, img_rut = ? WHERE id_rut = ?";
+                Database::query($sql, [$nom, $ori, $des, $dis, $val, $hora, $duracion, $estado, $img, $id]);
             } else {
-                $sql = "INSERT INTO rutas (nom_rut, ori_rut, des_rut, dis_rut, val_rut, hora_salida, estado, img_rut)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-                $id = Database::insert($sql, [$nom, $ori, $des, $dis, $val, $hora, $estado, $img]);
+                $sql = "INSERT INTO rutas (nom_rut, ori_rut, des_rut, dis_rut, val_rut, hora_salida, duracion_min, estado, img_rut)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $id = Database::insert($sql, [$nom, $ori, $des, $dis, $val, $hora, $duracion, $estado, $img]);
             }
 
             Database::commit();
@@ -150,10 +166,43 @@ final class RutaService
         Logger::registrar(
             Database::pdo(),
             $id > 0 && isset($post['__editando']) ? 'EDITAR_RUTA' : 'GUARDAR_RUTA',
-            sprintf('Ruta #%d «%s» (%s → %s) guardada por %s', $id, $nom, $ori, $des, Auth::nombre())
+            sprintf('Ruta #%d «%s» (%s → %s, %d min) guardada por %s', $id, $nom, $ori, $des, $duracion, Auth::nombre())
         );
 
         return ['ok' => true, 'id' => $id, 'mensaje' => $id > 0 ? 'Ruta actualizada correctamente.' : 'Ruta creada correctamente.'];
+    }
+
+    /**
+     * Estima la duración del trayecto a partir de la distancia.
+     * 45 km/h es una velocidad media prudente en carretera (incluye Dietary
+     * descansos, semáforos y zonas urbanas).
+     */
+    public static function estimarDuracion(?float $km): int
+    {
+        $km = (float)($km ?? 0);
+        if ($km <= 0) return Config::DURACION_VIAJE_MIN_POR_DEFECTO;
+        return (int) max(30, round(($km / 45) * 60));
+    }
+
+    /** Duración legible: "1 h 45 min", "2 h", "45 min". */
+    public static function duracionLegible($minutos): string
+    {
+        $min = (int) $minutos;
+        if ($min <= 0) return 'Sin definir';
+        $h = intdiv($min, 60);
+        $m = $min % 60;
+
+        if ($h === 0) return $m . ' min';
+        if ($m === 0) return $h . ' h';
+        return $h . ' h ' . $m . ' min';
+    }
+
+    /** Hora de llegada prevista a partir de una salida y la duración de la ruta. */
+    public static function llegadaPrevista(string $salidaIso, $minutos): ?string
+    {
+        $ts = strtotime($salidaIso);
+        if ($ts === false) return null;
+        return date(Fecha::FMT_MYSQL, $ts + ((int)$minutos * 60));
     }
 
     public static function cambiarEstado(int $id, int $estado): bool

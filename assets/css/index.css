@@ -7,11 +7,50 @@
    identidad (vidrio, degradados, portada) y así los estilos del panel interno
    (`01-base.css` … `06-responsive.css`) no se mezclan con los del sitio público.
 
-   Depende de 01-base.css (variables, tipografía y reset).
+   Depende de 01-base.css (reset, variables y tipografía) y de 04-modales.css
+   (comportamiento de overlays, modales y drawers).
+
+   ─────────────────────────────────────────────────────────────────────────
+   REGLA DE ORO DE ESTE ARCHIVO
+   Sobre los contenedores que el marcado controla con utilidades de Tailwind
+   (`hidden`, `flex`) NO se declara `display`. Si se declara, gana o pierde
+   según el orden de carga y los modales/nav quedan invisibles pero presentes,
+   bloqueando la página con un overlay transparente.
+
+   La visibilidad se gobierna siempre con atributos:
+       data-sget-capa + data-abierto="1"  →  modales (assets/js/sget-modal.js)
+       data-abierto="1"                   →  menú móvil
    ========================================================================== */
 
 @import url('01-base.css');
 @import url('04-modales.css');
+
+/* -------------------------------------------------------------------------- */
+/* Alias de las variables heredadas                                            */
+/* -------------------------------------------------------------------------- */
+/* El marcado antiguo de la landing (.hero-section, .modal-isla-card, …) usa
+   nombres de variable que venían de css/style.css. Se conservan como alias de
+   los nuevos tokens para poder migrar el HTML gradualmente sin romper nada. */
+:root,
+html {
+    --bg-principal:  var(--sget-bg);
+    --bg-tarjeta:    var(--sget-superficie);
+    --color-texto:   var(--sget-texto);
+    --color-mutado:  var(--sget-texto-suave);
+    --neon-azul:     var(--sget-azul);
+    --border-color:  var(--sget-borde);
+    --sombra-tarjeta: var(--sget-sombra-fuerte);
+}
+
+html.dark {
+    --bg-principal:  var(--sget-bg-oscuro);
+    --bg-tarjeta:    var(--sget-superficie-osc);
+    --color-texto:   var(--sget-texto-osc);
+    --color-mutado:  var(--sget-texto-suave-osc);
+    --neon-azul:     #38bdf8;
+    --border-color:  var(--sget-borde-osc);
+    --sombra-tarjeta: 0 20px 50px rgba(0, 0, 0, .7), 0 0 30px rgba(56, 189, 248, .08);
+}
 
 /* -------------------------------------------------------------------------- */
 /* Portada                                                                    */
@@ -47,11 +86,19 @@
     line-height: 1.05;
     letter-spacing: -.03em;
 }
+
 .landing-hero__bajada {
     font-size: clamp(.95rem, 2.2vw, 1.125rem);
     line-height: 1.65;
     color: #cbd5e1;
     max-width: 60ch;
+}
+
+/* La portada heredada se apoya en las variables de arriba */
+.hero-section {
+    background-color: var(--bg-principal);
+    color: var(--color-texto);
+    transition: background-color var(--sget-transicion), color var(--sget-transicion);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -67,6 +114,7 @@
     text-align: center;
     margin-bottom: .5rem;
 }
+
 .landing-subtitle {
     text-align: center;
     color: var(--sget-texto-suave);
@@ -87,6 +135,7 @@
     box-shadow: var(--sget-sombra);
     transition: transform var(--sget-transicion), border-color var(--sget-transicion), box-shadow var(--sget-transicion);
 }
+
 .card-glass.glow-hover:hover {
     transform: translateY(-4px);
     border-color: color-mix(in srgb, var(--sget-azul) 55%, transparent);
@@ -107,6 +156,7 @@
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
     gap: 1.5rem;
 }
+
 .landing-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(50%, 8rem), 1fr));
@@ -117,11 +167,12 @@
 /* -------------------------------------------------------------------------- */
 /* Cabecera y navegación (móvil)                                              */
 /* -------------------------------------------------------------------------- */
+/* Sin `display`: la visibilidad base la controla Tailwind (`hidden lg:flex`). */
 .landing-nav {
-    display: flex;
     align-items: center;
     gap: .25rem;
 }
+
 .landing-nav__link {
     padding: .5rem 1rem;
     border-radius: 999px;
@@ -134,71 +185,61 @@
 .landing-nav__link:hover { background: var(--sget-superficie-2); color: var(--sget-texto); }
 .landing-nav__link[aria-current="page"] { background: var(--sget-azul); color: #fff; }
 
-/* Botón hamburguesa: solo visible en pantallas pequeñas */
-.landing-burger { display: none; }
+/* Botón hamburguesa: visible solo en pantallas pequeñas */
+.landing-burger {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--sget-radio-sm);
+    background: var(--sget-superficie-2);
+    border: 1px solid var(--sget-borde);
+    color: var(--sget-texto);
+    cursor: pointer;
+}
 
 @media (max-width: 1023px) {
-    .landing-burger {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 2.5rem;
-        height: 2.5rem;
-        border-radius: var(--sget-radio-sm);
-        background: var(--sget-superficie-2);
-        border: 1px solid var(--sget-borde);
-    }
+    .landing-burger { display: inline-flex; }
+
+    /* Menú desplegable. `data-abierto="1"` gana en especificidad (0,2,0) a la
+       utilidad `hidden` de Tailwind (0,1,0), así que el intercambio funciona
+       sin depender del orden de carga de las hojas de estilo. */
     .landing-nav {
         position: absolute;
         top: 100%;
         left: 0;
         right: 0;
-        flex-direction: column;
-        align-items: stretch;
         gap: .25rem;
         padding: .75rem;
         background: var(--sget-superficie);
         border: 1px solid var(--sget-borde);
         border-radius: var(--sget-radio);
         box-shadow: var(--sget-sombra-fuerte);
-        /* El menú móvil usa display, no opacity, para no capturar clics */
-        display: none;
     }
-    .landing-nav[data-abierto="1"] { display: flex; }
+    .landing-nav[data-abierto="1"] { display: flex; flex-direction: column; align-items: stretch; }
     .landing-nav__link { text-align: left; padding: .75rem 1rem; }
 }
 
 /* -------------------------------------------------------------------------- */
-/* Modales del sitio público (login, registro, política)                      */
+/* MODALES DEL SITIO PÚBLICO (login, registro, política, cookies)               */
 /* -------------------------------------------------------------------------- */
+/* El contenedor NO declara `display` ni `transform`: de eso se encarga
+   `.sget-modal-wrap` / `.sget-modal` (04-modales.css), y la visibilidad la
+   fija el motor común con `data-abierto`. */
 .modal-isla-container {
-    position: fixed;
-    inset: 0;
-    z-index: var(--sget-z-modal);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    background: rgba(2, 6, 23, .8);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: rgba(2, 6, 23, .78);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
 }
+
 .modal-isla-card {
-    width: 100%;
-    max-width: 34rem;
-    max-height: min(85dvh, 100%);
-    display: flex;
-    flex-direction: column;
-    background: var(--sget-superficie);
-    border: 1px solid var(--sget-borde);
-    border-radius: var(--sget-radio-lg);
-    box-shadow: var(--sget-sombra-fuerte);
-    overflow: hidden;
-    transform: scale(.95);
-    opacity: 0;
-    transition: transform .28s cubic-bezier(.2, .9, .3, 1.15), opacity .28s ease;
+    background-color: var(--bg-tarjeta);
+    border: 1px solid var(--border-color);
+    color: var(--color-texto);
+    box-shadow: var(--sombra-tarjeta);
+    transition: background-color var(--sget-transicion), border-color var(--sget-transicion);
 }
-.modal-isla-container[data-abierto="1"] .modal-isla-card { transform: none; opacity: 1; }
 
 /* -------------------------------------------------------------------------- */
 /* Responsive general                                                          */
@@ -207,10 +248,11 @@
     .landing-hero { padding: 5rem 0 3.5rem; }
     .landing-section { padding: 2.75rem 0; }
     .card-glass { border-radius: var(--sget-radio); }
-    /* Los campos de formulario no deben provocar zoom en iOS */
-    .modal-isla-card input, .modal-isla-card select, .modal-isla-card textarea { font-size: 1rem; }
-    /* El modal ocupa casi toda la pantalla en móvil */
-    .modal-isla-card { max-height: 92dvh; }
+
+    /* Los campos no deben provocar zoom automático en iOS */
+    .modal-isla-card input,
+    .modal-isla-card select,
+    .modal-isla-card textarea { font-size: 1rem; }
 }
 
 @media (max-width: 400px) {

@@ -37,8 +37,14 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
             </a>
         </div>
 
+        <!-- BOTÓN HAMBURGUESA (solo móvil) -->
+        <button type="button" data-sget-burger aria-label="Abrir menú" aria-expanded="false"
+                class="landing-burger ml-auto lg:hidden text-slate-700 dark:text-slate-200">
+            <i class="fas fa-bars text-sm"></i>
+        </button>
+
         <!-- ISLA FLOTANTE DE NAVEGACIÓN (CENTRO) -->
-        <nav class="hidden lg:flex items-center gap-1 bg-slate-100/60 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 p-1.5 rounded-full shadow-inner text-xs font-medium">
+        <nav class="landing-nav hidden lg:flex items-center gap-1 bg-slate-100/60 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 p-1.5 rounded-full shadow-inner text-xs font-medium">
             <a href="index.php#inicio" class="px-5 py-2 rounded-full transition-all duration-200 bg-sky-500 text-white font-bold shadow-sm hover:bg-sky-400">
                 Inicio
             </a>
@@ -73,10 +79,10 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
             <!-- BOTONES DE INICIO Y REGISTRO -->
             <?php if (!$estaAutenticado): ?>
                 <div class="flex items-center gap-2">
-                    <button type="button" onclick="abrirPanel('panelLogin')" class="px-4 py-2 rounded-full text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100/70 dark:bg-slate-800/70 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer">
+                    <button type="button" data-sget-modal="panelLogin" class="px-4 py-2 rounded-full text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100/70 dark:bg-slate-800/70 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer">
                         Iniciar Sesión
                     </button>
-                    <button type="button" onclick="abrirPanel('panelRegistro')" class="px-4 py-2 rounded-full text-xs font-extrabold bg-amber-400 text-slate-950 hover:bg-amber-300 transition-all cursor-pointer shadow-md hover:shadow-lg">
+                    <button type="button" data-sget-modal="panelRegistro" class="px-4 py-2 rounded-full text-xs font-extrabold bg-amber-400 text-slate-950 hover:bg-amber-300 transition-all cursor-pointer shadow-md hover:shadow-lg">
                         Registrarse
                     </button>
                 </div>
@@ -109,6 +115,9 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
     document.documentElement.setAttribute('data-language', '<?= htmlspecialchars($idiomaActual, ENT_QUOTES, 'UTF-8') ?>');
 </script>
 <script src="js/i18n.js?v=20260908-1"></script>
+
+<!-- Motor común de modales: el MISMO que usa el panel interno -->
+<script src="assets/js/sget-modal.js?v=<?= @filemtime('assets/js/sget-modal.js') ?: '1' ?>"></script>
 
 <!-- SCRIPT DE MANEJO DE TEMA -->
 <script>

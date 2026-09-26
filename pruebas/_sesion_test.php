@@ -40,3 +40,17 @@ $_SESSION['sget_idioma']    = 'es';
 
 header('Content-Type: text/plain; charset=utf-8');
 echo 'sesion de prueba lista (rol ' . $_SESSION['rol'] . ')';
+
+// Modo "ir a": establece la sesión y redirige a la página indicada.
+// Permite abrir páginas protegidas en el navegador sin cookies por adelantado.
+//   pruebas/_sesion_test.php?rol=1&ir=Admin/logs.php
+$ir = (string)($_GET['ir'] ?? '');
+if ($ir !== '' && !preg_match('#^[a-zA-Z0-9_\-./?=&]+$#', $ir)) {
+    http_response_code(400);
+    exit('Destino no permitido.');
+}
+if ($ir !== '') {
+    // Destino relativo a la raíz de la aplicación
+    header('Location: /' . ltrim($ir, '/'), true, 302);
+    exit;
+}

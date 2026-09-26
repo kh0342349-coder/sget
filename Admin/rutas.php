@@ -40,36 +40,7 @@ $activa = count(array_filter($rutas, fn($r) => (int)($r['estado'] ?? 1) === 1));
 $tituloPagina = 'Gestión de Rutas';
 include __DIR__ . '/../views/partials/head.php';
 ?>
-<<<<<<< Updated upstream
-<!DOCTYPE html>
-<html lang="es" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SGET - Gestión de Rutas</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="style_admin.css">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        'neon-azul': '#38bdf8',
-                        'neon-morado': '#a855f7'
-                    }
-                }
-            }
-        }
-    </script>
-</head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
-    
-    <?php include '../includes/sidebar.php'; ?>
-=======
 <?php include __DIR__ . '/../includes/sidebar.php'; ?>
->>>>>>> Stashed changes
 
 <div class="sget-shell">
     <?php include __DIR__ . '/../includes/header.php'; ?>

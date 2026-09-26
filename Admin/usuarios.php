@@ -32,157 +32,6 @@ $totales = [
 $totalUsuarios = array_sum($totales);
 $miId          = Auth::id();
 
-<<<<<<< Updated upstream
-// Consulta general de usuarios
-$query = "SELECT num_doc_usu, tip_doc_usu, nom_usu, corre_usu, id_rol_usu, estado FROM usuario";
-$resultado = $conexion->query($query);
-
-// Arrays para organizar la vista
-$admins = []; $conductores = []; $pasajeros = []; $desactivados = []; 
-
-if ($resultado) {
-    while ($row = $resultado->fetch_assoc()) {
-        if (isset($row['estado']) && $row['estado'] == 0) {
-            $desactivados[] = $row;
-        } else {
-            if ($row['id_rol_usu'] == 1) $admins[] = $row;
-            elseif ($row['id_rol_usu'] == 2) $conductores[] = $row;
-            elseif ($row['id_rol_usu'] == 3) $pasajeros[] = $row;
-        }
-    }
-}
-
-$totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + count($desactivados);
-?>
-<!DOCTYPE html>
-<html lang="es" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SGET - Administración de Usuarios</title>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="style_admin.css">
-    
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        'neon-azul': '#38bdf8',
-                        'neon-morado': '#a855f7'
-                    }
-                }
-            }
-        }
-    </script>
-</head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
-    <!-- BARRA LATERAL -->
-    <?php include '../includes/sidebar.php'; ?>
-
-    <!-- CONTENEDOR PRINCIPAL ALINEADO -->
-    <div id="main-content-wrapper" class="ml-72 flex flex-col min-h-screen flex-1 transition-all duration-300 min-w-0">
-        
-        <!-- HEADER REUTILIZABLE -->
-        <?php include '../includes/header.php'; ?>
-
-        <!-- CONTENIDO PRINCIPAL -->
-        <main class="space-y-8 flex-grow pb-12 relative z-10 p-8 max-w-[1600px] w-auto mx-auto w-full">
-            
-            <!-- ENCABEZADO, AYUDA Y BOTÓN AGREGAR -->
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 dark:bg-white/[0.02] p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-md">
-                <div class="flex items-center gap-3">
-                    <div>
-                        <div class="flex items-center gap-2.5">
-                            <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Administración de Usuarios</h1>
-                            
-                            <!-- BOTÓN DE AYUDA DEL SISTEMA -->
-                            <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
-                                <i class="fas fa-question text-[10px]"></i>
-                            </button>
-                        </div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Visualice, registre, edite y controle el estado operativo del personal en SGET.</p>
-                    </div>
-                </div>
-                
-                <div class="flex items-center gap-3 w-full md:w-auto">
-                    <!-- Buscador Rápido -->
-                    <div class="relative w-full md:w-64">
-                        <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                        <input type="text" id="inputBuscadorLive" onkeyup="filtrarTablaLocal()" placeholder="Buscar documento, nombre..." data-i18n-placeholder-es="Buscar documento, nombre..." data-i18n-placeholder-en="Search by document or name..." 
-                               class="w-full bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-slate-800 dark:text-white focus:outline-none focus:border-sky-400 transition-all shadow-sm">
-                    </div>
-
-                    <button onclick="abrirModalCrear()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-sky-500/20 hover:opacity-90 transition-all cursor-pointer whitespace-nowrap">
-                        <i class="fas fa-user-plus text-sm"></i> Nuevo Usuario
-                    </button>
-                </div>
-            </div>
-
-            <!-- TARJETAS MÉTRICAS RESUMEN -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <div class="bg-white dark:bg-[#121826] p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl flex items-center gap-4">
-                    <div class="w-12 h-12 bg-red-500/10 text-red-400 rounded-2xl flex items-center justify-center font-bold text-lg border border-red-500/20"><i class="fas fa-user-shield"></i></div>
-                    <div>
-                        <p class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Admins</p>
-                        <p class="text-xl font-black text-slate-900 dark:text-white mt-0.5 font-mono"><?php echo count($admins); ?></p>
-                    </div>
-                </div>
-                <div class="bg-white dark:bg-[#121826] p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl flex items-center gap-4">
-                    <div class="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center font-bold text-lg border border-emerald-500/20"><i class="fas fa-id-card"></i></div>
-                    <div>
-                        <p class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Conductores</p>
-                        <p class="text-xl font-black text-slate-900 dark:text-white mt-0.5 font-mono"><?php echo count($conductores); ?></p>
-                    </div>
-                </div>
-                <div class="bg-white dark:bg-[#121826] p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl flex items-center gap-4">
-                    <div class="w-12 h-12 bg-sky-500/10 text-sky-400 rounded-2xl flex items-center justify-center font-bold text-lg border border-sky-500/20"><i class="fas fa-walking"></i></div>
-                    <div>
-                        <p class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Pasajeros</p>
-                        <p class="text-xl font-black text-slate-900 dark:text-white mt-0.5 font-mono"><?php echo count($pasajeros); ?></p>
-                    </div>
-                </div>
-                <div class="bg-white dark:bg-[#121826] p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl flex items-center gap-4">
-                    <div class="w-12 h-12 bg-slate-500/10 text-slate-400 rounded-2xl flex items-center justify-center font-bold text-lg border border-slate-500/20"><i class="fas fa-users"></i></div>
-                    <div>
-                        <p class="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Total Usuarios</p>
-                        <p class="text-xl font-black text-slate-900 dark:text-white mt-0.5 font-mono"><?php echo $totalUsuarios; ?></p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SISTEMA DE PESTAÑAS (TABS) -->
-            <div class="flex flex-wrap gap-2 bg-white dark:bg-[#121826] p-2 rounded-2xl border border-slate-200 dark:border-white/10 w-fit shadow-md">
-                <button onclick="cambiarPestana('tab-admins')" id="btn-tab-admins" class="pestana-btn px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md">
-                    <i class="fas fa-user-shield text-xs"></i> Administradores (<?php echo count($admins); ?>)
-                </button>
-                <button onclick="cambiarPestana('tab-conductores')" id="btn-tab-conductores" class="pestana-btn px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 text-slate-400 hover:text-white">
-                    <i class="fas fa-id-card text-xs"></i> Conductores (<?php echo count($conductores); ?>)
-                </button>
-                <button onclick="cambiarPestana('tab-pasajeros')" id="btn-tab-pasajeros" class="pestana-btn px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 text-slate-400 hover:text-white">
-                    <i class="fas fa-walking text-xs"></i> Pasajeros (<?php echo count($pasajeros); ?>)
-                </button>
-                <button onclick="cambiarPestana('tab-desactivados')" id="btn-tab-desactivados" class="pestana-btn px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 text-slate-400 hover:text-red-400">
-                    <i class="fas fa-user-slash text-xs"></i> Desactivados (<?php echo count($desactivados); ?>)
-                </button>
-            </div>
-
-            <!-- CONTENEDOR DE SECCIONES (TABS) -->
-            <div id="contenedor-pestanas">
-                
-                <?php 
-                $secciones = [
-                    'tab-admins' => ['data' => $admins, 'visible' => true],
-                    'tab-conductores' => ['data' => $conductores, 'visible' => false],
-                    'tab-pasajeros' => ['data' => $pasajeros, 'visible' => false],
-                    'tab-desactivados' => ['data' => $desactivados, 'visible' => false]
-                ];
-
-                foreach ($secciones as $idTab => $s): 
-=======
 /** Dibuja una tabla de usuarios para una sección. */
 $tablaUsuarios = function (array $usuarios, bool $mostrarEstadoConductor = false) use ($miId): void {
     if (empty($usuarios)): ?>
@@ -220,7 +69,6 @@ $tablaUsuarios = function (array $usuarios, bool $mostrarEstadoConductor = false
                         'estado'      => (int)$u['estado'],
                         'titulo'      => 'Editar: ' . $u['nom_usu'],
                     ];
->>>>>>> Stashed changes
                 ?>
                     <tr data-sget-fila>
                         <td data-label="Documento">
@@ -350,7 +198,6 @@ include __DIR__ . '/../views/partials/head.php';
 <?php include __DIR__ . '/../views/modals/usuario.php'; ?>
 
 <script>
-    window.__MOTIVOS_VIAJE__ = window.__MOTIVOS_VIAJE__ || [];
     document.addEventListener('DOMContentLoaded', function () {
         SGETCRUD.atajoBusqueda('buscarUsuario');
         // La búsqueda recorre TODAS las pestañas, no solo la visible

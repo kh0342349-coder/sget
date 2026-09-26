@@ -4,12 +4,11 @@ session_start();
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../assets/conexion.php';
-require_once __DIR__ . '/../helpers/AuthHelper.php';
 
 $idAdmin = $_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 1;
 
 // Validación flexible de permisos para el admin
-if (!AuthHelper::tienePermiso($conexion, $idAdmin, 'gestionar_permisos')) {
+if (!Auth::tieneAcceso('gestionar_permisos')) {
     // Si no tiene el permiso explícito, verificamos si al menos es Rol 1 para evitar bloqueos propios
     $resAdminCheck = mysqli_query($conexion, "SELECT id_rol_usu FROM usuario WHERE id_usu = " . intval($idAdmin));
     $rowAdmin = mysqli_fetch_assoc($resAdminCheck);

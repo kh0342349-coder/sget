@@ -60,9 +60,9 @@
             opciones = opciones || {};
             var datos = typeof opciones.datos === 'object' && opciones.datos ? opciones.datos : null;
 
-            if (el.dataset.previo === undefined || datos) {
-                el.dataset.previo = el.innerHTML;   // respaldo para restaurar
-            }
+            // NOTA: no se guarda ni restaura `innerHTML`. Los diálogos se
+            // rellenan SIEMPRE con `datos` al abrirse, y restaurar el HTML
+            // previo pisaba lo que el usuario ya había escrito.
             if (datos) { this._poblar(el, datos); }
 
             el.dataset.abierto = '1';
@@ -82,16 +82,12 @@
             return el;
         },
 
-        cerrar: function (id, restaurar) {
+        cerrar: function (id) {
             var el = typeof id === 'string' ? this._porId(id) : id;
             if (!el) return;
             el.dataset.abierto = '0';
             el.setAttribute('aria-hidden', 'true');
 
-            if (restaurar !== false && el.dataset.previo !== undefined) {
-                el.innerHTML = el.dataset.previo;
-            }
-            delete el.dataset.previo;
 
             var i = this.pila.indexOf(el.id);
             if (i > -1) this.pila.splice(i, 1);
@@ -176,10 +172,14 @@
                     nodo.className = nodo.className.replace(/\bsget-badge--\S+/g, '').trim() + ' ' + valor;
                 });
 
-                // 5) data-sget-mostrar="nombre:0|1" → show/hide
+                // 5) data-sget-mostrar="nombre:0|1" → muestra/oculta
+                //    Se alterna `style.display` porque el layout depende de
+                //    Tailwind (flex/grid) y `hidden` podría perder specificity.
                 el.querySelectorAll('[data-sget-mostrar="' + campo + '"]').forEach(function (nodo) {
                     var flag = String(valor);
-                    nodo.hidden = (flag === '0' || flag === '' || flag === 'false');
+                    var visible = !(flag === '0' || flag === '' || flag === 'false');
+                    nodo.style.display = visible ? '' : 'none';
+                    nodo.hidden = !visible;
                 });
             });
         },

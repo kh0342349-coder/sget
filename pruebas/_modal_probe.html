@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_modal_probe.html
+    -----------------------------------------------------------------------------
+    Sonda de navegador REAL. Carga index.php en un iframe del mismo origen,
+    llama a abrirPanel()/cerrarPanel() y mide con getComputedStyle lo que el
+    usuario ve de verdad: display, opacidad, tamaño y si el overlay bloquea la
+    página cuando debe estar cerrado.
+
+    Se ejecuta con Chrome headless --dump-dom y se parsea desde
+    pruebas/modal-visual.js. No forma parte de la aplicación.
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda de modales</title>
+    <style>body{font:13px monospace}#resultado{white-space:pre-wrap}iframe{width:1280px;height:900px;border:1px solid #ccc}</style>
+</head>
+<body>
+<div id="resultado">ejecutando…</div>
+<iframe id="marco" src="../index.php"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+
+function anotar(ok, titulo, detalle) {
+    if (!ok) fallos++;
+    salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + titulo + (detalle ? ' | ' + detalle : ''));
+}
+function pintar() {
+    document.getElementById('resultado').textContent =
+        'MODAL_PROBE_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nMODAL_PROBE_END';
+}
+
+/* Las líneas INFO solo son de diagnóstico: no cuentan como resultado. */
+function info(t) { salida.push('INFO  | ' + t); }
+
+function medir(doc, id) {
+    const el = doc.getElementById(id);
+    if (!el) return null;
+    const cs = doc.defaultView.getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    const card = el.querySelector('[data-sget-panel]');
+    const cr = card ? card.getBoundingClientRect() : null;
+    return {
+        abierto: el.dataset.abierto === '1',
+        display: cs.display,
+        opacity: parseFloat(cs.opacity),
+        pointerEvents: cs.pointerEvents,
+        zIndex: cs.zIndex,
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+        cardW: cr ? Math.round(cr.width) : 0,
+        cardH: cr ? Math.round(cr.height) : 0,
+        color: card ? doc.defaultView.getComputedStyle(card).backgroundColor : '',
+        transform: card ? doc.defaultView.getComputedStyle(card).transform : '',
+    };
+}
+
+/* El estado real lo marca el atributo `data-abierto`, no la opacidad: bajo
+   tiempo virtual del navegador las transiciones CSS no avanzan, así que medir
+   `opacity` daría falsos negativos justo en el cierre. */
+function visible(m) {
+    return !!m && m.abierto && m.display !== 'none' && m.w > 200 && m.h > 100;
+}
+function cerrado(m) {
+    return !!m && !m.abierto;
+}
+
+document.getElementById('marco').addEventListener('load', function () {
+    const doc  = this.contentDocument;
+    const win  = this.contentWindow;
+
+    // Los estilos del iframe deben haber aplicado
+    setTimeout(function () {
+
+        /* ---------------- ESTADO INICIAL: todo cerrado ---------------- */
+        ['panelLogin', 'panelRegistro', 'panelPolitica', 'panelConfigCookies'].forEach(function (id) {
+            const m = medir(doc, id);
+            anotar(m !== null, id + ' existe en el iframe', '');
+            anotar(cerrado(m), id + ' arranca CERRADO (no bloquea la página)',
+                m ? 'display=' + m.display + ' opacity=' + m.opacity + ' ' + m.w + 'x' + m.h : 'no encontrado');
+            anotar(m && m.pointerEvents === 'none',
+                id + ' no intercepta clics cuando está cerrado',
+                m ? 'pointer-events=' + m.pointerEvents : '');
+        });
+
+        /* ---------------- ABRIR LOGIN ---------------- */
+        doc.defaultView.abrirPanel('panelLogin');
+        setTimeout(function () {
+            const m = medir(doc, 'panelLogin');
+            anotar(visible(m), 'abrirPanel("panelLogin") hace visible el modal',
+                m ? 'abierto=' + m.abierto + ' ' + m.w + 'x' + m.h : 'no encontrado');
+            anotar(m && m.cardW > 250 && m.cardW < 700, 'el cuadro tiene ancho de formulario', m ? m.cardW + 'px' : '');
+            anotar(m && m.cardH > 200, 'el cuadro tiene alto suficiente', m ? m.cardH + 'px' : '');
+            anotar(m && m.pointerEvents !== 'none', 'el modal acepta clics cuando está abierto', m ? m.pointerEvents : '');
+            anotar(m && m.zIndex !== 'auto' && parseInt(m.zIndex, 10) >= 50,
+                'el overlay queda por encima de la página', m ? 'z-index=' + m.zIndex : '');
+            anotar(m && m.color !== '' && m.color !== 'rgba(0, 0, 0, 0)',
+                'el cuadro tiene fondo (no es transparente)', m ? m.color : '');
+            anotar(doc.body.classList.contains('sget-modal-abierto'),
+                'se bloquea el scroll del body al abrir', doc.body.className);
+
+            // Foco dentro del modal (accesibilidad)
+            const activo = doc.activeElement;
+            anotar(activo && doc.getElementById('panelLogin').contains(activo),
+                'el foco entra en el modal', activo ? (activo.id || activo.tagName) : 'null');
+
+            /* ---------------- CAMBIAR A REGISTRO ---------------- */
+            doc.defaultView.cambiarAPanel('panelRegistro');
+            setTimeout(function () {
+                const mr = medir(doc, 'panelRegistro');
+                const ml = medir(doc, 'panelLogin');
+                anotar(visible(mr), 'cambiarAPanel("panelRegistro") abre el registro',
+                    mr ? 'display=' + mr.display + ' opacity=' + mr.opacity : 'no encontrado');
+                anotar(cerrado(ml), 'al cambiar, el modal de login se cierra solo',
+                    ml ? 'abierto=' + ml.abierto : '');
+
+                /* ---------------- CERRAR CON ESC ---------------- */
+                anotar(typeof win.SGETModal !== 'undefined',
+                    'el motor SGETModal está cargado en la landing',
+                    typeof win.SGETModal);
+                var pila = (win.SGETModal && win.SGETModal.pila) ? win.SGETModal.pila.join(',') : '(sin pila)';
+                salida.push('INFO  | pila del motor antes de Escape = [' + pila + ']');
+
+                doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+                setTimeout(function () {
+                    const mc = medir(doc, 'panelRegistro');
+                    anotar(cerrado(mc), 'Escape cierra el modal abierto',
+                        mc ? 'abierto=' + mc.abierto + ' opacity=' + mc.opacity : '');
+                    anotar(doc.body.classList.contains('sget-modal-abierto') === false,
+                        'al cerrar se libera el scroll del body', doc.body.className);
+
+                    /* ---------------- CERRAR CON EL BOTÓN X ---------------- */
+                    win.abrirPanel('panelLogin');
+                    setTimeout(function () {
+                        const antes = medir(doc, 'panelLogin');
+                        anotar(visible(antes), 'se puede reabrir el login tras Escape', '');
+                        var x = doc.querySelector('#panelLogin [data-sget-cerrar]');
+                        anotar(!!x, 'el botón de cerrar existe', '');
+                        if (x) x.click();
+                        setTimeout(function () {
+                            const mcerrado = medir(doc, 'panelLogin');
+                            anotar(cerrado(mcerrado), 'el botón X cierra el modal',
+                                mcerrado ? 'abierto=' + mcerrado.abierto : '');
+
+                            /* ---------------- MENÚ MÓVIL ---------------- */
+                            const nav = doc.querySelector('.landing-nav');
+                            const burger = doc.querySelector('[data-sget-burger]');
+                            anotar(!!nav && !!burger, 'el menú móvil tiene nav y botón hamburguesa', '');
+                            if (nav && burger) {
+                                burger.click();
+                                setTimeout(function () {
+                                    anotar(nav.dataset.abierto === '1', 'el hamburguesa despliega el menú',
+                                        'data-abierto=' + nav.dataset.abierto);
+                                    burger.click();
+                                    pintar();
+                                }, 60);
+                            } else { pintar(); }
+                        }, 400);
+                    }, 450);
+                }, 400);
+            }, 500);
+        }, 500);
+    }, 600);
+});
+
+setTimeout(function () {
+    if (salida.length < 5) {
+        salida.push('FALLA | la sonda no pudo ejecutarse (¿timeout?)');
+        fallos++;
+    }
+    pintar();
+}, 8000);
+</script>
+</body>
+</html>

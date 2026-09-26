@@ -2,7 +2,6 @@
 date_default_timezone_set('America/Bogota');
 session_start();
 include '../assets/conexion.php'; 
-require_once '../helpers/AuthHelper.php';
 
 if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
     header("Location: ../index.php");
