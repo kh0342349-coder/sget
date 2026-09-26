@@ -11,7 +11,7 @@ if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
 
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Pasajero";
 
-// 1. Filtramos por est_via = 'Activo'
+// 1. Filtramos por est_via IN ('Programado', 'En curso')
 // 2. Calculamos los cupos en tiempo real: (capacidad del vehículo - reservas hechas)
 $sql = "SELECT v.*, r.nom_rut, u.nom_usu, ve.cap_veh,
                (SELECT COUNT(*) FROM reserva WHERE id_via_res = v.id_via) as ocupados
@@ -19,7 +19,7 @@ $sql = "SELECT v.*, r.nom_rut, u.nom_usu, ve.cap_veh,
         LEFT JOIN rutas r ON v.id_rut_via = r.id_rut
         LEFT JOIN usuario u ON v.id_usu_via = u.id_usu
         LEFT JOIN vehiculo ve ON v.id_veh = ve.id_veh
-        WHERE v.est_via = 'Activo'
+        WHERE v.est_via IN ('Programado', 'En curso')
         HAVING ocupados < ve.cap_veh
         ORDER BY v.fec_via ASC, v.hor_sal_via ASC";
 

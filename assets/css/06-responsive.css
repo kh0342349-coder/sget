@@ -1,0 +1,76 @@
+/* ==========================================================================
+   assets/css/06-responsive.css
+   ------------------------------------------------------------------------------
+   RESPONSIVE · Ajustes transversales que no pertenecen a un componente concreto.
+   Regla del proyecto: los breakpoints son los mismos en todos los módulos.
+
+       640px  →  móvil        (columna única, modales como hojas inferiores)
+       768px  →  tableta      (tablas en modo tarjeta, rejillas de 2 col)
+       1024px →  laptop       (sidebar se oculta, contenido a ancho completo)
+       1280px →  escritorio
+       1536px →  pantallas grandes
+   ========================================================================== */
+
+/* -------------------------------------------------------------------------- */
+/* Utilidades de rejilla por breakpoint                                       */
+/* -------------------------------------------------------------------------- */
+.sget-cols-2, .sget-cols-3, .sget-cols-4 { display: grid; gap: 1rem; }
+.sget-cols-2 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.sget-cols-3 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); }
+.sget-cols-4 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); }
+
+/* Formularios de dos columnas → una columna en móvil */
+@media (min-width: 640px)  { .sget-form-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; } }
+@media (max-width: 639px)  { .sget-form-2col { display: block; } .sget-form-2col > * + * { margin-top: 1rem; } }
+@media (min-width: 640px)  { .sget-form-3col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; } }
+@media (max-width: 767px)  { .sget-form-3col { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; } }
+@media (max-width: 479px)  { .sget-form-3col { display: block; } .sget-form-3col > * + * { margin-top: 1rem; } }
+
+/* -------------------------------------------------------------------------- */
+/* Visible / oculto por breakpoint                                            */
+/* -------------------------------------------------------------------------- */
+@media (max-width: 639px)  { .sget-hide-mobile  { display: none !important; } }
+@media (min-width: 640px)  { .sget-show-mobile { display: none !important; } }
+@media (max-width: 1023px) { .sget-hide-tablet  { display: none !important; } }
+@media (min-width: 1024px) { .sget-hide-desktop { display: none !important; } }
+
+/* -------------------------------------------------------------------------- */
+/* Truncado de texto                                                         */
+/* -------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+    .sget-linea-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+    .sget-linea-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .sget-linea-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Zonas seguras en móviles                                                   */
+/* -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .sget-safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+    .sget-toast-zona { top: auto; bottom: max(1rem, env(safe-area-inset-bottom)); left: 1rem; right: 1rem; width: auto; }
+    .sget-toast { animation: sget-toast-in-mobile .3s cubic-bezier(.2, .9, .3, 1.2); }
+    .sget-toast--saliendo { animation: sget-toast-out-mobile .25s ease forwards; }
+}
+@keyframes sget-toast-in-mobile  { from { opacity: 0; transform: translateY(120%); } to { opacity: 1; transform: none; } }
+@keyframes sget-toast-out-mobile { to   { opacity: 0; transform: translateY(120%); } }
+
+/* -------------------------------------------------------------------------- */
+/* Objetivos táctiles                                                         */
+/* -------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+    .sget-btn { min-height: 2.875rem; }
+    .sget-icon-btn { width: 2.5rem; height: 2.5rem; }
+    .sget-input, .sget-select, .sget-textarea { font-size: 1rem; /* evita el zoom automático en iOS */ }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Impresión                                                                   */
+/* -------------------------------------------------------------------------- */
+@media print {
+    .sget-sidebar, .sget-sidebar-backdrop, .sget-overlay, .sget-drawer-wrap,
+    .sget-modal-wrap, .sget-toast-zona, .sget-page-actions, .sget-toolbar { display: none !important; }
+    .sget-shell { margin-left: 0 !important; }
+    body { background: #fff; color: #000; }
+    .sget-card, .sget-table-box { box-shadow: none; border: 1px solid #ddd; }
+}

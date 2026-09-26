@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       LEFT JOIN rutas r ON v.id_rut_via = r.id_rut
                       LEFT JOIN usuario u ON v.id_usu_via = u.id_usu
                       LEFT JOIN vehiculo ve ON v.id_veh = ve.id_veh
-                      WHERE v.id_via = ? AND v.est_via = 'Activo'";
+                      WHERE v.id_via = ? AND v.est_via IN ('Programado', 'En curso')";
                       
     $stmt = $conexion->prepare($sql_verificar);
     $stmt->bind_param("i", $id_via);

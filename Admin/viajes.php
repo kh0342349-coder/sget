@@ -1,88 +1,52 @@
 <?php
-// Archivo: Admin/viajes.php
-date_default_timezone_set('America/Bogota');
-session_start();
+/**
+ * Admin/viajes.php
+ * -----------------------------------------------------------------------------
+ * MÓDULO: DESPACHO DE VIAJES  (Admin)
+ * -----------------------------------------------------------------------------
+ * CORRECCIONES APLICADAS
+ *   - FECHA/HORA: `fec_via` es DATE y `hor_sal_via` es TIME. Antes eran DATETIME
+ *     y se llenaban con <input type="date">/type="time", por lo que MySQL
+ *     guardaba hor_sal_via = '0000-00-00 00:00:00' (FECHA CERO) y rompía
+ *     TIMESTAMP(fec_via, hor_sal_via). Ese era el "Data Default Fallback".
+ *   - ESTADOS: `est_via` es ENUM(Programado|En curso|Finalizado|Cancelado).
+ *     Ya no existe el ambiguo 'Activo' ni el cierre automático silencioso.
+ *   - CANCELACIÓN: si el viaje aún no sale se EXIGE una anotación (mín. 15
+ *     caracteres), se cancelan las reservas y se notifica a cada pasajero.
+ *   - Se eliminó la concatenación de variables en el SQL de liberación de
+ *     conductor/vehículo y el cierre automático que liberaba recursos sin
+ *     transacción.
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-include '../assets/conexion.php'; 
-require_once '../helpers/AuthHelper.php';
+require_once __DIR__ . '/../core/bootstrap.php';
 
-// Verificación de seguridad (Solo Admin)
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
-    header("Location: ../index.php");
-    exit();
+Auth::requerirAdmin();
+Auth::requerirAcceso('viajes');
+
+if (!empty($_GET['ok']))       Flash::exito((string)$_GET['ok']);
+elseif (!empty($_GET['error'])) Flash::error((string)$_GET['error']);
+
+// Mantenimiento: cierra viajes cuya salida+vencimiento ya pasó
+$cerrados = ViajeService::cerrarVencidos();
+
+$viajes = ViajeService::listar();
+$total  = count($viajes);
+
+$conteo = ['Programado' => 0, 'En curso' => 0, 'Finalizado' => 0, 'Cancelado' => 0];
+foreach (Database::all("SELECT est_via, COUNT(*) n FROM viaje GROUP BY est_via") as $f) {
+    $conteo[$f['est_via']] = (int)$f['n'];
 }
 
-// BLOQUEO DE SEGURIDAD POR RESTRICCIONES
-$idUsuarioActual = $_SESSION['id_usu'] ?? 0;
-AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'viajes');
+/** Motivos de cancelación exposed al JS del diálogo. */
+$motivos = json_encode(array_map(null, array_keys(ViajeService::motivosCancelacion()),
+                                    array_values(ViajeService::motivosCancelacion())));
 
-$nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
-
-// 1. CIERRE AUTOMÁTICO DE VIAJES (Han pasado 24 horas o más desde su hora de salida)
-$sql_cierre_tiempo = "SELECT id_via, id_usu_via, id_veh FROM viaje WHERE est_via = 'Activo' AND TIMESTAMP(fec_via, hor_sal_via) <= (NOW() - INTERVAL 24 HOUR)";
-$res_cierre = $conexion->query($sql_cierre_tiempo);
-if ($res_cierre && $res_cierre->num_rows > 0) {
-    while($row_c = $res_cierre->fetch_assoc()) {
-        $id_v_exp = $row_c['id_via'];
-        $id_u_exp = $row_c['id_usu_via'];
-        $id_ve_exp = $row_c['id_veh'];
-
-        // Marcar viaje como Finalizado
-        $conexion->query("UPDATE viaje SET est_via = 'Finalizado' WHERE id_via = $id_v_exp");
-        // Liberar conductor
-        if ($id_u_exp) {
-            $conexion->query("UPDATE usuario SET est_con_usu = 1 WHERE id_usu = $id_u_exp");
-        }
-        // Liberar vehículo
-        if ($id_ve_exp) {
-            $conexion->query("UPDATE vehiculo SET est_veh = 1 WHERE id_veh = $id_ve_exp");
-        }
-    }
-}
-
-// Consulta de viajes activos
-$query = "SELECT 
-            v.id_via, 
-            v.id_rut_via,
-            v.id_usu_via,
-            v.id_veh,
-            IFNULL(r.nom_rut, 'Ruta no asignada') AS nom_rut, 
-            r.img_rut,
-            IFNULL(u.nom_usu, 'Sin conductor') AS nom_usu, 
-            IFNULL(veh.pla_veh, 'Sin Placa') AS pla_veh,
-            v.val_via, 
-            v.fec_via,
-            v.hor_sal_via,
-            v.est_via
-          FROM viaje v 
-          LEFT JOIN rutas r ON v.id_rut_via = r.id_rut 
-          LEFT JOIN usuario u ON v.id_usu_via = u.id_usu 
-          LEFT JOIN vehiculo veh ON v.id_veh = veh.id_veh
-          WHERE v.est_via = 'Activo'
-          ORDER BY v.id_via DESC";
-
-$resultado = $conexion->query($query);
-
-// Consultas secundarias para selects del formulario (Incluimos val_rut para autocompletar la tarifa)
-$rutas_select = $conexion->query("SELECT id_rut, nom_rut, val_rut FROM rutas ORDER BY nom_rut ASC");
-
-$conductores_select = $conexion->query("SELECT id_usu, nom_usu, est_con_usu 
-                                        FROM usuario 
-                                        WHERE id_rol_usu = 2 
-                                        AND (est_con_usu = 1 OR est_con_usu = 'Disponible') 
-                                        AND id_usu NOT IN (
-                                            SELECT id_usu_via FROM viaje WHERE est_via = 'Activo'
-                                        ) 
-                                        ORDER BY nom_usu ASC");
-
-$vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh 
-                                      FROM vehiculo 
-                                      WHERE (est_veh = 1 OR est_veh = 'Activo') 
-                                      AND id_veh NOT IN (
-                                          SELECT id_veh FROM viaje WHERE est_via = 'Activo'
-                                      ) 
-                                      ORDER BY pla_veh ASC");
+$tituloPagina = 'Despacho de Viajes';
+include __DIR__ . '/../views/partials/head.php';
 ?>
+<<<<<<< Updated upstream
 <!DOCTYPE html>
 <html lang="es" class="dark">
 <head>
@@ -108,9 +72,14 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
     </script>
 </head>
     <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
+=======
+<?php include __DIR__ . '/../includes/sidebar.php'; ?>
+>>>>>>> Stashed changes
 
-    <?php include '../includes/sidebar.php'; ?>
+<div class="sget-shell">
+    <?php include __DIR__ . '/../includes/header.php'; ?>
 
+<<<<<<< Updated upstream
     <div id="main-content-wrapper" class="ml-72 flex flex-col min-h-screen flex-1 transition-all duration-300 min-w-0">
         
         <?php include '../includes/header.php'; ?>
@@ -133,9 +102,24 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                 
                 <button onclick="abrirModalCrear()" class="inline-flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-sky-500/20 hover:opacity-90 transition-all cursor-pointer whitespace-nowrap">
                     <i class="fas fa-plus-circle text-sm"></i> Asignar Viaje
+=======
+    <main class="sget-main">
+        <header class="sget-page-head">
+            <div>
+                <h1 class="sget-page-title"><i class="fas fa-truck-fast text-sky-500"></i> Despacho de Viajes</h1>
+                <p class="sget-page-sub">
+                    Programa salidas, controla la operación y <strong>cancela viajes notificando a los pasajeros</strong>.
+                </p>
+            </div>
+            <div class="sget-page-actions">
+                <button type="button" class="sget-btn sget-btn--primario" data-sget-modal="modalViaje" data-sget-nuevo="Programar Nuevo Viaje">
+                    <i class="fas fa-plus"></i> Programar Viaje
+>>>>>>> Stashed changes
                 </button>
             </div>
+        </header>
 
+<<<<<<< Updated upstream
             <!-- Listado en Tarjetas -->
             <?php if($resultado && $resultado->num_rows > 0): ?>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
@@ -305,27 +289,16 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                     <i class="fas fa-info-circle text-sky-400"></i> Guía de Despacho de Viajes
                 </h3>
                 <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"><i class="fas fa-times text-xs"></i></button>
+=======
+        <?php if ($cerrados > 0): ?>
+            <div class="sget-flash sget-flash--info">
+                <i class="fas fa-clock-rotate-left"></i>
+                <span>Mantenimiento automático: se cerraron <?= $cerrados ?> viaje(s) que superaron el plazo de operación.</span>
+>>>>>>> Stashed changes
             </div>
-            <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-plus-circle text-sky-400 mt-0.5"></i>
-                    <span><b>Asignar Viaje:</b> Al seleccionar la ruta, la tarifa se completa automáticamente. Pone al conductor y vehículo en estado Ocupado.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-pen text-blue-400 mt-0.5"></i>
-                    <span><b>Editar Parámetros:</b> Modifica los datos y gestiona la liberación o asignación de recursos.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-flag-checkered text-red-400 mt-0.5"></i>
-                    <span><b>Terminar Viaje:</b> Concluye el viaje liberando al conductor y vehículo.</span>
-                </li>
-            </ul>
-            <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
-                Entendido
-            </button>
-        </div>
-    </div>
+        <?php endif; ?>
 
+<<<<<<< Updated upstream
     <!-- SCRIPTS DE CONTROL -->
     <script>
         // Función para autocompletar el precio al cambiar la ruta
@@ -340,66 +313,190 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, est_veh
                 inputValVia.value = precio;
             } else {
                 inputValVia.value = '';
+=======
+        <?= Flash::render() ?>
+
+        <section class="sget-grid sget-grid--kpi">
+            <?php foreach ([
+                ['fa-calendar-check', 'var(--sget-azul)',    'Programados', $conteo['Programado']],
+                ['fa-truck-fast',    'var(--sget-ambars)',  'En curso',    $conteo['En curso']],
+                ['fa-flag-checkered','var(--sget-emerald)', 'Finalizados', $conteo['Finalizado']],
+                ['fa-ban',           'var(--sget-rojo)',    'Cancelados',  $conteo['Cancelado']],
+            ] as $kpi): ?>
+                <div class="sget-card sget-kpi">
+                    <span class="sget-kpi__icono" style="background:color-mix(in srgb,<?= $kpi[1] ?> 12%,transparent);color:<?= $kpi[1] ?>">
+                        <i class="fas <?= $kpi[0] ?>"></i></span>
+                    <div><p class="sget-label"><?= $kpi[2] ?></p><p class="sget-kpi__valor"><?= $kpi[3] ?></p></div>
+                </div>
+            <?php endforeach; ?>
+        </section>
+
+        <div class="sget-toolbar">
+            <div class="sget-search">
+                <i class="fas fa-magnifying-glass"></i>
+                <input type="search" id="buscarViaje" class="sget-input" placeholder="Buscar ruta, conductor o placa… (Ctrl+K)">
+            </div>
+        </div>
+
+        <?php if ($total === 0): ?>
+            <div class="sget-vacio">
+                <span class="sget-vacio__icono"><i class="fas fa-truck-fast"></i></span>
+                <h2 class="sget-label" style="font-size:.875rem">No hay viajes programados</h2>
+                <p class="sget-page-sub" style="margin:0">Programa el primer despacho asignando ruta, conductor, vehículo y hora de salida.</p>
+                <button type="button" class="sget-btn sget-btn--primario" style="margin-top:1rem"
+                        data-sget-modal="modalViaje" data-sget-nuevo="Programar Nuevo Viaje">
+                    <i class="fas fa-plus"></i> Programar Viaje
+                </button>
+            </div>
+        <?php else: ?>
+            <section class="sget-grid sget-grid--ancho">
+                <?php foreach ($viajes as $v):
+                    $id        = (int)$v['id_via'];
+                    $estado    = (string)$v['est_via'];
+                    $instante  = Fecha::instanteSalida($v['fec_via'] ?? null, $v['hor_sal_via'] ?? null);
+                    $yaSalio   = $instante !== null && strtotime($instante) <= time();
+                    $reservas  = (int)($v['num_reservas'] ?? 0);
+                    $trayecto  = trim(($v['nom_rut'] ?? 'Ruta') .
+                                      (!empty($v['ori_rut']) ? ' (' . $v['ori_rut'] . ' → ' . ($v['des_rut'] ?? '?') . ')' : ''));
+                    $datosEdicion = [
+                        'id_via'      => $id,
+                        'id_rut_via'  => (int)$v['id_rut_via'],
+                        'id_usu_via'  => (int)$v['id_usu_via'],
+                        'id_veh'      => (int)($v['id_veh'] ?? 0),
+                        'fec_via'     => Fecha::soloFecha($v['fec_via'] ?? ''),
+                        'hor_sal_via' => Fecha::soloHora($v['hor_sal_via'] ?? ''),
+                        'hor_lleg_via'=> Fecha::soloHora($v['hor_lleg_via'] ?? ''),
+                        'val_via'     => $v['val_via'],
+                        'titulo'      => 'Editar Viaje #' . $id,
+                    ];
+                    $datosCancelar = [
+                        'id'        => $id,
+                        'salida'    => Fecha::legible($instante),
+                        'ya_salio'  => $yaSalio ? 1 : 0,
+                        'pasajeros' => $reservas,
+                        'trayecto'  => $trayecto,
+                        'minimo'    => Config::MIN_ANOTACION_CANCELACION,
+                    ];
+                ?>
+                <article class="sget-card sget-fila" data-sget-fila style="display:flex;flex-direction:column;gap:.875rem">
+
+                    <header style="display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem">
+                        <div style="min-width:0">
+                            <p class="sget-label"><i class="fas fa-route"></i> Viaje #<?= $id ?></p>
+                            <h3 class="sget-page-title" style="font-size:1.0625rem;margin:.25rem 0">
+                                <span class="sget-linea-1"><?= htmlspecialchars($trayecto, ENT_QUOTES, 'UTF-8') ?></span>
+                            </h3>
+                        </div>
+                        <span class="sget-badge <?= ViajeService::claseEstado($estado) ?>">
+                            <i class="fas <?= ViajeService::iconoEstado($estado) ?>"></i> <?= $estado ?>
+                        </span>
+                    </header>
+
+                    <div class="sget-form-2col" style="gap:.75rem">
+                        <div>
+                            <p class="sget-label">Salida programada</p>
+                            <p class="sget-mono" style="font-size:.8125rem;margin-top:.25rem">
+                                <?= Fecha::legible($instante) ?>
+                                <?php if ($yaSalio): ?>
+                                    <span class="sget-badge sget-badge--aviso" style="margin-left:.25rem">Ya salió</span>
+                                <?php endif; ?>
+                            </p>
+                        </div>
+                        <div>
+                            <p class="sget-label">Recursos asignados</p>
+                            <p style="font-size:.8125rem;margin-top:.25rem" class="sget-truncar">
+                                <i class="fas fa-user-tie"></i> <?= htmlspecialchars((string)($v['conductor'] ?? 'Sin conductor'), ENT_QUOTES, 'UTF-8') ?><br>
+                                <i class="fas fa-bus"></i> <?= htmlspecialchars((string)($v['pla_veh'] ?? 'Sin placa'), ENT_QUOTES, 'UTF-8') ?>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="sget-form-3col" style="gap:.5rem">
+                        <div>
+                            <p class="sget-label">Tarifa</p>
+                            <p class="sget-mono" style="font-weight:800">$<?= number_format((float)$v['val_via'], 0, ',', '.') ?></p>
+                        </div>
+                        <div>
+                            <p class="sget-label">Reservas</p>
+                            <p class="sget-mono"><?= $reservas ?> pasajero(s)</p>
+                        </div>
+                        <div>
+                            <p class="sget-label">Llegada est.</p>
+                            <p class="sget-mono"><?= Fecha::soloHora($v['hor_lleg_via'] ?? '') ?: '—' ?></p>
+                        </div>
+                    </div>
+
+                    <footer style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:auto;padding-top:.875rem;border-top:1px solid var(--sget-borde)">
+                        <button type="button" class="sget-btn sget-btn--neutro sget-btn--sm" style="flex:1"
+                                data-sget-modal="modalViaje" data-sget-nuevo="Programar Nuevo Viaje"
+                                data-sget-datos='<?= htmlspecialchars(json_encode($datosEdicion, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
+                            <i class="fas fa-pen"></i> Editar
+                        </button>
+
+                        <?php if (!$yaSalio): ?>
+                            <button type="button" class="sget-btn sget-btn--aviso sget-btn--sm" style="flex:1"
+                                    data-sget-accion="enCurso"
+                                    data-sget-dato='<?= htmlspecialchars(json_encode(['id' => $id], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
+                                <i class="fas fa-truck-fast"></i> En curso
+                            </button>
+                        <?php endif; ?>
+
+                        <button type="button" class="sget-btn sget-btn--neutro sget-btn--sm" style="flex:1"
+                                data-sget-accion="finalizar"
+                                data-sget-dato='<?= htmlspecialchars(json_encode(['id' => $id], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
+                            <i class="fas fa-flag-checkered"></i> Terminar
+                        </button>
+
+                        <button type="button" class="sget-icon-btn sget-icon-btn--peligro"
+                                title="Cancelar viaje y notificar pasajeros" aria-label="Cancelar viaje"
+                                data-sget-accion="cancelarViaje"
+                                data-sget-dato='<?= htmlspecialchars(json_encode($datosCancelar, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
+                            <i class="fas fa-ban"></i>
+                        </button>
+                    </footer>
+                </article>
+                <?php endforeach; ?>
+            </section>
+        <?php endif; ?>
+    </main>
+</div>
+
+<?php include __DIR__ . '/../views/modals/viaje.php'; ?>
+
+<script>
+    window.__MOTIVOS_VIAJE__ = <?= $motivos ?>;
+    document.addEventListener('DOMContentLoaded', function () {
+        SGETCRUD.atajoBusqueda('buscarViaje');
+        SGETCRUD.buscar('buscarViaje', '[data-sget-fila]');
+
+        /* Al elegir ruta: se heredan la tarifa y la hora de salida por defecto.
+           Esto elimina el error de "tarifa en 0" y la hora 00:00 heredada. */
+        var selRuta = document.getElementById('viaje_ruta');
+        var inpTarifa = document.getElementById('viaje_tarifa');
+        var inpHora   = document.getElementById('viaje_hora');
+        var inpFecha  = document.getElementById('viaje_fecha');
+        var resumen   = document.querySelector('[data-resumen]');
+
+        function sincronizar() {
+            var opcion = selRuta.options[selRuta.selectedIndex];
+            if (!opcion || !opcion.value) { if (resumen) resumen.textContent = 'Selecciona la ruta y completa la fecha para ver el detalle.'; return; }
+
+            var tarifa = opcion.getAttribute('data-tarifa');
+            var hora   = opcion.getAttribute('data-hora');
+            if (tarifa && (!inpTarifa.value || parseFloat(inpTarifa.value) === 0)) inpTarifa.value = tarifa;
+            if (hora && !inpHora.value) inpHora.value = hora;
+            if (inpFecha && !inpFecha.value) inpFecha.value = new Date().toISOString().slice(0, 10);
+
+            if (resumen) {
+                resumen.innerHTML = '<strong>' + opcion.textContent.trim().split('—')[0] + '</strong><br>' +
+                    'Salida: ' + (inpFecha.value || '—') + ' a las ' + (inpHora.value || '—') +
+                    ' · Tarifa: $' + Number(tarifa || 0).toLocaleString('es-CO');
+>>>>>>> Stashed changes
             }
         }
-
-        function abrirDrawer() {
-            document.getElementById('overlayViaje').classList.remove('opacity-0', 'pointer-events-none');
-            document.getElementById('overlayViaje').classList.add('opacity-100', 'pointer-events-auto');
-            document.getElementById('drawerViaje').classList.remove('translate-x-full');
-            document.getElementById('drawerViaje').classList.add('translate-x-0');
-        }
-
-        function cerrarModalViaje() {
-            document.getElementById('drawerViaje').classList.remove('translate-x-0');
-            document.getElementById('drawerViaje').classList.add('translate-x-full');
-            document.getElementById('overlayViaje').classList.remove('opacity-100', 'pointer-events-auto');
-            document.getElementById('overlayViaje').classList.add('opacity-0', 'pointer-events-none');
-        }
-
-        function cerrarTodosModales() { 
-            cerrarModalViaje(); 
-            cerrarModalAyuda();
-        }
-
-        function abrirModalCrear() {
-            document.getElementById('formViaje').reset();
-            document.getElementById('input_id_via').value = '';
-            document.getElementById('drawerTitulo').innerHTML = '<i class="fas fa-route text-sky-400"></i> Asignar Nuevo Viaje';
-            abrirDrawer();
-        }
-
-        function abrirModalEditarBtn(btn) {
-            const data = JSON.parse(btn.getAttribute('data-viaje'));
-            document.getElementById('input_id_via').value = data.id_via;
-            document.getElementById('select_id_rut_via').value = data.id_rut_via;
-            document.getElementById('select_id_usu_via').value = data.id_usu_via;
-            document.getElementById('select_id_veh_via').value = data.id_veh;
-            document.getElementById('input_fec_via').value = data.fec_via;
-            document.getElementById('input_hor_sal_via').value = data.hor_sal_via;
-            document.getElementById('input_val_via').value = data.val_via;
-            
-            document.getElementById('drawerTitulo').innerHTML = '<i class="fas fa-pen text-sky-400"></i> Editar Viaje #' + data.id_via;
-            abrirDrawer();
-        }
-
-        function abrirModalDetalleBtn(btn) {
-            abrirModalEditarBtn(btn);
-        }
-
-        function abrirModalAyuda() {
-            document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
-            document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');
-            document.getElementById('modalAyuda').classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
-            document.getElementById('modalAyuda').classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
-        }
-
-        function cerrarModalAyuda() {
-            document.getElementById('modalAyuda').classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
-            document.getElementById('modalAyuda').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
-            document.getElementById('overlayAyuda').classList.remove('opacity-100', 'pointer-events-auto');
-            document.getElementById('overlayAyuda').classList.add('opacity-0', 'pointer-events-none');
-        }
-    </script>
-</body>
-</html>
+        if (selRuta) { selRuta.addEventListener('change', sincronizar); sincronizar(); }
+    });
+</script>
+<?php
+$jsExtra = ['sget-page.js'];
+include __DIR__ . '/../views/partials/foot.php';

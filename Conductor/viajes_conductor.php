@@ -60,7 +60,7 @@ if ($result_user && $result_user->num_rows > 0) {
 
 // Consultas secundarias para el Drawer (+)
 $rutas_select = $conexion->query("SELECT id_rut, nom_rut, val_rut FROM rutas ORDER BY nom_rut ASC");
-$vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = 1 OR est_veh = 'Activo' ORDER BY pla_veh ASC");
+$vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = 1 ORDER BY pla_veh ASC");
 
 $stmt_user->close();
 ?>

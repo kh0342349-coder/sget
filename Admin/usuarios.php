@@ -1,23 +1,38 @@
 <?php
-// Archivo: Admin/usuarios.php
-date_default_timezone_set('America/Bogota');   
-session_start();
+/**
+ * Admin/usuarios.php
+ * -----------------------------------------------------------------------------
+ * MÓDULO: ADMINISTRACIÓN DE USUARIOS  (Admin)
+ * -----------------------------------------------------------------------------
+ * CORRECCIONES APLICADAS
+ *   - `cambiar_estado_usu.php` NO EXISTÍA (la vista lo enlazaba → 404).
+ *     Ahora suspender/reactivar pasa por el API con confirmación y auditoría.
+ *   - `estado` es NOT NULL: un usuario con NULL ya no puede quedar invisible.
+ *   - Las contraseñas se guardan con password_hash() (antes en texto plano).
+ *   - Paginación por pestañas real (con roles y estado de conductor).
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-include '../assets/conexion.php'; 
-require_once '../helpers/AuthHelper.php';
+require_once __DIR__ . '/../core/bootstrap.php';
 
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
-    header("Location: ../index.php");
-    exit();
-}
+Auth::requerirAdmin();
+Auth::requerirAcceso('usuarios');
 
-// BLOQUEO DE SEGURIDAD POR RESTRICCIONES
-$idUsuarioActual = $_SESSION['id_usu'] ?? 0;
-AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'usuarios');
+if (!empty($_GET['ok']))       Flash::exito((string)$_GET['ok']);
+elseif (!empty($_GET['error'])) Flash::error((string)$_GET['error']);
 
-$nombreReal = $_SESSION['nombre_usuario'] ?? "Administrador";
-$documentoSesión  = $_SESSION['documento'];
+$grupos  = UsuarioService::agrupar();
+$totales = [
+    'admins'       => count($grupos['tab-admins']),
+    'conductores'  => count($grupos['tab-conductores']),
+    'pasajeros'    => count($grupos['tab-pasajeros']),
+    'inactivos'    => count($grupos['tab-inactivos']),
+];
+$totalUsuarios = array_sum($totales);
+$miId          = Auth::id();
 
+<<<<<<< Updated upstream
 // Consulta general de usuarios
 $query = "SELECT num_doc_usu, tip_doc_usu, nom_usu, corre_usu, id_rol_usu, estado FROM usuario";
 $resultado = $conexion->query($query);
@@ -167,258 +182,181 @@ $totalUsuarios = count($admins) + count($conductores) + count($pasajeros) + coun
                 ];
 
                 foreach ($secciones as $idTab => $s): 
+=======
+/** Dibuja una tabla de usuarios para una sección. */
+$tablaUsuarios = function (array $usuarios, bool $mostrarEstadoConductor = false) use ($miId): void {
+    if (empty($usuarios)): ?>
+        <p class="sget-sin-resultados">No hay registros en esta categoría.</p>
+    <?php else: ?>
+        <div class="sget-table-wrap">
+            <table class="sget-table">
+                <thead>
+                    <tr>
+                        <th>Documento</th>
+                        <th>Nombre</th>
+                        <th class="sget-hide-mobile">Correo</th>
+                        <?php if ($mostrarEstadoConductor): ?>
+                            <th class="sget-centro sget-hide-mobile">Disponibilidad</th>
+                        <?php endif; ?>
+                        <th class="sget-centro">Rol</th>
+                        <th class="sget-centro">Estado</th>
+                        <th class="acciones">Gestión</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($usuarios as $u):
+                    $id      = (int)$u['id_usu'];
+                    $activo  = (int)$u['estado'] === Config::USU_ACTIVO;
+                    $esYo    = $id === $miId;
+                    $rol     = (int)$u['id_rol_usu'];
+                    $datos   = [
+                        'id_usu'      => $id,
+                        'tip_doc_usu' => $u['tip_doc_usu'],
+                        'num_doc_usu' => $u['num_doc_usu'],
+                        'nom_usu'     => $u['nom_usu'],
+                        'corre_usu'   => $u['corre_usu'],
+                        'tel_usu'     => $u['tel_usu'],
+                        'id_rol_usu'  => $rol,
+                        'estado'      => (int)$u['estado'],
+                        'titulo'      => 'Editar: ' . $u['nom_usu'],
+                    ];
+>>>>>>> Stashed changes
                 ?>
-                <section id="<?php echo $idTab; ?>" class="seccion-tab <?php echo $s['visible'] ? '' : 'hidden'; ?> space-y-6">
-                    <div class="bg-white dark:bg-[#121826] p-6 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl space-y-6">
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left border-collapse text-xs tabla-datos">
-                                <thead>
-                                    <tr class="border-b border-slate-100 dark:border-white/5 text-[10px] text-slate-400 uppercase font-bold">
-                                        <th class="pb-3 px-3">Documento</th>
-                                        <th class="pb-3 px-3">Nombre Completo</th>
-                                        <th class="pb-3 px-3">Correo Electrónico</th>
-                                        <th class="pb-3 px-3 text-center">Estado / Cuenta</th>
-                                        <th class="pb-3 px-3 text-center">Gestión</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100 dark:divide-white/5">
-                                    <?php if(empty($s['data'])): ?>
-                                    <tr>
-                                        <td colspan="5" class="py-12 text-center text-slate-400 italic">No hay registros en esta categoría.</td>
-                                    </tr>
-                                    <?php else: foreach ($s['data'] as $u): ?>
-                                    <tr class="fila-usuario hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
-                                        <td class="py-3.5 px-3">
-                                            <span class="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-2 py-0.5 rounded-md mr-1.5"><?php echo $u['tip_doc_usu']; ?></span>
-                                            <span class="font-mono text-slate-800 dark:text-white font-semibold dato-buscar"><?php echo $u['num_doc_usu']; ?></span>
-                                        </td>
-                                        <td class="py-3.5 px-3">
-                                            <div class="flex items-center gap-3">
-                                                <div class="w-7 h-7 bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-white rounded-xl flex items-center justify-center text-xs font-black border border-slate-200 dark:border-white/10">
-                                                    <?php echo strtoupper(substr($u['nom_usu'], 0, 1)); ?>
-                                                </div>
-                                                <span class="font-bold text-slate-800 dark:text-white dato-buscar"><?php echo htmlspecialchars($u['nom_usu']); ?></span>
-                                            </div>
-                                        </td>
-                                        <td class="py-3.5 px-3 text-slate-500 dark:text-slate-400 italic dato-buscar"><?php echo $u['corre_usu']; ?></td>
-                                        <td class="py-3.5 px-3 text-center">
-                                            <?php if($u['num_doc_usu'] == $documentoSesión): ?>
-                                                <span class="px-3 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-full text-[10px] font-extrabold uppercase">Tu Cuenta</span>
-                                            <?php elseif(isset($u['estado']) && $u['estado'] == 0): ?>
-                                                <span class="px-3 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded-full text-[10px] font-extrabold uppercase">Inactivo</span>
-                                            <?php else: ?>
-                                                <span class="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-extrabold uppercase">Activo</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td class="py-3.5 px-3 text-center">
-                                            <div class="flex justify-center items-center gap-2">
-                                                <!-- Botón Editar -->
-                                                <button type="button" onclick="abrirModalEditar(<?php echo htmlspecialchars(json_encode($u)); ?>)" class="w-7 h-7 bg-amber-500/10 text-amber-400 rounded-xl flex items-center justify-center hover:bg-amber-500 hover:text-white transition-all shadow-sm" title="Editar Usuario">
-                                                    <i class="fas fa-edit text-[10px]"></i>
-                                                </button>
-                                                
-                                                <?php if($u['num_doc_usu'] != $documentoSesión): ?>
-                                                    <!-- Botón Activar / Desactivar -->
-                                                    <?php $nuevoEstado = (isset($u['estado']) && $u['estado'] == 0) ? 1 : 0; ?>
-                                                    <a href="cambiar_estado_usu.php?doc=<?php echo $u['num_doc_usu']; ?>&estado=<?php echo $nuevoEstado; ?>" 
-                                                       class="w-7 h-7 flex items-center justify-center rounded-xl border transition-all shadow-sm <?php echo (isset($u['estado']) && $u['estado'] == 0) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500 hover:text-white' : 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500 hover:text-white'; ?>" 
-                                                       title="<?php echo (isset($u['estado']) && $u['estado'] == 0) ? 'Activar cuenta' : 'Desactivar cuenta'; ?>">
-                                                        <i class="fas <?php echo (isset($u['estado']) && $u['estado'] == 0) ? 'fa-toggle-off' : 'fa-toggle-on'; ?> text-xs"></i>
-                                                    </a>
-                                                <?php endif; ?>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
+                    <tr data-sget-fila>
+                        <td data-label="Documento">
+                            <span class="sget-badge sget-badge--neutro"><?= htmlspecialchars((string)$u['tip_doc_usu'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <span class="sget-mono"><?= htmlspecialchars((string)$u['num_doc_usu'], ENT_QUOTES, 'UTF-8') ?></span>
+                        </td>
+                        <td data-label="Nombre">
+                            <div style="display:flex;align-items:center;gap:.625rem">
+                                <span class="sget-avatar"><?= htmlspecialchars(mb_strtoupper(mb_substr((string)$u['nom_usu'], 0, 1)), ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="sget-truncar"><?= htmlspecialchars((string)$u['nom_usu'], ENT_QUOTES, 'UTF-8') ?></span>
+                            </div>
+                        </td>
+                        <td data-label="Correo" class="sget-suave sget-truncar sget-hide-mobile"><?= htmlspecialchars((string)$u['corre_usu'], ENT_QUOTES, 'UTF-8') ?></td>
+                        <?php if ($mostrarEstadoConductor): ?>
+                            <td data-label="Disponibilidad" class="sget-centro sget-hide-mobile">
+                                <span class="sget-badge <?= (int)($u['est_con_usu'] ?? 0) === Config::CON_DISPONIBLE ? 'sget-badge--exito' : 'sget-badge--aviso' ?>">
+                                    <?= (int)($u['est_con_usu'] ?? 0) === Config::CON_DISPONIBLE ? 'Disponible' : 'Ocupado' ?>
+                                </span>
+                            </td>
+                        <?php endif; ?>
+                        <td data-label="Rol" class="sget-centro">
+                            <span class="sget-badge <?= UsuarioService::claseRol($rol) ?>"><?= UsuarioService::ETIQUETA_ROL[$rol] ?? '—' ?></span>
+                        </td>
+                        <td data-label="Estado" class="sget-centro">
+                            <?php if ($esYo): ?>
+                                <span class="sget-badge sget-badge--info">Tu cuenta</span>
+                            <?php else: ?>
+                                <span class="sget-badge <?= UsuarioService::claseEstado($u['estado']) ?>"><?= UsuarioService::etiquetaEstado($u['estado']) ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="acciones" data-label="Acciones">
+                            <button type="button" class="sget-icon-btn sget-icon-btn--editar" title="Editar" aria-label="Editar usuario"
+                                    data-sget-modal="modalUsuario" data-sget-nuevo="Registrar Nuevo Usuario"
+                                    data-sget-datos='<?= htmlspecialchars(json_encode($datos, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
+                                <i class="fas fa-pen"></i>
+                            </button>
+
+                            <?php if (!$esYo): ?>
+                                <button type="button" class="sget-icon-btn <?= $activo ? 'sget-icon-btn--peligro' : 'sget-icon-btn--exito' ?>"
+                                        title="<?= $activo ? 'Suspender cuenta' : 'Reactivar cuenta' ?>"
+                                        aria-label="<?= $activo ? 'Suspender cuenta' : 'Reactivar cuenta' ?>"
+                                        data-sget-accion="suspender"
+                                        data-sget-dato='<?= htmlspecialchars(json_encode(['id' => $id, 'estado' => $activo ? Config::USU_INACTIVO : Config::USU_ACTIVO, 'nombre' => $u['nom_usu']], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
+                                    <i class="fas <?= $activo ? 'fa-user-slash' : 'fa-user-check' ?>"></i>
+                                </button>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
                 <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif;
+};
 
+$tituloPagina = 'Administración de Usuarios';
+include __DIR__ . '/../views/partials/head.php';
+?>
+<?php include __DIR__ . '/../includes/sidebar.php'; ?>
+
+<div class="sget-shell">
+    <?php include __DIR__ . '/../includes/header.php'; ?>
+
+    <main class="sget-main">
+        <header class="sget-page-head">
+            <div>
+                <h1 class="sget-page-title"><i class="fas fa-users-gear text-sky-500"></i> Administración de Usuarios</h1>
+                <p class="sget-page-sub">Registra, edita y controla el acceso de administradores, conductores y pasajeros.</p>
             </div>
-
-        </main>
-    </div>
-
-    <!-- MODAL DE AYUDA DEL MÓDULO -->
-    <div id="overlayAyuda" onclick="cerrarModalAyuda()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300"></div>
-    <div id="modalAyuda" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
-        <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
-            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
-                <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                    <i class="fas fa-info-circle text-sky-400"></i> Guía de Administración de Usuarios
-                </h3>
-                <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
+            <div class="sget-page-actions">
+                <div class="sget-search">
+                    <i class="fas fa-magnifying-glass"></i>
+                    <input type="search" id="buscarUsuario" class="sget-input" placeholder="Buscar documento, nombre o correo… (Ctrl+K)">
+                </div>
+                <button type="button" class="sget-btn sget-btn--primario" data-sget-modal="modalUsuario" data-sget-nuevo="Registrar Nuevo Usuario">
+                    <i class="fas fa-user-plus"></i> Nuevo Usuario
+                </button>
             </div>
-            <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-user-plus text-sky-400 mt-0.5"></i>
-                    <span><b>Nuevo Usuario:</b> Registra administradores, conductores o pasajeros asignando su rol y credenciales.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-edit text-amber-400 mt-0.5"></i>
-                    <span><b>Edición:</b> Modifica los datos personales y correos electrónicos de cualquier cuenta activa.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-toggle-on text-emerald-400 mt-0.5"></i>
-                    <span><b>Estado Operativo:</b> Activa o inhabilita el acceso al sistema sin perder el historial del usuario.</span>
-                </li>
-            </ul>
-            <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
-                Entendido
+        </header>
+
+        <?= Flash::render() ?>
+
+        <section class="sget-grid sget-grid--kpi">
+            <?php foreach ([
+                ['fa-user-shield', 'var(--sget-rojo)',      'Administradores', $totales['admins']],
+                ['fa-id-card',     'var(--sget-emerald)',  'Conductores',     $totales['conductores']],
+                ['fa-walking',     'var(--sget-azul)',     'Pasajeros',       $totales['pasajeros']],
+                ['fa-user-slash',  'var(--sget-ambars)',   'Suspendidos',     $totales['inactivos']],
+                ['fa-users',       'var(--sget-morado)',   'Total usuarios',  $totalUsuarios],
+            ] as $kpi): ?>
+                <div class="sget-card sget-kpi">
+                    <span class="sget-kpi__icono" style="background:color-mix(in srgb,<?= $kpi[1] ?> 12%,transparent);color:<?= $kpi[1] ?>">
+                        <i class="fas <?= $kpi[0] ?>"></i></span>
+                    <div><p class="sget-label"><?= $kpi[2] ?></p><p class="sget-kpi__valor"><?= $kpi[3] ?></p></div>
+                </div>
+            <?php endforeach; ?>
+        </section>
+
+        <div class="sget-tabs" data-sget-tabgrupo role="tablist" aria-label="Filtrar por rol">
+            <button type="button" class="sget-tab" role="tab" aria-selected="true"  data-sget-tab="tab-admins">
+                <i class="fas fa-user-shield"></i> Administradores (<?= $totales['admins'] ?>)
+            </button>
+            <button type="button" class="sget-tab" role="tab" aria-selected="false" data-sget-tab="tab-conductores">
+                <i class="fas fa-id-card"></i> Conductores (<?= $totales['conductores'] ?>)
+            </button>
+            <button type="button" class="sget-tab" role="tab" aria-selected="false" data-sget-tab="tab-pasajeros">
+                <i class="fas fa-walking"></i> Pasajeros (<?= $totales['pasajeros'] ?>)
+            </button>
+            <button type="button" class="sget-tab" role="tab" aria-selected="false" data-sget-tab="tab-inactivos">
+                <i class="fas fa-user-slash"></i> Suspendidos (<?= $totales['inactivos'] ?>)
             </button>
         </div>
-    </div>
 
-    <!-- PANEL LATERAL (DRAWER) PARA CREAR / EDITAR USUARIO -->
-    <div id="overlayUsuario" onclick="cerrarModalUsuario()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+        <?php foreach ([
+            'tab-admins'      => ['usuarios' => $grupos['tab-admins'],       'conductor' => false],
+            'tab-conductores' => ['usuarios' => $grupos['tab-conductores'],  'conductor' => true],
+            'tab-pasajeros'   => ['usuarios' => $grupos['tab-pasajeros'],    'conductor' => false],
+            'tab-inactivos'   => ['usuarios' => $grupos['tab-inactivos'],    'conductor' => false],
+        ] as $panel => $cfg): ?>
+            <section class="sget-table-box" data-sget-panel-id="<?= $panel ?>" <?= $panel !== 'tab-admins' ? 'hidden' : '' ?>>
+                <?php $tablaUsuarios($cfg['usuarios'], $cfg['conductor']); ?>
+            </section>
+        <?php endforeach; ?>
+    </main>
+</div>
 
-    <aside id="drawerUsuario" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#121826] border-l border-slate-200 dark:border-white/15 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
-        <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
-            <h3 id="drawerTitulo" class="text-base font-extrabold text-slate-900 dark:text-white">Registrar Nuevo Usuario</h3>
-            <button onclick="cerrarModalUsuario()" class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center"><i class="fas fa-times"></i></button>
-        </div>
-        
-        <div class="p-6 flex-1 overflow-y-auto space-y-4">
-            <!-- Nota: Usamos un único archivo procesar_usuario.php para manejar tanto altas como actualizaciones -->
-            <form id="formUsuario" action="procesar_usuario.php" method="POST" class="space-y-4">
-                
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="space-y-1">
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Tipo Documento</label>
-                        <select name="tip_doc_usu" id="input_tip_doc" required class="w-full px-3 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-white">
-                            <option value="CC">Cédula (CC)</option>
-                            <option value="TI">Tarjeta (TI)</option>
-                            <option value="CE">Extranjería (CE)</option>
-                            <option value="G">Registro (G)</option>
-                        </select>
-                    </div>
-                    <div class="space-y-1">
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase">Número de Documento</label>
-                        <input type="text" name="num_doc_usu" id="input_num_doc" required placeholder="Ej.: 107249" data-i18n-placeholder-es="Ej.: 107249" data-i18n-placeholder-en="e.g. 107249" class="w-full px-3 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-white font-mono">
-                    </div>
-                </div>
+<?php include __DIR__ . '/../views/modals/usuario.php'; ?>
 
-                <div class="space-y-1">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase">Nombre Completo</label>
-                    <input type="text" name="nom_usu" id="input_nom_usu" required placeholder="Ej.: John Smith" data-i18n-placeholder-es="Ej.: Juan Pérez" data-i18n-placeholder-en="e.g. John Smith" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-white">
-                </div>
-
-                <div class="space-y-1">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase">Correo Electrónico</label>
-                    <input type="email" name="corre_usu" id="input_corre_usu" required placeholder="correo@sget.com" data-i18n-placeholder-es="correo@sget.com" data-i18n-placeholder-en="email@sget.com" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-white">
-                </div>
-
-                <div class="space-y-1">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase">Rol de Usuario</label>
-                    <select name="id_rol_usu" id="select_id_rol" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-white">
-                        <option value="1">Administrador</option>
-                        <option value="2">Conductor</option>
-                        <option value="3">Pasajero</option>
-                    </select>
-                </div>
-
-                <div class="space-y-1">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase">Contraseña</label>
-                    <input type="password" name="contra_usu" id="input_contra" placeholder="Dejar en blanco para mantener la contraseña actual" data-i18n-placeholder-es="Dejar en blanco para mantener la contraseña actual" data-i18n-placeholder-en="Leave blank to keep the current password" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs text-white">
-                </div>
-
-            </form>
-        </div>
-
-        <div class="p-6 border-t border-slate-100 dark:border-white/5 flex gap-3">
-            <button type="button" onclick="cerrarModalUsuario()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 text-slate-300 rounded-xl text-xs font-bold uppercase">Cancelar</button>
-            <button type="submit" form="formUsuario" id="btnGuardarDrawer" class="flex-1 py-3 bg-sky-500 text-slate-950 rounded-xl text-xs font-extrabold uppercase shadow-lg shadow-sky-500/20">Guardar</button>
-        </div>
-    </aside>
-
-    <!-- SCRIPTS DE CONTROL -->
-    <script>
-    function abrirModalAyuda() {
-        document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
-        document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');
-        document.getElementById('modalAyuda').classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
-        document.getElementById('modalAyuda').classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
-    }
-
-    function cerrarModalAyuda() {
-        document.getElementById('modalAyuda').classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
-        document.getElementById('modalAyuda').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
-        document.getElementById('overlayAyuda').classList.remove('opacity-100', 'pointer-events-auto');
-        document.getElementById('overlayAyuda').classList.add('opacity-0', 'pointer-events-none');
-    }
-
-    function cambiarPestana(idTab) {
-        document.querySelectorAll('.seccion-tab').forEach(seccion => {
-            seccion.classList.add('hidden');
-        });
-        document.getElementById(idTab).classList.remove('hidden');
-
-        document.querySelectorAll('.pestana-btn').forEach(btn => {
-            btn.className = 'pestana-btn px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 text-slate-400 hover:text-white';
-        });
-        const activo = document.getElementById('btn-' + idTab);
-        activo.className = 'pestana-btn px-5 py-2.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md';
-    }
-
-    function filtrarTablaLocal() {
-        const filtro = document.getElementById('inputBuscadorLive').value.toLowerCase();
-        const filas = document.querySelectorAll('.fila-usuario');
-
-        filas.forEach(fila => {
-            const datos = fila.querySelectorAll('.dato-buscar');
-            let textoFila = '';
-            datos.forEach(d => textoFila += d.textContent.toLowerCase() + ' ');
-
-            if (textoFila.includes(filtro)) {
-                fila.style.display = '';
-            } else {
-                fila.style.display = 'none';
-            }
-        });
-    }
-
-    function abrirDrawer() {
-        document.getElementById('overlayUsuario').classList.remove('opacity-0', 'pointer-events-none');
-        document.getElementById('overlayUsuario').classList.add('opacity-100', 'pointer-events-auto');
-        document.getElementById('drawerUsuario').classList.remove('translate-x-full');
-        document.getElementById('drawerUsuario').classList.add('translate-x-0');
-    }
-
-    function cerrarModalUsuario() {
-        document.getElementById('drawerUsuario').classList.remove('translate-x-0');
-        document.getElementById('drawerUsuario').classList.add('translate-x-full');
-        document.getElementById('overlayUsuario').classList.remove('opacity-100', 'pointer-events-auto');
-        document.getElementById('overlayUsuario').classList.add('opacity-0', 'pointer-events-none');
-    }
-
-    function abrirModalCrear() {
-        document.getElementById('formUsuario').action = 'procesar_usuario.php';
-        document.getElementById('drawerTitulo').innerText = 'Registrar Nuevo Usuario';
-        document.getElementById('btnGuardarDrawer').innerText = 'Guardar Usuario';
-        document.getElementById('formUsuario').reset();
-        document.getElementById('input_num_doc').readOnly = false;
-        abrirDrawer();
-    }
-
-    function abrirModalEditar(datos) {
-        document.getElementById('formUsuario').action = 'procesar_usuario.php';
-        document.getElementById('drawerTitulo').innerText = 'Editar Usuario: ' + datos.nom_usu;
-        document.getElementById('btnGuardarDrawer').innerText = 'Actualizar Cambios';
-
-        document.getElementById('input_tip_doc').value = datos.tip_doc_usu;
-        document.getElementById('input_num_doc').value = datos.num_doc_usu;
-        // Mantenemos bloqueado el documento para evitar inconsistencias en la llave primaria
-        document.getElementById('input_num_doc').readOnly = true;
-        document.getElementById('input_nom_usu').value = datos.nom_usu;
-        document.getElementById('input_corre_usu').value = datos.corre_usu;
-        document.getElementById('select_id_rol').value = datos.id_rol_usu;
-        document.getElementById('input_contra').value = '';
-
-        abrirDrawer();
-    }
-    </script>
-</body>
-</html>
+<script>
+    window.__MOTIVOS_VIAJE__ = window.__MOTIVOS_VIAJE__ || [];
+    document.addEventListener('DOMContentLoaded', function () {
+        SGETCRUD.atajoBusqueda('buscarUsuario');
+        // La búsqueda recorre TODAS las pestañas, no solo la visible
+        SGETCRUD.buscar('buscarUsuario', '[data-sget-fila]');
+    });
+</script>
+<?php
+$jsExtra = ['sget-page.js'];
+include __DIR__ . '/../views/partials/foot.php';

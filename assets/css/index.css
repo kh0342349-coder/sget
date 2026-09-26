@@ -1,0 +1,221 @@
+/* ==========================================================================
+   assets/css/index.css
+   ------------------------------------------------------------------------------
+   LANDING PAGE (index.php) · Estilos exclusivos del sitio público.
+   ------------------------------------------------------------------------------
+   Este archivo NO se carga dentro de la aplicación: la landing tiene su propia
+   identidad (vidrio, degradados, portada) y así los estilos del panel interno
+   (`01-base.css` … `06-responsive.css`) no se mezclan con los del sitio público.
+
+   Depende de 01-base.css (variables, tipografía y reset).
+   ========================================================================== */
+
+@import url('01-base.css');
+@import url('04-modales.css');
+
+/* -------------------------------------------------------------------------- */
+/* Portada                                                                    */
+/* -------------------------------------------------------------------------- */
+.landing-hero {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background: linear-gradient(160deg, #020617 0%, #0b1220 45%, #0f172a 100%);
+    color: #fff;
+    padding: 7rem 0 5rem;
+}
+
+/* Halo decorativo: da profundidad sin imágenes pesadas */
+.landing-hero::before {
+    content: '';
+    position: absolute;
+    inset: -30% -10% auto -10%;
+    height: 70%;
+    background:
+        radial-gradient(closest-side, rgba(56, 189, 248, .28), transparent 70%),
+        radial-gradient(closest-side, rgba(168, 85, 247, .22), transparent 70%);
+    background-position: 30% 40%, 75% 10%;
+    background-repeat: no-repeat;
+    background-size: 55% 100%, 45% 100%;
+    filter: blur(30px);
+    z-index: -1;
+}
+
+.landing-hero__titulo {
+    font-size: clamp(2rem, 6vw, 3.75rem);
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -.03em;
+}
+.landing-hero__bajada {
+    font-size: clamp(.95rem, 2.2vw, 1.125rem);
+    line-height: 1.65;
+    color: #cbd5e1;
+    max-width: 60ch;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Secciones                                                                   */
+/* -------------------------------------------------------------------------- */
+.landing-section { padding: clamp(3rem, 8vw, 5.5rem) 0; }
+.landing-section--alt { background: color-mix(in srgb, var(--sget-superficie-2) 70%, transparent); }
+
+.landing-title {
+    font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+    font-weight: 900;
+    letter-spacing: -.02em;
+    text-align: center;
+    margin-bottom: .5rem;
+}
+.landing-subtitle {
+    text-align: center;
+    color: var(--sget-texto-suave);
+    font-size: .9375rem;
+    max-width: 65ch;
+    margin: 0 auto 2.5rem;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tarjetas de cristal (glassmorphism)                                        */
+/* -------------------------------------------------------------------------- */
+.card-glass {
+    background: color-mix(in srgb, var(--sget-superficie) 78%, transparent);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--sget-borde);
+    border-radius: var(--sget-radio-lg);
+    box-shadow: var(--sget-sombra);
+    transition: transform var(--sget-transicion), border-color var(--sget-transicion), box-shadow var(--sget-transicion);
+}
+.card-glass.glow-hover:hover {
+    transform: translateY(-4px);
+    border-color: color-mix(in srgb, var(--sget-azul) 55%, transparent);
+    box-shadow: 0 18px 40px -20px color-mix(in srgb, var(--sget-azul) 60%, transparent);
+}
+
+.divider-glow {
+    height: 1px;
+    border: 0;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--sget-azul) 40%, transparent), transparent);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Rejillas                                                                    */
+/* -------------------------------------------------------------------------- */
+.landing-features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+    gap: 1.5rem;
+}
+.landing-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(50%, 8rem), 1fr));
+    gap: 1.5rem;
+    text-align: center;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cabecera y navegación (móvil)                                              */
+/* -------------------------------------------------------------------------- */
+.landing-nav {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+}
+.landing-nav__link {
+    padding: .5rem 1rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 700;
+    color: var(--sget-texto-suave);
+    transition: background-color var(--sget-transicion), color var(--sget-transicion);
+    white-space: nowrap;
+}
+.landing-nav__link:hover { background: var(--sget-superficie-2); color: var(--sget-texto); }
+.landing-nav__link[aria-current="page"] { background: var(--sget-azul); color: #fff; }
+
+/* Botón hamburguesa: solo visible en pantallas pequeñas */
+.landing-burger { display: none; }
+
+@media (max-width: 1023px) {
+    .landing-burger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--sget-radio-sm);
+        background: var(--sget-superficie-2);
+        border: 1px solid var(--sget-borde);
+    }
+    .landing-nav {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: .25rem;
+        padding: .75rem;
+        background: var(--sget-superficie);
+        border: 1px solid var(--sget-borde);
+        border-radius: var(--sget-radio);
+        box-shadow: var(--sget-sombra-fuerte);
+        /* El menú móvil usa display, no opacity, para no capturar clics */
+        display: none;
+    }
+    .landing-nav[data-abierto="1"] { display: flex; }
+    .landing-nav__link { text-align: left; padding: .75rem 1rem; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Modales del sitio público (login, registro, política)                      */
+/* -------------------------------------------------------------------------- */
+.modal-isla-container {
+    position: fixed;
+    inset: 0;
+    z-index: var(--sget-z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(2, 6, 23, .8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+.modal-isla-card {
+    width: 100%;
+    max-width: 34rem;
+    max-height: min(85dvh, 100%);
+    display: flex;
+    flex-direction: column;
+    background: var(--sget-superficie);
+    border: 1px solid var(--sget-borde);
+    border-radius: var(--sget-radio-lg);
+    box-shadow: var(--sget-sombra-fuerte);
+    overflow: hidden;
+    transform: scale(.95);
+    opacity: 0;
+    transition: transform .28s cubic-bezier(.2, .9, .3, 1.15), opacity .28s ease;
+}
+.modal-isla-container[data-abierto="1"] .modal-isla-card { transform: none; opacity: 1; }
+
+/* -------------------------------------------------------------------------- */
+/* Responsive general                                                          */
+/* -------------------------------------------------------------------------- */
+@media (max-width: 640px) {
+    .landing-hero { padding: 5rem 0 3.5rem; }
+    .landing-section { padding: 2.75rem 0; }
+    .card-glass { border-radius: var(--sget-radio); }
+    /* Los campos de formulario no deben provocar zoom en iOS */
+    .modal-isla-card input, .modal-isla-card select, .modal-isla-card textarea { font-size: 1rem; }
+    /* El modal ocupa casi toda la pantalla en móvil */
+    .modal-isla-card { max-height: 92dvh; }
+}
+
+@media (max-width: 400px) {
+    .landing-stats { grid-template-columns: 1fr 1fr; gap: 1rem; }
+}
+
+/* Puntos de anclaje sin el salto brusco del header fijo */
+html { scroll-padding-top: 6rem; }

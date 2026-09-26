@@ -258,7 +258,7 @@ switch ($modulo) {
 
             if ($id_via > 0) {
                 // MODO ACTUALIZAR VIAJE
-                $stmt = $conexion->prepare("UPDATE viaje SET id_rut_via = ?, id_usu_via = ?, id_veh = ?, fec_via = ?, hor_sal_via = ?, val_via = ?, est_via = 'Activo' WHERE id_via = ?");
+                $stmt = $conexion->prepare("UPDATE viaje SET id_rut_via = ?, id_usu_via = ?, id_veh = ?, fec_via = ?, hor_sal_via = ?, val_via = ?, est_via = 'Programado' WHERE id_via = ?");
                 $stmt->bind_param("iiissdi", $id_ruta, $id_conductor, $id_vehiculo, $fec_via, $hor_sal_via, $precio, $id_via);
 
                 if ($stmt->execute()) {
@@ -285,7 +285,7 @@ switch ($modulo) {
                     $conductor = $result->fetch_assoc();
 
                     if ($conductor) {
-                        $sqlViaje = "INSERT INTO viaje (id_rut_via, id_usu_via, id_veh, fec_via, hor_sal_via, val_via, est_via) VALUES (?, ?, ?, ?, ?, ?, 'Activo')";
+                        $sqlViaje = "INSERT INTO viaje (id_rut_via, id_usu_via, id_veh, fec_via, hor_sal_via, val_via, est_via) VALUES (?, ?, ?, ?, ?, ?, 'Programado')";
                         $stmtViaje = $conexion->prepare($sqlViaje);
                         $stmtViaje->bind_param("iiissd", $id_ruta, $id_conductor, $id_vehiculo, $fec_via, $hor_sal_via, $precio);
                         $stmtViaje->execute();
@@ -295,7 +295,7 @@ switch ($modulo) {
                         $stmtUpdate->bind_param("i", $id_conductor);
                         $stmtUpdate->execute();
 
-                        $sqlUpdateVeh = "UPDATE vehiculo SET est_veh = 'Inactivo' WHERE id_veh = ?";
+                        $sqlUpdateVeh = "UPDATE vehiculo SET est_veh = 0 WHERE id_veh = ?";
                         $stmtUpdateVeh = $conexion->prepare($sqlUpdateVeh);
                         $stmtUpdateVeh->bind_param("i", $id_vehiculo);
                         $stmtUpdateVeh->execute();

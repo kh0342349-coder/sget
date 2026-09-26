@@ -31,7 +31,7 @@ $query_viajes = "SELECT
                  FROM viaje v
                  INNER JOIN rutas r ON v.id_rut_via = r.id_rut
                  LEFT JOIN vehiculo veh ON v.id_veh = veh.id_veh
-                 WHERE v.est_via = 'Activo'
+                 WHERE v.est_via IN ('Programado', 'En curso')
                  ORDER BY v.id_via DESC
                  LIMIT 6";
 
@@ -53,8 +53,8 @@ if (!$resultado_viajes) {
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
-    <!-- Hoja de Estilos del Index -->
-    <link rel="stylesheet" href="index.css">
+    <!-- CSS MODULAR DE LA LANDING PAGE (variables + reset + estilos propios) -->
+    <link rel="stylesheet" href="assets/css/index.css?v=<?= @filemtime('assets/css/index.css') ?: '1' ?>">
 
     <!-- SDK de Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client?hl=en" async defer></script>

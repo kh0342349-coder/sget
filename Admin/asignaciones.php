@@ -131,7 +131,7 @@ $sqlViajesDisponibles = "SELECT v.id_via,
                          LEFT JOIN rutas r ON v.id_rut_via = r.id_rut 
                          LEFT JOIN usuario u ON v.id_usu_via = u.id_usu 
                          LEFT JOIN vehiculo veh ON v.id_veh = veh.id_veh
-                         WHERE v.est_via = 'Activo'
+                         WHERE v.est_via IN ('Programado', 'En curso')
                          ORDER BY v.id_via DESC";
 $viajesDisponibles = $conexion->query($sqlViajesDisponibles);
 ?>
@@ -143,7 +143,13 @@ $viajesDisponibles = $conexion->query($sqlViajesDisponibles);
     <title>SGET - Asignaciones y Recaudo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="style_admin.css">
+    <!-- CSS MODULAR DEL PANEL (antes: style_admin.css, que no existia en esta carpeta) -->
+    <link rel="stylesheet" href="../assets/css/01-base.css">
+    <link rel="stylesheet" href="../assets/css/02-layout.css">
+    <link rel="stylesheet" href="../assets/css/03-componentes.css">
+    <link rel="stylesheet" href="../assets/css/04-modales.css">
+    <link rel="stylesheet" href="../assets/css/05-tablas.css">
+    <link rel="stylesheet" href="../assets/css/06-responsive.css">
     <script>
         tailwind.config = {
             darkMode: 'class',

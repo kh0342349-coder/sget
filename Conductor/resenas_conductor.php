@@ -44,7 +44,7 @@ $resenas = $stmt_resenas->get_result();
 
 // Consultas secundarias para el Drawer (+)
 $rutas_select = $conexion->query("SELECT id_rut, nom_rut, val_rut FROM rutas ORDER BY nom_rut ASC");
-$vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = 1 OR est_veh = 'Activo' ORDER BY pla_veh ASC");
+$vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = 1 ORDER BY pla_veh ASC");
 ?>
 <!DOCTYPE html>
 <html lang="es" class="dark">

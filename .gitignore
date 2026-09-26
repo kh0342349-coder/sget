@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# SGET — Sistema Inteligente de Transporte
+# ---------------------------------------------------------------------------
+
+# Dependencias / artefactos
+/vendor/
+/node_modules/
+composer.lock
+package-lock.json
+
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+error_log
+
+# Uploads de usuarios (el contenido se sirve, pero nunca se versiona)
+/uploads/*
+!/uploads/.gitkeep
+
+# Migraciones aplicadas
+# (las migraciones en sí SÍ se versionan en /migraciones)
+
+# Pruebas: nunca subir el interruptor de pruebas ni sus cookies
+/pruebas/.habilitar
+*.cookies.txt
+
+# Backups de base de datos
+*.sql.gz
+/backups/
+
+# Editores
+.idea/
+.vscode/
+*.swp

@@ -1,0 +1,104 @@
+/* ==========================================================================
+   assets/css/05-tablas.css
+   ------------------------------------------------------------------------------
+   TABLAS · Tabla de datos responsive. En escritorio es una tabla normal; en
+   móvil cada fila se convierte en una "tarjeta" apilada usando data-label, lo
+   que elimina el scroll horizontal infinito (problema responsive clásico).
+   ========================================================================== */
+
+.sget-table-box {
+    background: var(--sget-superficie);
+    border: 1px solid var(--sget-borde);
+    border-radius: var(--sget-radio-lg);
+    box-shadow: var(--sget-sombra);
+    overflow: hidden;
+}
+
+.sget-table-wrap { width: 100%; overflow-x: auto; }
+
+.sget-table { font-size: .75rem; width: 100%; min-width: 44rem; }
+.sget-table thead th {
+    padding: .875rem 1rem;
+    text-align: left;
+    font-size: .625rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--sget-texto-suave);
+    background: var(--sget-superficie-2);
+    border-bottom: 1px solid var(--sget-borde);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.sget-table tbody td { padding: .875rem 1rem; border-bottom: 1px solid var(--sget-borde); vertical-align: middle; }
+.sget-table tbody tr:last-child td { border-bottom: none; }
+.sget-table tbody tr { transition: background-color var(--sget-transicion); }
+.sget-table tbody tr:hover { background: color-mix(in srgb, var(--sget-azul) 4%, transparent); }
+.sget-table td.acciones { text-align: right; white-space: nowrap; }
+.sget-table td.acciones > * { display: inline-flex; margin-left: .375rem; }
+
+.sget-table--compacta tbody td,
+.sget-table--compacta thead th { padding: .5rem .75rem; }
+
+.sget-mono { font-family: ui-monospace, 'SFMono-Regular', monospace; font-weight: 600; }
+.sget-suave { color: var(--sget-texto-suave); }
+.sget-nowrap { white-space: nowrap; }
+.sget-centro { text-align: center; }
+.sget-truncar { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.sget-avatar {
+    width: 1.875rem; height: 1.875rem;
+    display: grid; place-items: center;
+    border-radius: var(--sget-radio-sm);
+    background: var(--sget-superficie-2);
+    border: 1px solid var(--sget-borde);
+    font-size: .75rem;
+    font-weight: 900;
+    flex-shrink: 0;
+}
+
+/* Fila oculta por el buscador en vivo */
+.sget-fila[hidden] { display: none !important; }
+
+.sget-sin-resultados { padding: 2.5rem 1rem; text-align: center; color: var(--sget-texto-suave); font-size: .8125rem; font-style: italic; }
+
+/* -------------------------------------------------------------------------- */
+/* Modo tarjetas (movil)                                                      */
+/* -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+    .sget-table { min-width: 0; }
+    .sget-table thead { display: none; }
+    .sget-table tbody tr {
+        display: block;
+        margin: .75rem;
+        border: 1px solid var(--sget-borde);
+        border-radius: var(--sget-radio);
+        background: var(--sget-superficie-2);
+        overflow: hidden;
+    }
+    .sget-table tbody td {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: .625rem .875rem;
+        border-bottom: 1px solid var(--sget-borde);
+        text-align: right;
+    }
+    .sget-table tbody td::before {
+        content: attr(data-label);
+        font-size: .625rem;
+        font-weight: 800;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        color: var(--sget-texto-suave);
+        text-align: left;
+        flex-shrink: 0;
+    }
+    .sget-table tbody td:last-child { border-bottom: none; }
+    .sget-table td.acciones { justify-content: flex-end; text-align: right; }
+    .sget-table td.acciones::before { content: none; }
+    .sget-truncar { max-width: 60vw; }
+}

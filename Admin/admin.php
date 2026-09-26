@@ -85,7 +85,7 @@ $conductores_disponibles = $conexion->query("
     FROM usuario u 
     LEFT JOIN asignacion a ON u.id_usu = a.id_usu_asig 
     LEFT JOIN vehiculo v ON a.id_veh_asig = v.id_veh 
-    WHERE u.id_rol_usu = 2 AND u.est_con_usu = 'Disponible' 
+    WHERE u.id_rol_usu = 2 AND u.est_con_usu = 1 
     LIMIT 5
 ");
 ?>
@@ -115,7 +115,13 @@ $conductores_disponibles = $conexion->query("
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="style_admin.css">
+    <!-- CSS MODULAR DEL PANEL (antes: style_admin.css, que no existia en esta carpeta) -->
+    <link rel="stylesheet" href="../assets/css/01-base.css">
+    <link rel="stylesheet" href="../assets/css/02-layout.css">
+    <link rel="stylesheet" href="../assets/css/03-componentes.css">
+    <link rel="stylesheet" href="../assets/css/04-modales.css">
+    <link rel="stylesheet" href="../assets/css/05-tablas.css">
+    <link rel="stylesheet" href="../assets/css/06-responsive.css">
 </head>
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
 

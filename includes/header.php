@@ -109,8 +109,29 @@ foreach ($catalogoOpciones as$opcion) {
     </div>
 
     <div class="flex items-center space-x-3 sm:space-x-4 shrink-0">
+        <!-- BUZÓN DE NOTIFICACIONES (avisos de cancelación de viajes, etc.) -->
+        <?php $__noLeidas = 0;
+        if (class_exists('NotificacionService') && $idUsuarioSesión > 0) {
+            try { $__noLeidas = NotificacionService::noLeidas($idUsuarioSesión); } catch (Throwable $e) { $__noLeidas = 0; }
+        } ?>
+        <div class="relative shrink-0">
+            <button type="button" data-sget-modal="modalNotificaciones"
+                    class="w-10 h-10 rounded-2xl bg-slate-200/50 dark:bg-white/5 text-slate-700 dark:text-slate-300
+                           hover:bg-sky-500/20 hover:text-sky-500 transition-all flex items-center justify-center
+                           border border-slate-300/50 dark:border-white/10 text-sm shadow-sm cursor-pointer relative"
+                    title="Notificaciones" aria-label="Notificaciones<?= $__noLeidas ? ', ' . $__noLeidas . ' sin leer' : '' ?>">
+                <i class="fas fa-bell text-xs"></i>
+                <?php if ($__noLeidas > 0): ?>
+                    <span class="sget-badge sget-badge--error"
+                          style="position:absolute;top:-.375rem;right:-.375rem;padding:.125rem .375rem;font-size:.5rem;min-width:1.125rem;justify-content:center">
+                        <?= $__noLeidas > 9 ? '9+' : $__noLeidas ?>
+                    </span>
+                <?php endif; ?>
+            </button>
+        </div>
+
         <div class="relative group shrink-0">
-            <button type="button" onclick="abrirModalAyuda()" class="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-500 dark:text-sky-400 hover:bg-sky-500/20 border border-sky-500/20 transition-all flex items-center justify-center text-sm shadow-sm cursor-pointer" title="Guía del módulo (F1)">
+            <button type="button" data-sget-modal="modalAyuda" class="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-500 dark:text-sky-400 hover:bg-sky-500/20 border border-sky-500/20 transition-all flex items-center justify-center text-sm shadow-sm cursor-pointer" title="Guía del módulo (F1)">
                 <i class="fas fa-question text-xs"></i>
             </button>
         </div>
@@ -169,7 +190,26 @@ foreach ($catalogoOpciones as$opcion) {
     </div>
 </div>
 
+<<<<<<< Updated upstream
 <!-- SCRIPT GENERAL: CAMBIO DE TEMA, INACTIVIDAD Y BUSCADOR -->
+=======
+<!-- INCLUSIÓN DEL COMPONENTE DE INACTIVIDAD CENTRALIZADO Y SEGURO -->
+<?php @include_once __DIR__ . '/modal_inactividad.php'; ?>
+
+<!-- MODALES DEL SISTEMA (ayuda contextual y buzón de notificaciones).
+     Se incluyen desde el header para que existan en TODAS las páginas. -->
+<?php
+require_once dirname(__DIR__) . '/core/bootstrap.php';
+if (file_exists(dirname(__DIR__) . '/views/modals/ayuda.php')) {
+    include dirname(__DIR__) . '/views/modals/ayuda.php';
+}
+if (file_exists(dirname(__DIR__) . '/views/modals/notificaciones.php')) {
+    include dirname(__DIR__) . '/views/modals/notificaciones.php';
+}
+?>
+
+<!-- SCRIPT GENERAL DE CONFIGURACIÓN, CAMBIO DE TEMA Y BUSCADOR -->
+>>>>>>> Stashed changes
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         

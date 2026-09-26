@@ -1,0 +1,164 @@
+/* ==========================================================================
+   assets/css/02-layout.css
+   ------------------------------------------------------------------------------
+   LAYOUT · Estructura general de la aplicación (sidebar + contenido + header).
+   Un solo lugar donde se define el desplazamiento del contenido cuando el
+   menú lateral se expande/collapsa. Todos los módulos dependen de estas vars.
+   ========================================================================== */
+
+/* Contenedor principal que se desplaza con el sidebar.
+   NOTA: la clase de colapso es la MISMA que usa el sidebar existente
+   (`sidebar-collapsed`), para que las páginas antiguas y las nuevas se
+   comporten igual sin duplicar estilos. */
+.sget-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    margin-left: var(--sget-sidebar-ancho);
+    transition: margin-left .35s cubic-bezier(.34, 1.56, .64, 1);
+    min-width: 0;   /* permite que flex children sí encogan (responsive real) */
+}
+
+body.sidebar-collapsed .sget-shell { margin-left: var(--sget-sidebar-mini); }
+
+.sget-main {
+    flex: 1;
+    width: 100%;
+    max-width: 100rem;
+    margin: 0 auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    min-width: 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Encabezado de página (título + acciones)                                   */
+/* -------------------------------------------------------------------------- */
+.sget-page-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: color-mix(in srgb, var(--sget-superficie) 75%, transparent);
+    border: 1px solid var(--sget-borde);
+    border-radius: var(--sget-radio-lg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: var(--sget-sombra);
+}
+
+.sget-page-title {
+    display: flex;
+    align-items: center;
+    gap: .625rem;
+    font-size: 1.5rem;
+    font-weight: 900;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+}
+
+.sget-page-sub {
+    margin-top: .375rem;
+    font-size: .75rem;
+    color: var(--sget-texto-suave);
+    max-width: 62ch;
+}
+
+.sget-page-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem;
+    width: 100%;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Rejillas de tarjetas                                                       */
+/* -------------------------------------------------------------------------- */
+.sget-grid {
+    display: grid;
+    gap: 1.25rem;
+    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+}
+.sget-grid--ancho { grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr)); }
+.sget-grid--kpi   { grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+
+/* -------------------------------------------------------------------------- */
+/* Barra de filtros / buscador                                                */
+/* -------------------------------------------------------------------------- */
+.sget-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem;
+    padding: 1rem;
+    background: var(--sget-superficie);
+    border: 1px solid var(--sget-borde);
+    border-radius: var(--sget-radio);
+}
+
+.sget-search {
+    position: relative;
+    flex: 1 1 16rem;
+    min-width: 12rem;
+}
+.sget-search > i {
+    position: absolute;
+    left: .875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--sget-texto-tenue);
+    font-size: .75rem;
+    pointer-events: none;
+}
+.sget-search > input { padding-left: 2.5rem; }
+
+/* -------------------------------------------------------------------------- */
+/* Sidebar                                                                    */
+/* -------------------------------------------------------------------------- */
+.sget-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--sget-sidebar-ancho);
+    background: var(--sget-superficie);
+    border-right: 1px solid var(--sget-borde);
+    display: flex;
+    flex-direction: column;
+    z-index: var(--sget-z-header);
+    transition: width .35s cubic-bezier(.34, 1.56, .64, 1), transform .35s ease;
+    overflow: hidden;
+}
+body.sidebar-collapsed .sget-sidebar { width: var(--sget-sidebar-mini); }
+
+.sget-sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, .6);
+    backdrop-filter: blur(2px);
+    z-index: 39;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--sget-transicion);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Puntos de quiebre                                                          */
+/* -------------------------------------------------------------------------- */
+@media (max-width: 1024px) {
+    .sget-sidebar { transform: translateX(-100%); box-shadow: var(--sget-sombra-fuerte); }
+    body.sidebar-open .sget-sidebar { transform: translateX(0); }
+    body.sidebar-open .sget-sidebar-backdrop { opacity: 1; pointer-events: auto; }
+    .sget-shell, body.sidebar-collapsed .sget-shell { margin-left: 0; }
+    .sget-main { padding: 1rem; gap: 1.25rem; }
+}
+
+@media (max-width: 640px) {
+    .sget-page-head { padding: 1.125rem; border-radius: var(--sget-radio); }
+    .sget-page-title { font-size: 1.25rem; }
+    .sget-page-actions > * { flex: 1 1 100%; }
+    .sget-grid, .sget-grid--ancho { grid-template-columns: 1fr; }
+}

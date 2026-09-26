@@ -1,4 +1,5 @@
 <?php
+<<<<<<< Updated upstream
 // Archivo: Admin/procesar_viaje.php
 session_start();
 include '../assets/conexion.php';
@@ -74,3 +75,61 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 header("Location: viajes.php");
 exit();
 ?>
+=======
+/**
+ * Conductor/viaje_asignado.php  ->  este endpoint heredado
+ * Admin/procesar_viaje.php
+ * -----------------------------------------------------------------------------
+ * @deprecated  Ya no debería usarse: la vía oficial es api/index.php
+ *               (POST  modulo=viaje&accion=guardar).
+ *
+ * Se conserva como ADAPTADOR porque el formulario del conductor todavía
+ * apunta aquí. Su único trabajo es traducir la petición antigua a
+ * ViajeService y redirigir, de modo que la lógica de negocio quede en un
+ * solo sitio.
+ *
+ * ANTES tenía tres problemas que ya no existen aquí:
+ *   - concatenaba $id_usu_via / $id_veh_via directamente en el SQL
+ *   - liberaba conductor y vehículo sin transacción
+ *   - no validaba nada: aceptaba fechas/horas inválidas (fallback de datos)
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
+
+require_once __DIR__ . '/../core/bootstrap.php';
+
+// Conductores (rol 2) y administradores (rol 1) pueden programar viajes
+if (!in_array(Auth::rol(), [Config::ROL_ADMIN, Config::ROL_CONDUCTOR], true)) {
+    Auth::denegar('viajes');
+}
+
+// El token CSRF lo emite el propio sistema; si el formulario heredado no lo
+// trae, se acepta solo para no romper la sesión del conductor en caliente,
+// pero se avisa en el log.
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    sget_redirigir('viajes.php');
+}
+
+if (!Auth::validarToken($_POST['_token'] ?? null)) {
+    error_log('[SGET][procesar_viaje] Petición sin token CSRF válido desde ' . ($_SERVER['REMOTE_ADDR'] ?? '?'));
+    Flash::error('La sesión expiró. Vuelve a cargar la página e inténtalo de nuevo.');
+    sget_redirigir(Auth::rol() === Config::ROL_CONDUCTOR ? '../Conductor/viaje_asignado.php' : 'viajes.php');
+}
+
+$destino = Auth::rol() === Config::ROL_CONDUCTOR ? '../Conductor/viaje_asignado.php' : 'viajes.php';
+
+// El conductor solo puede programar para sí mismo
+if (Auth::rol() === Config::ROL_CONDUCTOR) {
+    $_POST['id_usu_via'] = Auth::id();
+}
+
+$resultado = ViajeService::guardar($_POST);
+
+if (!empty($resultado['ok'])) {
+    Flash::exito($resultado['mensaje']);
+} else {
+    Flash::error($resultado['mensaje'] ?? 'No se pudo guardar el viaje.');
+}
+
+sget_redirigir($destino);
+>>>>>>> Stashed changes

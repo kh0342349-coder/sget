@@ -210,6 +210,7 @@ if (!function_exists('tiene_acceso_sb')) {
         <?php endif; ?>
     </nav>
 
+<<<<<<< Updated upstream
     <div class="p-3 border-t border-slate-200/80 dark:border-white/10 space-y-1.5 shrink-0">
         <select data-sget-language aria-label="Language" title="Seleccionar idioma / Select language" style="min-width: 108px;" class="sget-language-selector w-full px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-white/5 text-xs font-black text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10 cursor-pointer">
             <option value="es" <?= $idiomaActualSidebar === 'es' ? 'selected' : '' ?>>🇪🇸 ESP</option>
@@ -222,6 +223,11 @@ if (!function_exists('tiene_acceso_sb')) {
         </button>
     
         <button onclick="abrirModalAyuda()" data-tooltip="Ayuda del Módulo" class="sidebar-link w-full flex items-center justify-center gap-2.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 py-3 rounded-2xl text-xs font-bold transition-all border border-sky-500/20 cursor-pointer">
+=======
+    <!-- SOPORTE Y AYUDA -->
+    <div class="p-3 border-t border-slate-200/80 dark:border-white/10 shrink-0">
+        <button type="button" data-sget-modal="modalAyuda" data-tooltip="Ayuda del Módulo" class="sidebar-link w-full flex items-center justify-center gap-2.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 py-3 rounded-2xl text-xs font-bold transition-all border border-sky-500/20 cursor-pointer">
+>>>>>>> Stashed changes
             <i class="fas fa-question-circle text-sm shrink-0"></i>
             <span class="sidebar-text truncate"><?php echo $lang['soporte'] ?? 'Soporte y Ayuda'; ?></span>
         </button>

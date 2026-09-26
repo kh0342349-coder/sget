@@ -1,80 +1,46 @@
 <?php
-// Archivo: Admin/rutas.php
-date_default_timezone_set('America/Bogota');
-session_start();
+/**
+ * Admin/rutas.php
+ * -----------------------------------------------------------------------------
+ * MÓDULO: GESTIÓN DE RUTAS  (Admin)
+ * -----------------------------------------------------------------------------
+ * REFACTOR 2026 · Arquitectura por capas
+ *   core/       Config, Database(PDO), Fecha, Auth, Validator, Flash
+ *   services/   RutaService  → reglas de negocio de rutas
+ *   views/      modales y partials reutilizables
+ *   assets/     CSS modular + motor único de modales
+ *
+ * CORRECCIONES APLICADAS
+ *   - El INSERT/UPDATE ya no pierde ori_rut / des_rut / dis_rut (quedaban '').
+ *   - La imagen se valida (tipo + tamaño) y se borra de la carpeta correcta.
+ *   - Suspender y eliminar pasan por el API, con confirmación y auditoría.
+ *   - El listado pasa a modo tarjeta en móvil (responsive real).
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-include '../assets/conexion.php';
-require_once '../helpers/AuthHelper.php';
+require_once __DIR__ . '/../core/bootstrap.php';
 
-// Verificación de seguridad (Solo Admin)
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
-    header("Location: ../index.php");
-    exit();
-}
+Auth::requerirAdmin();
+Auth::requerirAcceso('rutas');
 
-// BLOQUEO DE SEGURIDAD POR RESTRICCIONES
-$idUsuarioActual = $_SESSION['id_usu'] ?? 0;
-AuthHelper::requerirAcceso($conexion, $idUsuarioActual, 'rutas');
+/* -------------------------------------------------------------------------- */
+/* Mensajes de retorno del API (PRG)                                          */
+/* -------------------------------------------------------------------------- */
+if (!empty($_GET['ok']))     Flash::exito((string)$_GET['ok']);
+elseif (!empty($_GET['error'])) Flash::error((string)$_GET['error']);
 
-$mensaje = "";
+// Cierre automático de viajes vencidos (mantenimiento transversal)
+ViajeService::cerrarVencidos();
 
-// PROCESAMIENTO DE CREACIÓN Y EDICIÓN DE RUTAS
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['accion'])) {
-    $accion = $_POST['accion'];
-    $nom_rut = trim($_POST['nom_rut'] ?? '');
-    $val_rut = floatval($_POST['val_rut'] ?? 0);
-    $id_rut = intval($_POST['id_rut'] ?? 0);
+$rutas  = RutaService::todas();
+$total  = count($rutas);
+$activa = count(array_filter($rutas, fn($r) => (int)($r['estado'] ?? 1) === 1));
 
-    // Manejo de imagen
-    $img_rut = $_POST['imagen_actual'] ?? '';
-    if (isset($_FILES['img_rut']) && $_FILES['img_rut']['error'] == 0) {
-        $ext = pathinfo($_FILES['img_rut']['name'], PATHINFO_EXTENSION);
-        $img_rut = 'ruta_' . time() . '.' . $ext;
-        if (!is_dir('../img/rutas/')) {
-            mkdir('../img/rutas/', 0777, true);
-        }
-        move_uploaded_file($_FILES['img_rut']['tmp_name'], '../img/rutas/' . $img_rut);
-    }
-
-    if ($accion === 'crear') {
-        $stmt = $conexion->prepare("INSERT INTO rutas (nom_rut, val_rut, img_rut) VALUES (?, ?, ?)");
-        $stmt->bind_param("sds", $nom_rut, $val_rut, $img_rut);
-        if ($stmt->execute()) {
-            $mensaje = "
-            <div class='bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-2xl shadow-lg flex items-center gap-3 mb-6'>
-                <i class='fas fa-check-circle text-lg'></i>
-                <span class='text-sm font-semibold'>¡Ruta creada exitosamente!</span>
-            </div>";
-        } else {
-            $mensaje = "
-            <div class='bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl shadow-lg flex items-center gap-3 mb-6'>
-                <i class='fas fa-times-circle text-lg'></i>
-                <span class='text-sm font-semibold'>Error al crear la ruta.</span>
-            </div>";
-        }
-    } elseif ($accion === 'editar' && $id_rut > 0) {
-        $stmt = $conexion->prepare("UPDATE rutas SET nom_rut = ?, val_rut = ?, img_rut = ? WHERE id_rut = ?");
-        $stmt->bind_param("sdsi", $nom_rut, $val_rut, $img_rut, $id_rut);
-        if ($stmt->execute()) {
-            $mensaje = "
-            <div class='bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-2xl shadow-lg flex items-center gap-3 mb-6'>
-                <i class='fas fa-check-circle text-lg'></i>
-                <span class='text-sm font-semibold'>¡Ruta actualizada exitosamente!</span>
-            </div>";
-        } else {
-            $mensaje = "
-            <div class='bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl shadow-lg flex items-center gap-3 mb-6'>
-                <i class='fas fa-times-circle text-lg'></i>
-                <span class='text-sm font-semibold'>Error al actualizar la ruta.</span>
-            </div>";
-        }
-    }
-}
-
-// Consultar rutas registradas
-$sql_rutas = "SELECT * FROM rutas ORDER BY id_rut DESC";
-$resultado_rutas = mysqli_query($conexion, $sql_rutas);
+$tituloPagina = 'Gestión de Rutas';
+include __DIR__ . '/../views/partials/head.php';
 ?>
+<<<<<<< Updated upstream
 <!DOCTYPE html>
 <html lang="es" class="dark">
 <head>
@@ -101,225 +67,164 @@ $resultado_rutas = mysqli_query($conexion, $sql_rutas);
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
     
     <?php include '../includes/sidebar.php'; ?>
+=======
+<?php include __DIR__ . '/../includes/sidebar.php'; ?>
+>>>>>>> Stashed changes
 
-    <div id="main-content-wrapper" class="ml-72 flex flex-col min-h-screen flex-1 transition-all duration-300 min-w-0">
-        <?php include '../includes/header.php'; ?>
+<div class="sget-shell">
+    <?php include __DIR__ . '/../includes/header.php'; ?>
 
-        <main class="space-y-8 flex-grow pb-12 relative z-10 p-8 max-w-[1600px] w-auto mx-auto w-full">
-            
-            <!-- ENCABEZADO CON BOTÓN NUEVA RUTA Y AYUDA -->
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 dark:bg-white/[0.02] p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-md">
-                <div>
-                    <div class="flex items-center gap-2.5">
-                        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Gestión de Rutas</h1>
-                        
-                        <!-- BOTÓN DE AYUDA -->
-                        <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
-                            <i class="fas fa-question text-[10px]"></i>
-                        </button>
-                    </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Administre los trayectos, origen, destino, tarifas base y fotos de despacho.</p>
-                </div>
-                
-                <!-- BOTÓN NUEVA RUTA -->
-                <button type="button" onclick="abrirDrawerCrear()" class="px-5 py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:opacity-90 text-white font-extrabold rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 transition-all flex items-center gap-2 cursor-pointer">
+    <main class="sget-main">
+        <header class="sget-page-head">
+            <div>
+                <h1 class="sget-page-title"><i class="fas fa-route text-sky-500"></i> Gestión de Rutas</h1>
+                <p class="sget-page-sub">
+                    Registra cada trayecto con su <strong>ciudad de salida</strong>, <strong>ciudad de destino</strong>,
+                    distancia, tarifa base y hora de salida por defecto.
+                </p>
+            </div>
+            <div class="sget-page-actions">
+                <button type="button" class="sget-btn sget-btn--primario" data-sget-modal="modalRuta">
                     <i class="fas fa-plus"></i> Nueva Ruta
                 </button>
             </div>
+        </header>
 
-            <?php if (!empty($mensaje)) echo $mensaje; ?>
+        <?= Flash::render() ?>
 
-            <!-- Listado en Tarjetas con Imágenes -->
-            <?php if($resultado_rutas && mysqli_num_rows($resultado_rutas) > 0): ?>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                    <?php while($r = mysqli_fetch_assoc($resultado_rutas)): ?>
-                        <?php 
-                            $nombreImagen = trim($r['img_rut'] ?? '');
-                            $rutaImagen = !empty($nombreImagen) ? "../img/rutas/" . $nombreImagen : "";
-                        ?>
-                        <div class="relative overflow-hidden rounded-2xl h-52 border border-slate-200 dark:border-white/10 shadow-md group transition-all duration-300 hover:shadow-xl flex flex-col justify-between p-4 bg-slate-950">
-                            
-                            <?php if (!empty($nombreImagen) && file_exists("../img/rutas/" . $nombreImagen)): ?>
-                                <img src="<?php echo htmlspecialchars($rutaImagen); ?>" 
-                                    alt="<?php echo htmlspecialchars($r['nom_rut']); ?>" 
-                                    class="absolute inset-0 w-full h-full object-cover object-center z-0 opacity-70 transition-transform duration-500 group-hover:scale-110">
-                            <?php endif; ?>
-                            
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-black/60 z-0"></div>
+        <!-- KPIs -->
+        <section class="sget-grid sget-grid--kpi">
+            <div class="sget-card sget-kpi">
+                <span class="sget-kpi__icono" style="background:color-mix(in srgb,var(--sget-azul) 12%,transparent);color:var(--sget-azul)"><i class="fas fa-route"></i></span>
+                <div><p class="sget-label">Rutas registradas</p><p class="sget-kpi__valor"><?= $total ?></p></div>
+            </div>
+            <div class="sget-card sget-kpi">
+                <span class="sget-kpi__icono" style="background:color-mix(in srgb,var(--sget-emerald) 12%,transparent);color:var(--sget-emerald)"><i class="fas fa-circle-check"></i></span>
+                <div><p class="sget-label">Activas</p><p class="sget-kpi__valor"><?= $activa ?></p></div>
+            </div>
+            <div class="sget-card sget-kpi">
+                <span class="sget-kpi__icono" style="background:color-mix(in srgb,var(--sget-ambars) 14%,transparent);color:var(--sget-ambars)"><i class="fas fa-pause"></i></span>
+                <div><p class="sget-label">Suspendidas</p><p class="sget-kpi__valor"><?= $total - $activa ?></p></div>
+            </div>
+        </section>
 
-                            <div class="relative z-10 flex items-center justify-between mb-2">
-                                <span class="text-[10px] font-mono font-bold text-white/90 bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-md border border-white/10">
-                                    #<?php echo $r['id_rut']; ?>
-                                </span>
-                                <span class="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-900/60 px-2 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1 backdrop-blur-md">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span> Activa
-                                </span>
-                            </div>
-
-                            <div class="relative z-10 space-y-0.5 mt-auto mb-3">
-                                <span class="text-[10px] font-black uppercase tracking-widest text-amber-300 drop-shadow-md">
-                                    $<?php echo number_format($r['val_rut'] ?? 0, 0, ',', '.'); ?> COP
-                                </span>
-                                <h3 class="font-black text-white text-lg tracking-tight leading-tight truncate drop-shadow-lg" title="<?php echo htmlspecialchars($r['nom_rut']); ?>">
-                                    <?php echo htmlspecialchars($r['nom_rut']); ?>
-                                </h3>
-                            </div>
-
-                            <div class="relative z-10 flex items-center gap-2 pt-2 border-t border-white/20">
-                                <button type="button" 
-                                        onclick="abrirDrawerEditar(<?php echo $r['id_rut']; ?>, '<?php echo htmlspecialchars($r['nom_rut'], ENT_QUOTES); ?>', <?php echo $r['val_rut'] ?? 0; ?>, '<?php echo htmlspecialchars($nombreImagen, ENT_QUOTES); ?>')"
-                                        class="flex-1 text-center py-1.5 px-2 bg-blue-600/90 hover:bg-blue-600 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 backdrop-blur-sm cursor-pointer">
-                                    <i class="fas fa-edit"></i> Editar
-                                </button>
-                                <a href="eliminar.php?tipo=ruta&id=<?php echo $r['id_rut']; ?>" 
-                                onclick="return confirm(window.SGET_I18N?.t('¿Confirma que desea eliminar esta ruta?') || 'Are you sure you want to delete this route?')"
-                                class="flex-1 text-center py-1.5 px-2 bg-red-600/90 hover:bg-red-600 text-white font-bold text-[10px] uppercase tracking-wider rounded-lg shadow-sm transition-all flex items-center justify-center gap-1 backdrop-blur-sm">
-                                    <i class="fas fa-trash"></i> Eliminar
-                                </a>
-                            </div>
-
-                        </div>
-                    <?php endwhile; ?>
-                </div>
-            <?php else: ?>
-                <div class="flex flex-col items-center justify-center p-12 bg-white dark:bg-[#121826] rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl text-center">
-                    <div class="w-16 h-16 rounded-2xl bg-sky-500/10 text-sky-400 flex items-center justify-center text-2xl mb-4">
-                        <i class="fas fa-route"></i>
-                    </div>
-                    <h3 class="text-base font-bold text-slate-800 dark:text-white">No hay rutas registradas</h3>
-                    <p class="text-slate-500 dark:text-slate-400 text-xs mt-1">Actualmente no existen trayectos creados en el sistema.</p>
-                </div>
-            <?php endif; ?>
-
-        </main>
-    </div>
-
-    <!-- PANEL LATERAL DESLIZANTE (DRAWER) DESDE LA DERECHA -->
-    <div id="drawerOverlay" onclick="cerrarDrawerRuta()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300"></div>
-    <div id="drawerRuta" class="fixed top-0 right-0 h-full w-full max-w-md bg-white dark:bg-[#121826] shadow-2xl z-50 transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col border-l border-slate-200 dark:border-white/10 p-6 overflow-y-auto">
-        
-        <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-4 mb-6">
-            <h3 id="drawerTitulo" class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                <i class="fas fa-route text-sky-400"></i> Registrar Nueva Ruta
-            </h3>
-            <button onclick="cerrarDrawerRuta()" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer">
-                <i class="fas fa-times text-xs"></i>
-            </button>
+        <!-- Buscador + filtros -->
+        <div class="sget-toolbar">
+            <div class="sget-search">
+                <i class="fas fa-magnifying-glass"></i>
+                <input type="search" id="buscarRuta" class="sget-input" placeholder="Buscar ruta, salida o destino… (Ctrl+K)">
+            </div>
+            <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="*">Todas</button>
+            <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="1">Activas</button>
+            <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="0">Suspendidas</button>
         </div>
 
-        <form action="rutas.php" method="POST" enctype="multipart/form-data" class="space-y-5 flex-grow flex flex-col justify-between">
-            <div class="space-y-4">
-                <input type="hidden" name="accion" id="input_accion" value="crear">
-                <input type="hidden" name="id_rut" id="input_id_rut" value="">
-                <input type="hidden" name="imagen_actual" id="input_imagen_actual" value="">
-
-                <div class="space-y-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nombre del Trayecto / Ruta</label>
-                    <input type="text" name="nom_rut" id="input_nom_rut" required placeholder="Ej.: Fusagasugá - Bogotá" data-i18n-placeholder-es="Ej.: Fusagasugá - Bogotá" data-i18n-placeholder-en="e.g. Fusagasugá - Bogotá" class="w-full px-4 py-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs text-slate-800 dark:text-white">
-                </div>
-
-                <div class="space-y-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tarifa Base ($)</label>
-                    <input type="number" name="val_rut" id="input_val_rut" step="0.01" required placeholder="0.00" data-i18n-placeholder-es="0.00" data-i18n-placeholder-en="0.00" class="w-full px-4 py-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs font-mono text-slate-800 dark:text-white">
-                </div>
-
-                <div class="space-y-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fotografía de la Ruta</label>
-                    <input type="file" name="img_rut" accept="image/*" class="w-full px-4 py-2.5 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-sky-500/10 file:text-sky-400 hover:file:bg-sky-500/20 cursor-pointer">
-                    <p class="text-[10px] text-slate-500 mt-1">Formatos permitidos: JPG, PNG. (Opcional al editar)</p>
-                </div>
-            </div>
-
-            <div class="pt-4 border-t border-slate-100 dark:border-white/5 flex gap-3">
-                <button type="button" onclick="cerrarDrawerRuta()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
-                <button type="submit" class="flex-1 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 hover:opacity-90 transition-all cursor-pointer">
-                    Guardar Ruta
+        <!-- Listado -->
+        <?php if ($total === 0): ?>
+            <div class="sget-vacio">
+                <span class="sget-vacio__icono"><i class="fas fa-route"></i></span>
+                <h2 class="sget-label" style="font-size:.875rem">No hay rutas registradas</h2>
+                <p class="sget-page-sub" style="margin:0">Crea la primera ruta indicando su ciudad de salida, su destino y la tarifa base.</p>
+                <button type="button" class="sget-btn sget-btn--primario" style="margin-top:1rem" data-sget-modal="modalRuta">
+                    <i class="fas fa-plus"></i> Crear la primera ruta
                 </button>
             </div>
-        </form>
+        <?php else: ?>
+            <section class="sget-grid sget-grid--ancho">
+                <?php foreach ($rutas as $r):
+                    $id     = (int)$r['id_rut'];
+                    $imgUrl = RutaService::urlImagen($r['img_rut'] ?? null);
+                    $estado = (int)($r['estado'] ?? 1);
+                    $hora   = Fecha::soloHora($r['hora_salida'] ?? '');
+                    $datos  = [
+                        'id_rut'      => $id,
+                        'nom_rut'     => $r['nom_rut'],
+                        'ori_rut'     => $r['ori_rut'],
+                        'des_rut'     => $r['des_rut'],
+                        'dis_rut'     => $r['dis_rut'],
+                        'val_rut'     => $r['val_rut'],
+                        'hora_salida' => $hora,
+                        'img_actual'  => $r['img_rut'],
+                        'estado'      => (string)$estado,
+                        'titulo'      => 'Editar Ruta #' . $id,
+                    ];
+                ?>
+                <article class="sget-card sget-card--interactiva sget-fila"
+                         data-sget-fila data-estado="<?= $estado ?>" style="<?= $estado ? '' : 'opacity:.62;' ?>">
 
-    </div>
+                    <header style="display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem">
+                        <div style="min-width:0">
+                            <p class="sget-label">
+                                <i class="fas fa-location-arrow text-emerald-400"></i>
+                                <span class="sget-linea-1"><?= htmlspecialchars((string)$r['ori_rut'], ENT_QUOTES, 'UTF-8') ?></span>
+                            </p>
+                            <h3 class="sget-page-title" style="font-size:1.0625rem;margin:.25rem 0">
+                                <i class="fas fa-arrow-right" style="font-size:.7rem;color:var(--sget-texto-tenue)"></i>
+                                <span class="sget-linea-1"><?= htmlspecialchars((string)$r['des_rut'], ENT_QUOTES, 'UTF-8') ?></span>
+                            </h3>
+                            <p class="sget-page-sub sget-linea-1" style="margin:0"><?= htmlspecialchars((string)$r['nom_rut'], ENT_QUOTES, 'UTF-8') ?></p>
+                        </div>
+                        <span class="sget-badge <?= $estado ? 'sget-badge--exito' : 'sget-badge--neutro' ?>">
+                            <?= $estado ? 'Activa' : 'Suspendida' ?>
+                        </span>
+                    </header>
 
-    <!-- MODAL DE AYUDA -->
-    <div id="overlayAyuda" onclick="cerrarModalAyuda()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300"></div>
-    <div id="modalAyuda" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
-        <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
-            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
-                <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                    <i class="fas fa-info-circle text-sky-400"></i> Guía de Gestión de Rutas
-                </h3>
-                <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"><i class="fas fa-times text-xs"></i></button>
-            </div>
-            <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-plus-circle text-sky-400 mt-0.5"></i>
-                    <span><b>Nueva Ruta:</b> Despliega el panel lateral derecho para registrar un nuevo trayecto especificando su nombre, tarifa e imagen.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-edit text-blue-400 mt-0.5"></i>
-                    <span><b>Editar Ruta:</b> Despliega el mismo panel lateral precargando los datos del trayecto seleccionado.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-trash text-red-400 mt-0.5"></i>
-                    <span><b>Eliminar:</b> Remueve permanentemente el trayecto del sistema.</span>
-                </li>
-            </ul>
-            <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
-                Entendido
-            </button>
-        </div>
-    </div>
+                    <div class="sget-form-3col" style="margin-top:1rem;gap:.5rem">
+                        <div>
+                            <p class="sget-label">Tarifa</p>
+                            <p class="sget-mono" style="font-size:.875rem;font-weight:800">$<?= number_format((float)$r['val_rut'], 0, ',', '.') ?></p>
+                        </div>
+                        <div>
+                            <p class="sget-label">Distancia</p>
+                            <p class="sget-mono" style="font-size:.875rem"><?= (float)$r['dis_rut'] > 0 ? number_format((float)$r['dis_rut'], 1, ',', '.') . ' km' : '—' ?></p>
+                        </div>
+                        <div>
+                            <p class="sget-label">Salida</p>
+                            <p class="sget-mono" style="font-size:.875rem"><?= $hora !== '' ? $hora : '—' ?></p>
+                        </div>
+                    </div>
 
-    <!-- SCRIPTS DE CONTROL -->
-    <script>
-    function abrirDrawerCrear() {
-        document.getElementById('drawerTitulo').innerHTML = '<i class="fas fa-route text-sky-400"></i> Registrar Nueva Ruta';
-        document.getElementById('input_accion').value = 'crear';
-        document.getElementById('input_id_rut').value = '';
-        document.getElementById('input_nom_rut').value = '';
-        document.getElementById('input_val_rut').value = '';
-        document.getElementById('input_imagen_actual').value = '';
+                    <?php if ($imgUrl): ?>
+                        <img src="../<?= htmlspecialchars($imgUrl, ENT_QUOTES, 'UTF-8') ?>"
+                             alt="<?= htmlspecialchars((string)$r['nom_rut'], ENT_QUOTES, 'UTF-8') ?>" loading="lazy"
+                             style="margin-top:.875rem;width:100%;height:7rem;object-fit:cover;border-radius:var(--sget-radio-sm)">
+                    <?php endif; ?>
 
-        document.getElementById('drawerOverlay').classList.remove('opacity-0', 'pointer-events-none');
-        document.getElementById('drawerOverlay').classList.add('opacity-100', 'pointer-events-auto');
-        document.getElementById('drawerRuta').classList.remove('translate-x-full');
-        document.getElementById('drawerRuta').classList.add('translate-x-0');
-    }
+                    <footer style="display:flex;gap:.5rem;margin-top:1rem;padding-top:.875rem;border-top:1px solid var(--sget-borde)">
+                        <button type="button" class="sget-btn sget-btn--neutro sget-btn--sm" style="flex:1"
+                                data-sget-modal="modalRuta"
+                                data-sget-nuevo="Registrar Nueva Ruta"
+                                data-sget-datos='<?= htmlspecialchars(json_encode($datos, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
+                            <i class="fas fa-pen"></i> Editar
+                        </button>
 
-    function abrirDrawerEditar(id, nombre, valor, imagen) {
-        document.getElementById('drawerTitulo').innerHTML = '<i class="fas fa-edit text-sky-400"></i> Editar Ruta #' + id;
-        document.getElementById('input_accion').value = 'editar';
-        document.getElementById('input_id_rut').value = id;
-        document.getElementById('input_nom_rut').value = nombre;
-        document.getElementById('input_val_rut').value = valor;
-        document.getElementById('input_imagen_actual').value = imagen;
+                        <button type="button" class="sget-icon-btn <?= $estado ? 'sget-icon-btn--editar' : 'sget-icon-btn--exito' ?>"
+                                title="<?= $estado ? 'Suspender ruta' : 'Reactivar ruta' ?>"
+                                aria-label="<?= $estado ? 'Suspender ruta' : 'Reactivar ruta' ?>"
+                                data-sget-accion="alternar" data-sget-modulo="ruta"
+                                data-sget-dato='<?= htmlspecialchars(json_encode(['id' => $id, 'estado' => $estado ? 0 : 1, 'accion' => 'cambiarEstado'], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
+                            <i class="fas <?= $estado ? 'fa-pause' : 'fa-play' ?>"></i>
+                        </button>
 
-        document.getElementById('drawerOverlay').classList.remove('opacity-0', 'pointer-events-none');
-        document.getElementById('drawerOverlay').classList.add('opacity-100', 'pointer-events-auto');
-        document.getElementById('drawerRuta').classList.remove('translate-x-full');
-        document.getElementById('drawerRuta').classList.add('translate-x-0');
-    }
+                        <button type="button" class="sget-icon-btn sget-icon-btn--peligro"
+                                title="Eliminar ruta" aria-label="Eliminar ruta"
+                                data-sget-accion="eliminar" data-sget-modulo="ruta"
+                                data-sget-dato='<?= htmlspecialchars(json_encode(['id' => $id], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'
+                                data-sget-titulo="Eliminar ruta"
+                                data-sget-texto='Se eliminará la ruta <strong><?= htmlspecialchars((string)$r['nom_rut'], ENT_QUOTES, 'UTF-8') ?></strong>. Solo es posible si no tiene viajes activos ni programados.'
+                                data-sget-ok="Sí, eliminar">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </footer>
+                </article>
+                <?php endforeach; ?>
+            </section>
+        <?php endif; ?>
+    </main>
+</div>
 
-    function cerrarDrawerRuta() {
-        document.getElementById('drawerRuta').classList.remove('translate-x-0');
-        document.getElementById('drawerRuta').classList.add('translate-x-full');
-        document.getElementById('drawerOverlay').classList.remove('opacity-100', 'pointer-events-auto');
-        document.getElementById('drawerOverlay').classList.add('opacity-0', 'pointer-events-none');
-    }
+<?php include __DIR__ . '/../views/modals/ruta.php'; ?>
 
-    function abrirModalAyuda() {
-        document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
-        document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');
-        document.getElementById('modalAyuda').classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
-        document.getElementById('modalAyuda').classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
-    }
-
-    function cerrarModalAyuda() {
-        document.getElementById('modalAyuda').classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
-        document.getElementById('modalAyuda').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
-        document.getElementById('overlayAyuda').classList.remove('opacity-100', 'pointer-events-auto');
-        document.getElementById('overlayAyuda').classList.add('opacity-0', 'pointer-events-none');
-    }
-    </script>
-</body>
-</html>
+<?php
+$jsExtra = ['sget-page.js'];
+include __DIR__ . '/../views/partials/foot.php';

@@ -30,7 +30,13 @@ $tab = $_GET['tab'] ?? 'general';
 
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="style_admin.css">
+    <!-- CSS MODULAR DEL PANEL (antes: style_admin.css, que no existia en esta carpeta) -->
+    <link rel="stylesheet" href="../assets/css/01-base.css">
+    <link rel="stylesheet" href="../assets/css/02-layout.css">
+    <link rel="stylesheet" href="../assets/css/03-componentes.css">
+    <link rel="stylesheet" href="../assets/css/04-modales.css">
+    <link rel="stylesheet" href="../assets/css/05-tablas.css">
+    <link rel="stylesheet" href="../assets/css/06-responsive.css">
     <script>
         tailwind.config = {
             darkMode: 'class',
