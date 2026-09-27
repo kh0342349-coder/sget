@@ -17,6 +17,10 @@ $inactividadContexto = hash('sha256', (string) $_SESSION['inactividad_contexto']
 $inactividadConfig = [
     'inicialmenteBloqueada' => $inactividadInicialmenteBloqueada,
     'contexto' => $inactividadContexto,
+    // El navegador NO debe decidir el plazo: lo recibe desde core/Config.php
+    // para que cambiarlo en un solo sitio sincronice servidor y cliente.
+    'minutosInactividad' => Config::MINUTOS_INACTIVIDAD,
+    'segundosGracia'     => Config::SEGUNDOS_GRACIA_INACTIVIDAD,
     'bloqueadaEn' => isset($_SESSION['inactividad_bloqueada_en'])
         ? (int) $_SESSION['inactividad_bloqueada_en']
         : null,

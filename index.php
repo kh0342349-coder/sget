@@ -49,6 +49,9 @@ if (!$resultado_viajes) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SGET - Sistema Inteligente de Transporte</title>
 
+    <!-- Tema: se ejecuta ANTES del primer pintado para evitar el parpadeo -->
+    <script src="assets/js/theme-init.js?v=<?= @filemtime('assets/js/theme-init.js') ?: '1' ?>"></script>
+
     <!-- Tailwind CSS & FontAwesome -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -72,22 +75,6 @@ if (!$resultado_viajes) {
             }
         };
 
-        // Script Anti-Parpadeo de Tema
-        (function() {
-            const theme = localStorage.getItem('theme') || 
-                (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-            const html = document.documentElement;
-            
-            if (theme === 'dark') {
-                html.classList.add('dark');
-                html.classList.remove('light');
-                html.setAttribute('data-theme', 'dark');
-            } else {
-                html.classList.remove('dark');
-                html.classList.add('light');
-                html.setAttribute('data-theme', 'light');
-            }
-        })();
 
         // Manejador del Token devuelto por Google
         function handleGoogleResponse(response) {
@@ -109,7 +96,6 @@ if (!$resultado_viajes) {
             .catch(error => console.error('Error al comunicarse con el servidor:', error));
         }
     </script>
-    <script src="theme-toggle.js" defer></script>
 </head>
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen flex flex-col antialiased">
 

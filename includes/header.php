@@ -52,13 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion_perfil']) && $
 if (isset($_POST['idioma']) && in_array($_POST['idioma'], ['es', 'en'], true)) {
     $_SESSION['sget_idioma'] =$_POST['idioma'];
 }
-$idiomaActual =$_SESSION['sget_idioma'] ?? 'es';
-
-if ($idiomaActual === 'en') {
-    @include_once __DIR__ . '/../lang/en.php';
-} else {
-    @include_once __DIR__ . '/../lang/es.php';
-}
+// Idioma + diccionario: partial único e idempotente (antes se repetía a mano
+// en header, sidebar y header_index, y en este archivo el <script> quedó sin
+// abrir, imprimiendo código JavaScript como texto encima de la cabecera).
+require_once __DIR__ . '/i18n.php';
 
 $rolUsuario = $_SESSION['rol'] ?? $_SESSION['id_rol_usu'] ?? 0;
 $idUsuarioSesión = intval($_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 0);
@@ -126,10 +123,8 @@ foreach ($catalogoOpciones as$opcion) {
 ?>
 
 <script>
-window.SGET_LANGUAGE_URL = '../set_language.php';
-window.SGET_CSRF = '<?= Auth::token() ?>';
-</script> document.documentElement.setAttribute('data-language', '<?= htmlspecialchars($idiomaActual, ENT_QUOTES, 'UTF-8') ?>');</script>
-<script src="../js/i18n.js?v=20260908-1"></script>
+    window.SGET_CSRF = <?= json_encode(Auth::token()) ?>;
+</script>
 <script>
     const OPCIONES_SGET = <?php echo json_encode($opcionesSGET); ?>;
 </script>

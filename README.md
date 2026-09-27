@@ -47,7 +47,9 @@ touch pruebas/.habilitar
 SGET_DEBUG=1 php -S 127.0.0.1:8899 -t .      # en Windows: set SGET_DEBUG=1 && php -S ...
 php pruebas/render.php        # 92 · páginas de los 3 roles + módulo de auditoría
 php pruebas/api.php           # 10 · CSRF, errores por campo, auth, exportación
-node pruebas/modal-visual.js  # 65 · modales de la landing (Chrome headless)
+node pruebas/tema-visual.js     # 413 · tema claro/oscuro y contraste en 17 páginas
+node pruebas/visual-visual.js   # 76 · modales de la landing y CRUD, sin draws
+node pruebas/modal-visual.js    # 65 · modales de la landing (abrir/cerrar)
 node pruebas/transicion-visual.js  # 18 · transiciones entre módulos
 node pruebas/cancelacion-visual.js  # 39 · flujo de cancelación de viaje
 rm pruebas/.habilitar        # ¡bórralo siempre!

@@ -107,6 +107,7 @@ $conductores_disponibles = $conexion->query("
     </script>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
     <script>
         tailwind.config = {
             darkMode: 'class'

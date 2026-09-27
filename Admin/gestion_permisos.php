@@ -128,6 +128,7 @@ $nombresRoles = [
     <title>SGET - Gestión de Permisos y Restricciones</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <!-- CSS MODULAR DEL PANEL (antes: style_admin.css, que no existia en esta carpeta) -->
     <link rel="stylesheet" href="../assets/css/01-base.css">

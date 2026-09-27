@@ -1,0 +1,69 @@
+<!DOCTYPE html><html><body><pre id="r">x</pre>
+<iframe id="f" src="/index.php" style="width:1300px;height:900px"></iframe>
+<script>
+var o=[],fallos=0,hecho=false;
+function ok(c,t,d){if(!c)fallos++;o.push((c?'OK   | ':'FALLA | ')+t+(d?' | '+d:''));}
+function info(t){o.push('INFO  | '+t);}
+function fin(){if(hecho)return;hecho=true;
+  document.getElementById('r').textContent='BTN_START\n'+o.join('\n')+'\nFALLOS='+fallos+'\nBTN_END';}
+window.onerror=function(m){o.push('FALLA | error JS: '+m);fallos++;fin();return false;};
+
+/* No depende del evento `load`: un subrecurso externo puede no responder. */
+function arrancar(n,cb){
+  (function intentar(){
+    var d=document.getElementById('f').contentDocument;
+    if(d&&d.body&&d.getElementById('panelLogin')) return cb(d);
+    if(n<=0){o.push('FALLA | la landing no cargó a tiempo');fallos++;return fin();}
+    setTimeout(function(){intentar();},200);
+  })();
+}
+
+arrancar(24,function(d){
+  try{
+    var w=d.defaultView;
+    var st=d.createElement('style');
+    st.textContent='*,*::before,*::after{transition:none !important;animation:none !important}';
+    d.head.appendChild(st);
+    w.SGETTheme.set('light');
+
+    // La causa de que los botones salieran como texto plano era que la landing
+    // NO cargaba 03-componentes.css (donde vive .sget-btn).
+    var hrefs=[]; for(var i=0;i<d.styleSheets.length;i++){ var h=d.styleSheets[i].href; if(h) hrefs.push(h.split('/').pop().split('?')[0]); }
+    info('hojas de la landing: '+hrefs.join(', '));
+    ok(hrefs.indexOf('index.css')>-1,'la landing carga su hoja index.css');
+    ok(hrefs.indexOf('01-base.css')>-1||/index\.css$/.test(hrefs[hrefs.length-1]||''),'index.css está cargada');
+
+    var abrir=d.querySelector('[data-sget-modal="panelLogin"]');
+    ok(!!abrir,'hay un botón que abre el login');
+    abrir.click();
+
+    var ml=d.getElementById('panelLogin');
+    ok(ml.dataset.abierto==='1','el modal de login se abre','abierto='+ml.dataset.abierto);
+
+    function medir(sel,t,exigirFondo){
+      var e=ml.querySelector(sel);
+      if(!e){ok(false,t,'no existe '+sel);return null;}
+      var c=w.getComputedStyle(e),r=e.getBoundingClientRect();
+      info(t+' bg='+c.backgroundColor+' color='+c.color+' fw='+c.fontWeight+' w='+Math.round(r.width)+' h='+Math.round(r.height));
+      var pintado = c.backgroundColor!=='rgba(0, 0, 0, 0)' || (c.backgroundImage&&c.backgroundImage!=='none');
+      ok(r.width>=32&&r.height>=14,t+' tiene tamaño real',Math.round(r.width)+'x'+Math.round(r.height));
+      // Un botón puede pintar con degradado (backgroundImage) y no con color plano.
+      if(exigirFondo!==false) ok(pintado,t+' tiene fondo pintado','color='+c.backgroundColor+' imagen='+c.backgroundImage.slice(0,40));
+      return c;
+    }
+    var b=medir('button[type="submit"]','botón Ingresar');
+    if(b) ok(b.fontWeight!=='400'&&parseInt(b.fontWeight)>=700,'el texto del botón está en negrita',b.fontWeight);
+    medir('button[data-sget-cerrar]','botón cerrar');
+    var lab=medir('.sget-label','etiqueta de campo', false);
+    if(lab) ok(parseInt(lab.fontWeight)>=700,'la etiqueta se lee en negrita',lab.fontWeight);
+    medir('.sget-input','campo de texto');
+    medir('.sget-modal__head','cabecera del modal', false);
+    medir('.sget-modal__icono','icono del modal');
+    ok(!!ml.querySelector('i.fas'),'hay icono FontAwesome en el modal');
+    var captcha=ml.querySelector('.g-recaptcha');
+    info('reCAPTCHA presente: '+!!captcha);
+  }catch(e){ o.push('FALLA | excepción: '+e.message); fallos++; }
+  fin();
+});
+setTimeout(fin, 9000);
+</script></body></html>

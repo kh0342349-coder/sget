@@ -1,0 +1,98 @@
+<!DOCTYPE html><html><body><pre id="r">x</pre>
+<iframe id="f" src="/index.php" style="width:1300px;height:900px"></iframe>
+<script>
+var o=[],fallos=0;
+function ok(c,t,d){if(!c)fallos++;o.push((c?'OK   | ':'FALLA | ')+t+(d?' | '+d:''));}
+function fin(){document.getElementById('r').textContent='LAND_START\n'+o.join('\n')+'\nFALLOS='+fallos+'\nLAND_END';}
+function lum(c){var m=String(c).match(/rgba?\(([^)]+)\)/);if(!m)return null;var p=m[1].split(',').map(parseFloat);
+  if(p[3]===0)return null;return (0.2126*p[0]+0.7152*p[1]+0.0722*p[2])/255;}
+/* No depende del evento `load` del iframe: si un subrecurso externo
+   (reCAPTCHA, Google Identity) no responde, `load` puede no llegar nunca. */
+function arrancar(n){
+  return new Promise(function(res){
+    (function intentar(){
+      var d=f.contentDocument;
+      if(d&&d.body&&(d.getElementById('panelLogin')||d.getElementById('modalRuta'))) return res();
+      if(n<=0) return res();
+      n--; setTimeout(intentar,200);
+    })();
+  });
+}
+function esperar(n){var d=f.contentDocument;
+  if(d&&d.body&&d.getElementById('panelLogin')&&d.getElementById('panelRegistro'))return Promise.resolve();
+  if(n<=0)return Promise.resolve();
+  return new Promise(function(r){setTimeout(function(){r(esperar(n-1));},200);});}
+
+arrancar(24).then(function(){
+  var d=f.contentDocument,w=d.defaultView;
+  var st=d.createElement('style');
+  st.textContent='*,*::before,*::after{transition:none !important;animation:none !important}';
+  d.head.appendChild(st);
+
+  ok(!!w.SGETTheme,'el script de tema está cargado en la landing');
+  ok(d.querySelectorAll('.sget-modal-wrap').length>=4,'la landing tiene 4 modales',
+     d.querySelectorAll('.sget-modal-wrap').length+' encontrados');
+
+  [['panelLogin','login'],['panelRegistro','registro'],['panelPolitica','política'],['panelConfigCookies','cookies']]
+  .forEach(function(par){
+    var m=d.getElementById(par[0]);
+    ok(!!m,'existe el modal de '+par[1]);
+    if(!m)return;
+    ok(m.classList.contains('sget-modal-wrap'),par[1]+' usa .sget-modal-wrap');
+    ok(m.dataset.abierto!=='1',par[1]+' arranca cerrado');
+    var cs=w.getComputedStyle(m);
+    ok(cs.pointerEvents==='none',par[1]+' no intercepta clics al estar cerrado',cs.pointerEvents);
+  });
+
+  // Login en tema CLARO
+  w.SGETTheme.set('light');
+  d.querySelector('[data-sget-modal="panelLogin"]').click();
+  var ml=d.getElementById('panelLogin');
+  var card=ml.querySelector('.sget-modal');
+  var cs=w.getComputedStyle(ml);
+  ok(ml.dataset.abierto==='1','el modal de login se abre');
+  ok(parseFloat(cs.opacity)>0.9,'el overlay es opaco (opacidad '+cs.opacity+')');
+  var rc=card.getBoundingClientRect();
+  ok(rc.width>280&&rc.height>250,'el modal tiene tamaño real ('+Math.round(rc.width)+'x'+Math.round(rc.height)+')');
+  o.push('INFO | claro  login bg='+w.getComputedStyle(card).backgroundColor+' color='+w.getComputedStyle(card).color);
+  ok(lum(w.getComputedStyle(card).backgroundColor)>0.55,'[claro] el modal de login es CLARO (no negro)',
+     w.getComputedStyle(card).backgroundColor);
+  ok(Math.abs(lum(w.getComputedStyle(card).color)-lum(w.getComputedStyle(card).backgroundColor))>0.4,
+     '[claro] el texto del login contrasta',
+     w.getComputedStyle(card).color+' sobre '+w.getComputedStyle(card).backgroundColor);
+  var inp=d.getElementById('loginDocumento');
+  ok(!!inp,'el campo de documento existe');
+  var ci=w.getComputedStyle(inp);
+  ok(lum(ci.backgroundColor)>0.55,'[claro] el campo del login es claro',ci.backgroundColor);
+  ok(Math.abs(lum(ci.color)-lum(ci.backgroundColor))>0.4,'[claro] el texto del campo contrasta',
+     ci.color+' sobre '+ci.backgroundColor);
+
+  // Login en tema OSCURO
+  ml.querySelector('[data-sget-cerrar]').click();
+  w.SGETTheme.set('dark');
+  d.querySelector('[data-sget-modal="panelLogin"]').click();
+  var cd=w.getComputedStyle(card);
+  o.push('INFO | oscuro login bg='+cd.backgroundColor+' color='+cd.color);
+  ok(lum(cd.backgroundColor)<0.45,'[oscuro] el modal de login es oscuro',cd.backgroundColor);
+  ok(Math.abs(lum(cd.color)-lum(cd.backgroundColor))>0.4,'[oscuro] el texto contrasta',
+     cd.color+' sobre '+cd.backgroundColor);
+
+  // Registro
+  ml.querySelector('[data-sget-cerrar]').click();
+  d.querySelector('[data-sget-ir-a="panelRegistro"]').click();
+  setTimeout(function(){
+    var mr=d.getElementById('panelRegistro');
+    ok(mr.dataset.abierto==='1','el modal de registro se abre desde el login');
+    ok(w.getComputedStyle(mr).pointerEvents!=='none','el registro acepta clics');
+    ok(mr.querySelector('#reg_pass')&&mr.querySelector('#reg_pass_confirm'),'el registro pide confirmar contraseña');
+    ok(!!mr.querySelector('#acepta_politica'),'el registro pide aceptar la política');
+    // Cerrar con Escape
+    d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    setTimeout(function(){
+      ok(mr.dataset.abierto!=='1','Escape cierra el modal de registro');
+      fin();
+    },400);
+  },500);
+});
+setTimeout(fin, 9000);
+</script></body></html>

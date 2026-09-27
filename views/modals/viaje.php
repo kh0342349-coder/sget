@@ -15,12 +15,15 @@ $__rutas     = RutaService::todas(true);
 $__conductores = ViajeService::conductoresDisponibles();
 $__vehiculos = VehiculoService::disponiblesParaDespacho();
 ?>
-<div class="sget-drawer-wrap" id="modalViaje" data-sget-capa data-titulo="<?= $__edicion ? 'Editar viaje' : 'Programar viaje' ?>">
+<?php // Antes: panel lateral (drawer). Ahora: modal centrado, igual que el resto de CRUD. ?>
+<div class="sget-modal-wrap" id="modalViaje" data-sget-capa data-titulo="<?= $__edicion ? 'Editar viaje' : 'Programar viaje' ?>">
     <div class="sget-overlay"></div>
-    <aside class="sget-drawer sget-drawer--ancho" role="dialog" aria-modal="true" aria-labelledby="tituloModalViaje">
-        <form data-sget-panel novalidate>
 
-            <header class="sget-drawer__head">
+    <form class="sget-modal sget-modal--lg" data-sget-panel novalidate
+          data-sget-form data-sget-cerrar-al-guardar="modalViaje"
+          role="dialog" aria-modal="true" aria-labelledby="tituloModalViaje">
+
+            <header class="sget-modal__head">
                 <div>
                     <h2 class="sget-modal__titulo" id="tituloModalViaje">
                         <span class="sget-modal__icono"><i class="fas fa-bus"></i></span>
@@ -33,7 +36,7 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
                 </button>
             </header>
 
-            <div class="sget-drawer__body sget-scroll">
+            <div class="sget-modal__body sget-scroll">
                 <?= Auth::campoToken() ?>
                 <input type="hidden" name="modulo" value="viaje">
                 <input type="hidden" name="accion" value="guardar">
@@ -150,12 +153,11 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
                 </div>
             </div>
 
-            <footer class="sget-drawer__foot">
+            <footer class="sget-modal__foot">
                 <button type="button" class="sget-btn sget-btn--neutro" data-sget-cerrar>Cancelar</button>
                 <button type="submit" class="sget-btn sget-btn--primario">
                     <i class="fas fa-floppy-disk"></i> <span>Guardar Viaje</span>
                 </button>
             </footer>
-        </form>
-    </aside>
+    </form>
 </div>

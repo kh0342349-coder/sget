@@ -7,7 +7,7 @@ header("Expires: 0");
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-$idiomaActual = $_SESSION['sget_idioma'] ?? 'es';
+require_once __DIR__ . '/i18n.php';
 
 // 2. Comprobar si realmente hay una sesión activa válida
 $estaAutenticado = !empty($_SESSION['nombre_usuario']) || !empty($_SESSION['documento']);
@@ -73,7 +73,7 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
 
             <!-- TOGGLE TEMA -->
             <button id="theme-toggle" type="button" class="w-10 h-10 rounded-full bg-slate-100/70 dark:bg-slate-800/70 text-slate-700 dark:text-amber-300 flex items-center justify-center transition-all cursor-pointer border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105" title="Cambiar Tema">
-                <i id="theme-toggle-icon" class="fas fa-moon text-sm"></i>
+                <i id="themeIcon" class="fas fa-moon text-sm"></i>
             </button>
 
             <!-- BOTONES DE INICIO Y REGISTRO -->
@@ -110,39 +110,30 @@ $pagina_actual = basename($_SERVER['PHP_SELF']);
     </div>
 </header>
 
-<script>
-    window.SGET_LANGUAGE_URL = 'set_language.php';
-    document.documentElement.setAttribute('data-language', '<?= htmlspecialchars($idiomaActual, ENT_QUOTES, 'UTF-8') ?>');
-</script>
-<script src="js/i18n.js?v=20260908-1"></script>
+<?php /* El idioma, data-language y i18n.js los emite includes/i18n.php (una sola vez). */ ?>
 
 <!-- Motor común de modales: el MISMO que usa el panel interno -->
 <script src="assets/js/sget-modal.js?v=<?= @filemtime('assets/js/sget-modal.js') ?: '1' ?>"></script>
 
-<!-- SCRIPT DE MANEJO DE TEMA -->
+<!-- BOTÓN DE TEMA: delega en la API compartida (assets/js/theme-init.js) -->
+
 <script>
-    (function() {
-        const themeToggleBtn = document.getElementById('theme-toggle');
-        const themeIcon = document.getElementById('theme-toggle-icon');
 
-        function actualizarIcono(esOscuro) {
-            if (!themeIcon) return;
-            if (esOscuro) {
-                themeIcon.className = 'fas fa-sun text-sm text-amber-400';
-            } else {
-                themeIcon.className = 'fas fa-moon text-sm text-slate-600';
-            }
-        }
+    (function () {
 
-        const esOscuroInicial = document.documentElement.classList.contains('dark');
-        actualizarIcono(esOscuroInicial);
+        var btn = document.getElementById('theme-toggle');
 
-        if (themeToggleBtn) {
-            themeToggleBtn.addEventListener('click', () => {
-                const esOscuro = document.documentElement.classList.toggle('dark');
-                localStorage.setItem('theme', esOscuro ? 'dark' : 'light');
-                actualizarIcono(esOscuro);
-            });
-        }
+        if (!btn) return;
+
+        btn.addEventListener('click', function () {
+
+            if (window.SGETTheme) window.SGETTheme.toggle();
+
+        });
+
     })();
+
 </script>
+
+
+

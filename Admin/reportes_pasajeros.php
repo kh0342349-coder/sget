@@ -24,6 +24,7 @@ $res = $conexion->query($sql);
     <meta charset="UTF-8">
     <title>Reportes de Pasajeros</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 

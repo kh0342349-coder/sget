@@ -94,7 +94,7 @@ final class Config
     /* Reglas de negocio                                                   */
     /* ------------------------------------------------------------------ */
     /** Minutos de inactividad antes de bloquear la sesion. */
-    public const MINUTOS_INACTIVIDAD = 15;
+    public const MINUTOS_INACTIVIDAD = 2;
 
     /** Segundos de gracia para escribir la contraseña antes de expirar. */
     public const SEGUNDOS_GRACIA_INACTIVIDAD = 60;

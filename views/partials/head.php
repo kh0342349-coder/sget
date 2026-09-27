@@ -25,7 +25,8 @@ $mv = filemtime(Config::raiz('assets/js/sget-modal.js')) ?: '1';
     <meta name="color-scheme" content="light dark">
     <title>SGET · <?= htmlspecialchars($tituloPagina, ENT_QUOTES, 'UTF-8') ?></title>
 
-    <?php include dirname(__DIR__, 2) . '/includes/theme_init.php'; ?>
+    <!-- Tema: debe ejecutarse antes del primer pintado, sin defer. -->
+    <script src="<?= Config::basePath() ?>/assets/js/theme-init.js?v=<?= filemtime(Config::raiz('assets/js/theme-init.js')) ?: '1' ?>"></script>
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>

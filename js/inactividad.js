@@ -2,11 +2,21 @@
 (() => {
     'use strict';
 
-    const TIEMPO_BLOQUEO_INICIAL = 30 * 1000;
-    const TIEMPO_ESPERA_TEMPORIZADOR = 60 * 1000;
-    const SEGUNDOS_CONTEO_FINAL = 60;
-
+    /* El plazo llega desde el servidor (core/Config.php → includes/modal_inactividad.php).
+       Antes estaba fijo en 30 s en el cliente, así que cambiar la constante del
+       servidor no cambiaba nada: el bloqueo ocurría antes o después de la regla real. */
     const configuracion = window.SGET_INACTIVITY_CONFIG || {};
+
+    const MINUTOS_INACTIVIDAD = Number(configuracion.minutosInactividad) > 0
+        ? Number(configuracion.minutosInactividad)
+        : 2;
+    const SEGUNDOS_GRACIA = Number(configuracion.segundosGracia) > 0
+        ? Number(configuracion.segundosGracia)
+        : 60;
+
+    const TIEMPO_BLOQUEO_INICIAL = MINUTOS_INACTIVIDAD * 60 * 1000;
+    const TIEMPO_ESPERA_TEMPORIZADOR = SEGUNDOS_GRACIA * 1000;
+    const SEGUNDOS_CONTEO_FINAL = SEGUNDOS_GRACIA;
     const claveAlmacenamiento = `sget_inactividad_${configuracion.contexto || 'sin_contexto'}`;
 
     let temporizadorInactividad;

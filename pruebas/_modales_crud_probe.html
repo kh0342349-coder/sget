@@ -1,0 +1,77 @@
+<!DOCTYPE html><html><body><pre id="r">x</pre>
+<iframe id="f" src="/pruebas/_sesion_test.php?rol=1&ir=Admin%2Frutas.php" style="width:1300px;height:900px"></iframe>
+<script>
+var o=[], fallos=0;
+function ok(c,t,d){ if(!c)fallos++; o.push((c?'OK   | ':'FALLA | ')+t+(d?' | '+d:'')); }
+function fin(){ document.getElementById('r').textContent='VIS_START\n'+o.join('\n')+'\nFALLOS='+fallos+'\nVIS_END'; }
+/* No depende del evento `load` del iframe: si un subrecurso externo
+   (reCAPTCHA, Google Identity) no responde, `load` puede no llegar nunca. */
+function arrancar(n){
+  return new Promise(function(res){
+    (function intentar(){
+      var d=f.contentDocument;
+      if(d&&d.body&&(d.getElementById('panelLogin')||d.getElementById('modalRuta'))) return res();
+      if(n<=0) return res();
+      n--; setTimeout(intentar,200);
+    })();
+  });
+}
+function esperar(n){ var d=f.contentDocument;
+  if(d&&d.body&&d.querySelector('#modalRuta')) return Promise.resolve();
+  if(n<=0) return Promise.resolve();
+  return new Promise(function(r){setTimeout(function(){r(esperar(n-1));},200);}); }
+
+arrancar(24).then(function(){
+  var d=f.contentDocument, w=d.defaultView;
+  var st=d.createElement('style');
+  st.textContent='*,*::before,*::after{transition:none !important;animation:none !important}';
+  d.head.appendChild(st);
+
+  o.push('INFO | modales presentes: '+d.querySelectorAll('.sget-modal-wrap').length);
+  o.push('INFO | drawers presentes: '+d.querySelectorAll('.sget-drawer-wrap').length);
+  o.push('INFO | clases de layout: '+d.querySelectorAll('.sget-shell').length);
+
+  // El drawer NO debe existir: ahora todo es modal
+  ok(d.querySelectorAll('.sget-drawer-wrap').length===0,'ya no quedan drawers, solo modales',
+     d.querySelectorAll('.sget-drawer-wrap').length+' drawer(s)');
+
+  var modal=d.getElementById('modalRuta');
+  ok(!!modal,'existe el modal de rutas');
+  ok(modal.classList.contains('sget-modal-wrap'),'usa .sget-modal-wrap');
+  ok(!!modal.querySelector('.sget-modal'),'contiene un .sget-modal');
+  ok(!!modal.querySelector('form[data-sget-form]'),'el formulario se envía por el flujo común');
+
+  // Abrir en tema claro
+  w.SGETTheme.set('light');
+  d.querySelector('[data-sget-modal="modalRuta"]').click();
+  var cs=w.getComputedStyle(modal), card=w.getComputedStyle(modal.querySelector('.sget-modal'));
+  var r=modal.querySelector('.sget-modal').getBoundingClientRect();
+  ok(modal.dataset.abierto==='1','el modal se abre');
+  ok(parseFloat(cs.opacity)>0.9,'el overlay es visible (opacidad '+cs.opacity+')');
+  ok(r.width>300 && r.height>200,'el modal tiene tamaño real ('+Math.round(r.width)+'x'+Math.round(r.height)+')');
+  ok(r.left>0,'el modal está centrado horizontalmente (left='+Math.round(r.left)+')');
+  o.push('INFO | claro  cardBg='+card.backgroundColor+' cardColor='+card.color);
+  var lum=c=>{var m=String(c).match(/rgba?\(([^)]+)\)/); if(!m)return null; var p=m[1].split(',').map(parseFloat); return (0.2126*p[0]+0.7152*p[1]+0.0722*p[2])/255;};
+  ok(lum(card.backgroundColor)>0.55,'[claro] el modal es claro',card.backgroundColor);
+  ok(Math.abs(lum(card.color)-lum(card.backgroundColor))>0.4,'[claro] el texto del modal contrasta',
+     card.color+' sobre '+card.backgroundColor);
+
+  // Campos del modal
+  ['ruta_nom','ruta_ori','ruta_des','ruta_dis','ruta_hora','ruta_val','ruta_dur'].forEach(function(id){
+    ok(!!modal.querySelector('#'+id),'el modal de ruta tiene el campo #'+id);
+  });
+  ok(!!modal.querySelector('[name="duracion_min"]'),'el modal de ruta pide la duración del trayecto');
+
+  // Cerrar y cambiar a oscuro
+  modal.querySelector('[data-sget-cerrar]').click();
+  w.SGETTheme.set('dark');
+  d.querySelector('[data-sget-modal="modalRuta"]').click();
+  var card2=w.getComputedStyle(modal.querySelector('.sget-modal'));
+  o.push('INFO | oscuro cardBg='+card2.backgroundColor+' cardColor='+card2.color);
+  ok(lum(card2.backgroundColor)<0.45,'[oscuro] el modal es oscuro',card2.backgroundColor);
+  ok(Math.abs(lum(card2.color)-lum(card2.backgroundColor))>0.4,'[oscuro] el texto del modal contrasta',
+     card2.color+' sobre '+card2.backgroundColor);
+  fin();
+});
+setTimeout(fin, 9000);
+</script></body></html>

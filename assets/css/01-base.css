@@ -53,9 +53,19 @@
     --sget-z-modal: 60;
     --sget-z-toast: 90;
     --sget-z-confirm: 110;
+
+    /* Velo del overlay de los modales.
+       ANTES: rgba(2,6,23,.72) + backdrop-filter: blur(6px). Eso tapaba y
+       difuminaba TODA la pantalla, incluida la tabla que se estaba editando:
+       el usuario perdía el contexto y parecía que la página se había roto.
+       AHORA: sin desenfoque y con un velo suave que se adapta al tema, de modo
+       que la pantalla sigue siendo legible detrás del modal. */
+    --sget-overlay:      rgba(15, 23, 42, .30);
+    --sget-overlay-osc:  rgba(2, 6, 23, .48);
 }
 
 html.dark {
+    --sget-overlay:    var(--sget-overlay-osc);
     --sget-bg:         var(--sget-bg-oscuro);
     --sget-superficie: var(--sget-superficie-osc);
     --sget-superficie-2: var(--sget-superficie2-osc);
@@ -74,6 +84,13 @@ html.dark {
 html {
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
+    /* El fondo se fija TAMBIÉN en <html>, no solo en <body>.
+       Motivo: cuando solo <body> tiene fondo, el navegador lo propaga al lienzo
+       y el valor "pintado" deja de coincidir con el token del tema; además
+       aparecería un destello blanco al cambiar de tema. */
+    background: var(--sget-bg);
+    color: var(--sget-texto);
+    transition: background-color var(--sget-transicion), color var(--sget-transicion);
 }
 
 body {
@@ -81,6 +98,9 @@ body {
     font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
     background: var(--sget-bg);
     color: var(--sget-texto);
+    /* El color se fija aquí y en cada contenedor, no se deja solo por herencia:
+       si un ancestro queda con el color del otro tema, el texto se vuelve
+       invisible (por ejemplo, tarjeta blanca con texto casi blanco en claro). */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     transition: background-color var(--sget-transicion), color var(--sget-transicion);

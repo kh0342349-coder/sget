@@ -395,6 +395,14 @@ tamaño, foco, bloqueo de scroll).
 | `07-transiciones.css` | Entrada/salida al cambiar de módulo | *¿Por qué la página "salta"?* |
 | `index.css` | **Solo la landing page** | *¿Dónde busco los estilos del sitio público?* |
 
+Además, fuera de las hojas:
+
+| Archivo | Responsabilidad |
+|---|---|
+| `assets/js/theme-init.js` | Aplica el tema antes del primer pintado y expone `SGETTheme` |
+| `includes/i18n.php` | Idioma + diccionario + `i18n.js`, en un solo punto idempotente |
+| `css/style.css` | Legado: solo `Conductor/` y `Pasajero/`. `:root` es claro y `html.dark` el oscuro |
+
 Todos los componentes usan el prefijo `sget-`, así que no dependen de utilidades
 arbitrarias de Tailwind: una corrección se hace **una vez** y aplica a todo.
 
@@ -423,3 +431,19 @@ escritorio · `1536` grande.
    siguen con Tailwind en línea, sin motor de modales y sin CSS modular.
 7. **Pruebas de extremo a extremo del login real** (hoy el login se prueba solo
    indirectamente a través de la sesión simulada de `pruebas/`).
+
+### Errores que sirven de advertencia
+
+Tres fallos de este proyecto merecen recordarse porque fueron **causados por un
+cambio y no por código viejo**, y son fáciles de repetir:
+
+1. **Un `display` en un overlay deja la página muerta.** CSS con `.hidden` de
+   Tailwind se pisa si una hoja declara `display` en el mismo contenedor: el
+   overlay queda invisible pero presente y no deja pulsar nada. Hoy lo vigila
+   `pruebas/visual-visual.js`.
+2. **La landing se quedó sin componentes.** `index.css` importaba `01` y `04`
+   pero no `03`, así que `.sget-btn` no existía y los botones del login salían
+   como texto plano. Si una página usa componentes, hay que cargar `03`.
+3. **Duplicar lógica en cliente y servidor.** El bloqueo por inactividad tenía
+   30 s fijos en el JS y 15 min en `Config`. Ahora el plazo viaja del servidor al
+   navegador: un solo lugar que cambiar.

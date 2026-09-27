@@ -12,6 +12,8 @@
    comporten igual sin duplicar estilos. */
 .sget-shell {
     display: flex;
+    background: var(--sget-bg);
+    color: var(--sget-texto);
     flex-direction: column;
     min-height: 100vh;
     margin-left: var(--sget-sidebar-ancho);
@@ -23,6 +25,7 @@ body.sidebar-collapsed .sget-shell { margin-left: var(--sget-sidebar-mini); }
 
 .sget-main {
     flex: 1;
+    color: var(--sget-texto);
     width: 100%;
     max-width: 100rem;
     margin: 0 auto;

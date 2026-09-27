@@ -7,12 +7,9 @@ if (!isset($conexion)) {
     include_once __DIR__ . '/../assets/conexion.php';
 }
 
-$idiomaActualSidebar = $_SESSION['sget_idioma'] ?? 'es';
-if ($idiomaActualSidebar === 'en') {
-    @include_once __DIR__ . '/../lang/en.php';
-} else {
-    @include_once __DIR__ . '/../lang/es.php';
-}
+// Mismo partial que header.php: se define una sola vez aunque se incluya dos veces.
+require_once __DIR__ . '/i18n.php';
+$idiomaActualSidebar = $idiomaActual;
 
 $rolUsuario = $_SESSION['rol'] ?? $_SESSION['id_rol_usu'] ?? 0;
 $pagina_actual = basename($_SERVER['PHP_SELF']);
@@ -61,11 +58,7 @@ if (!function_exists('tiene_acceso_sb')) {
 }
 ?>
 
-<script>
-    window.SGET_LANGUAGE_URL = '../set_language.php';
-    document.documentElement.setAttribute('data-language', '<?= htmlspecialchars($idiomaActualSidebar, ENT_QUOTES, 'UTF-8') ?>');
-</script>
-<script src="../js/i18n.js?v=20260908-1"></script>
+<?php /* i18n.php ya emitted data-language, SGET_LANGUAGE_URL e i18n.js */ ?>
 
 <style>
     /* TRANSICIONES Y COLAPSO FLUIDO */

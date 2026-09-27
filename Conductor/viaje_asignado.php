@@ -102,8 +102,16 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reporte de Viaje - SGET</title>
-    <?php include __DIR__ . '/../includes/theme_init.php'; ?>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
+    <link rel="stylesheet" href="assets/css/01-base.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="assets/css/02-layout.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="assets/css/03-componentes.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="assets/css/04-modales.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="assets/css/05-tablas.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="assets/css/06-responsive.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="assets/css/07-transiciones.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',

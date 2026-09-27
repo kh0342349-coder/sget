@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_tema_probe.html
+    -----------------------------------------------------------------------------
+    Sonda de contraste del tema. Abre una página real del panel y comprueba lo que
+    hace el USUARIO: pulsar el botón de la cabecera y ver si la interfaz cambia
+    de verdad, y si en ambos temas el texto contrasta con el fondo.
+
+    Detecta el fallo "unos módulos en oscuro y otros en claro": si el fondo y el
+    texto no contrastan, o queda una superficie del color contrario, lo reporta.
+
+    Solo se usa desde pruebas/tema-visual.js.
+-->
+<html lang="es">
+<head><meta charset="UTF-8"><title>Sonda de tema</title></head>
+<body>
+<pre id="r">ejecutando…</pre>
+<iframe id="f" style="width:1300px;height:820px;border:1px solid #ccc"></iframe>
+
+<script>
+var out = [], fallos = 0, hecho = false;
+
+function push(linea) { out.push(linea); }
+function ok(cond, texto, detalle) {
+    if (!cond) fallos++;
+    push((cond ? 'OK   | ' : 'FALLA | ') + texto + (detalle ? ' | ' + detalle : ''));
+}
+function info(texto) { push('INFO  | ' + texto); }
+function fin() {
+    if (hecho) return;
+    hecho = true;
+    var pre = document.getElementById('r');
+    pre.textContent = 'TEMA_PROBE_START\n' + out.join('\n') + '\nFALLOS=' + fallos + '\nTEMA_PROBE_END';
+}
+function fallo(t) { ok(false, t); fin(); }
+window.onerror = function (m) { fallo('error JS en la sonda: ' + m); };
+
+var f = document.getElementById('f');
+var qs = new URLSearchParams(location.search);
+var rol = qs.get('rol') || '1';
+var pagina = qs.get('pagina') || 'Admin/rutas.php';
+
+/* Luminancia 0..1 */
+function lum(color) {
+    if (!color) return null;
+    var m = String(color).match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    var p = m[1].split(',').map(function (x) { return parseFloat(x); });
+    if (p.length < 3 || p.some(isNaN)) return null;
+    if (p[3] === 0) return null;                 // totalmente transparente
+    return (0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]) / 255;
+}
+
+function leer(doc) {
+    var w = doc.defaultView;
+    var cs = function (n) { return n ? w.getComputedStyle(n) : null; };
+    var q  = function (x) { return doc.querySelector(x); };
+
+    var tarjeta = q('.sget-card, .sget-table-box, .card-glass, .sget-toolbar');
+    var boton   = q('.sget-btn--primario, button[type="submit"]');
+    var campo   = q('.sget-input, .sget-select');           // SOLO los del sistema
+    var shell   = q('.sget-shell, #main-content-wrapper, main');
+    var cuerpo  = doc.body ? w.getComputedStyle(doc.body) : null;
+
+    return {
+        // El token resuelto es la CONTRATURA real: es lo que pinta body y shell.
+        tokenBg: cuerpo ? cuerpo.getPropertyValue('--sget-bg').trim() : '',
+        tokenFg: cuerpo ? cuerpo.getPropertyValue('--sget-texto').trim() : '',
+        body:   cuerpo ? cuerpo.backgroundColor : '',
+        fg:     cuerpo ? cuerpo.color : '',
+        shell:  shell ? cs(shell).backgroundColor : '',
+        card:   tarjeta ? cs(tarjeta).backgroundColor : '',
+        cardFg: tarjeta ? cs(tarjeta).color : '',
+        btn:    boton ? cs(boton).backgroundColor : '',
+        input:  campo ? cs(campo).backgroundColor : '',
+        inputFg: campo ? cs(campo).color : '',
+        dark:   doc.documentElement.classList.contains('dark'),
+        tema:   doc.documentElement.getAttribute('data-theme'),
+        esquema: doc.documentElement.style.colorScheme,
+        guardado: (function () { try { return w.localStorage.getItem('theme'); } catch (e) { return null; } })()
+    };
+}
+
+/* La sesión de prueba responde 302: el iframe carga dos documentos. */
+function esperarListo(n) {
+    var d = f.contentDocument;
+    if (d && d.body && d.querySelector('#themeToggle')) return Promise.resolve(true);
+    if (n <= 0) return Promise.resolve(false);
+    return new Promise(function (r) { setTimeout(function () { r(esperarListo(n - 1)); }, 200); });
+}
+
+/* En Chrome headless no hay compositor, así que las transiciones CSS NO avanzan:
+   `body` tiene `transition: background-color .25s` y su valor computado se queda
+   congelado en el inicial, haciendo creer que el tema no cambió. Por eso la
+   sonda desactiva transiciones antes de medir; es la técnica habitual para
+   verificación visual automática. */
+function sinTransiciones() {
+    var d = f.contentDocument;
+    if (!d.head) return;
+    var st = d.createElement('style');
+    st.setAttribute('data-sonda', '1');
+    st.textContent = '*,*::before,*::after{transition:none !important;animation:none !important}';
+    d.head.appendChild(st);
+}
+
+function boton() { return f.contentDocument.querySelector('#themeToggle'); }
+
+function comprobar(etiqueta, oscuro) {
+    var m = leer(f.contentDocument);
+    info(etiqueta + ' token=' + m.tokenBg + ' body=' + m.body + ' card=' + m.card + ' input=' + m.input);
+
+    var min = oscuro ? 0 : 0.55, max = oscuro ? 0.45 : 1;
+    var rango = function (l) { return l === null || (l >= min && l <= max); };
+
+    ok(m.tema === (oscuro ? 'dark' : 'light'), '[' + etiqueta + '] data-theme correcto', m.tema);
+    ok(m.dark === oscuro, '[' + etiqueta + '] la clase dark/light es correcta', 'dark=' + m.dark);
+    ok(m.esquema === (oscuro ? 'dark' : 'light'), '[' + etiqueta + '] color-scheme correcto', m.esquema);
+
+    // El token de fondo es la fuente de verdad de lo que pinta la página.
+    ok(rango(lum(m.tokenBg)), '[' + etiqueta + '] el token --sget-bg es ' + etiqueta, m.tokenBg);
+    ok(rango(lum(m.tokenFg)), '[' + etiqueta + '] el token --sget-texto es ' + etiqueta, m.tokenFg);
+
+    // Superficies y campos (elementos normales, no el root)
+    ok(rango(lum(m.card)), '[' + etiqueta + '] las superficies son ' + etiqueta, m.card);
+    ok(rango(lum(m.input)), '[' + etiqueta + '] los campos del sistema son ' + etiqueta, m.input);
+
+    // Contraste real: texto sobre su propia superficie
+    if (m.card && m.cardFg) {
+        ok(Math.abs(lum(m.cardFg) - lum(m.card)) > 0.4,
+           '[' + etiqueta + '] el texto de las tarjetas contrasta con su fondo',
+           'fg=' + m.cardFg + ' bg=' + m.card);
+    }
+    if (m.input && m.inputFg) {
+        ok(Math.abs(lum(m.inputFg) - lum(m.input)) > 0.4,
+           '[' + etiqueta + '] el texto de los campos contrasta con su fondo',
+           'fg=' + m.inputFg + ' bg=' + m.input);
+    }
+    if (m.btn) {
+        ok(rango(lum(m.btn)) === false || m.btn !== m.card, '[' + etiqueta + '] el botón primario se distingue de las tarjetas',
+           'btn=' + m.btn + ' card=' + m.card);
+    }
+}
+
+/* Lleva la interfaz al tema pedido pulsando el botón, como el usuario */
+function llevarA(oscuro,cb) {
+    var actual = leer(f.contentDocument);
+    if (actual.dark === oscuro) { cb(); return; }
+    boton().click();
+    setTimeout(function () { cb(); }, 350);
+}
+
+f.addEventListener('load', function () {
+    esperarListo(50).then(function () {
+        setTimeout(function () {
+            var doc = f.contentDocument;
+            if (!doc || !doc.body) return fallo('la página cargó');
+            if (!doc.querySelector('#themeToggle')) return fallo('el botón de tema está en la cabecera');
+
+            var inicial = leer(doc);
+            info('inicial data-theme=' + inicial.tema + ' body=' + inicial.body);
+
+            /* 1) El botón cambia de tema */
+            boton().click();
+            setTimeout(function () {
+                var c = leer(f.contentDocument);
+                ok(c.tema !== inicial.tema, 'el botón de la cabecera cambia de tema',
+                   'antes=' + inicial.tema + ' ahora=' + c.tema);
+                ok((c.tema === 'dark') === c.dark, 'clase dark y data-theme coinciden',
+                   'tema=' + c.tema + ' dark=' + c.dark);
+                ok(c.esquema === (c.dark ? 'dark' : 'light'), 'color-scheme sigue al tema', c.esquema);
+
+                /* 2) Volver a comprobar el estado inicial */
+                llevarA(inicial.dark, function () {
+                    var v = leer(f.contentDocument);
+                    ok(v.tema === inicial.tema, 'el segundo clic vuelve al tema anterior', v.tema);
+
+                    /* 3) Contraste en claro */
+                    llevarA(false, function () {
+                        comprobar('claro', false);
+                        /* 4) Contraste en oscuro */
+                        llevarA(true, function () {
+                            comprobar('oscuro', true);
+                            var g = leer(f.contentDocument).guardado;
+                            ok(g === 'dark', 'la preferencia queda guardada en localStorage', g);
+                            fin();
+                        });
+                    });
+                });
+            }, 400);
+        }, 400);
+    });
+});
+
+f.src = '../pruebas/_sesion_test.php?rol=' + rol + '&ir=' + encodeURIComponent(pagina);
+
+setTimeout(function () { if (!hecho) { ok(false, 'la sonda terminó a tiempo'); fin(); } }, 22000);
+</script>
+</body>
+</html>

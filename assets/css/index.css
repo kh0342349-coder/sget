@@ -22,7 +22,12 @@
        data-abierto="1"                   →  menú móvil
    ========================================================================== */
 
+/* La landing usa los mismos componentes que el panel (botones, campos,
+   etiquetas, avisos), así que carga las hojas base, componentes y modales.
+   ANTES solo importaba 01 y 04: por eso en los modales de login y registro
+   los botones salían como texto plano y los campos sin estilo. */
 @import url('01-base.css');
+@import url('03-componentes.css');
 @import url('04-modales.css');
 
 /* -------------------------------------------------------------------------- */
@@ -227,10 +232,10 @@ html.dark {
 /* El contenedor NO declara `display` ni `transform`: de eso se encarga
    `.sget-modal-wrap` / `.sget-modal` (04-modales.css), y la visibilidad la
    fija el motor común con `data-abierto`. */
+/* Mismo criterio que en el panel: velo suave, sin desenfoque, para no tapar
+   la página de fondo mientras se inicia sesión o se registra una cuenta. */
 .modal-isla-container {
-    background: rgba(2, 6, 23, .78);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    background: var(--sget-overlay);
 }
 
 .modal-isla-card {
