@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_idioma_probe.html
+    -----------------------------------------------------------------------------
+    Sonda del SELECTOR DE IDIOMA de la landing (index.php).
+
+    Reproduce el fallo reportado («el botón de cambio de idioma no funciona»):
+    el selector pedía `set_language.php` con un prefijo relativo mal calculado,
+    así que en una instalación real (http://localhost/sget/) el POST se iba a
+    http://localhost/set_language.php → 404 silencioso dentro de un try/catch:
+    la página se traducía en pantalla, pero el idioma NO se guardaba y al
+    recargar todo volvía al anterior.
+
+    Se comprueba el ciclo COMPLETO:
+      1. la URL de set_language.php existe (no 404),
+      2. el botón abre el menú y ENG se aplica en pantalla,
+      3. tras RECARGAR la página el idioma sigue siendo inglés (está en sesión),
+      4. al volver a ESP se traduce y, tras su recarga, sigue en español.
+    -----------------------------------------------------------------------------
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda del selector de idioma</title>
+    <style>body{margin:0;font:12px monospace}#r{padding:6px;background:#111;color:#0f0}iframe{width:1400px;height:900px;border:0}</style>
+</head>
+<body>
+<pre id="r">ejecutando…</pre>
+<iframe id="f" src="../index.php"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+const anotar = (ok, t, d = '') => { if (!ok) fallos++; salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + t + (d ? ' | ' + d : '')); };
+const info = t => salida.push('INFO  | ' + t);
+const pintar = () => document.getElementById('r').textContent =
+    'IDIOMA_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nIDIOMA_END';
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+const irA = async (f, url, ms = 2500) => { f.contentWindow.location.href = url; await esperar(ms); };
+const idiomaDe = d => d.documentElement.getAttribute('data-language') || '?';
+
+async function run() {
+    const f = document.getElementById('f');
+    await esperar(2500);
+    let d = f.contentDocument, w = f.contentWindow;
+
+    /* ---- 1. La URL del endpoint de idioma ---- */
+    const url = w.SGET_LANGUAGE_URL;
+    anotar(!!url, 'La página declara SGET_LANGUAGE_URL', String(url));
+    if (url) {
+        info('URL resuelta: ' + new URL(url, w.location.href).href);
+        let funciona = false, estado = 0;
+        try {
+            const r = await fetch(new URL(url, w.location.href).href, { method: 'POST', body: 'idioma=es', credentials: 'same-origin' });
+            estado = r.status;
+            funciona = r.ok && (await r.json()).ok === true;
+        } catch (e) { estado = 0; }
+        anotar(funciona, 'set_language.php RESPONDE (no 404)', 'status=' + estado);
+        // No debe estar pidiendo un archivo por ENCIMA de la raíz del proyecto
+        anotar(!/^(\.\.\/)+set_language\.php$/.test(url) || w.location.pathname.split('/').filter(Boolean).length > 1,
+               'La URL no sale de la raíz del proyecto', url);
+    }
+
+    /* ---- 2. El botón abre el menú y aplica ENG ---- */
+    const boton = d.querySelector('.sget-language-btn');
+    anotar(!!boton, 'El selector de idioma se pintó como botón accesible', boton ? boton.textContent.trim() : 'no existe');
+    if (!boton) return pintar();
+
+    boton.click();
+    await esperar(250);
+    const menu = d.querySelector('.sget-language-menu');
+    anotar(menu && menu.classList.contains('open'), 'El botón abre el menú de idiomas',
+           menu ? menu.className : 'no existe');
+
+    const opcionEn = menu && menu.querySelector('.sget-language-option[data-value="en"]');
+    anotar(!!opcionEn, 'El menú ofrece la opción ENG');
+    if (opcionEn) {
+        opcionEn.click();
+        await esperar(1500);
+    }
+    d = f.contentDocument;
+    anotar(idiomaDe(d) === 'en', 'Al pulsar ENG la página pasa a inglés', 'data-language=' + idiomaDe(d));
+    info('textos traducidos: ' + (d.body.textContent.match(/Sign in|Log in|Register/i) || ['(ninguno)'])[0]);
+
+    /* ---- 3. PERSISTENCIA: tras recargar debe seguir en inglés ---- */
+    await irA(f, '../index.php', 3000);
+    d = f.contentDocument;
+    anotar(idiomaDe(d) === 'en', 'TRAS RECARGAR sigue en inglés (el idioma se guardó en la sesión)',
+           'data-language=' + idiomaDe(d));
+
+    /* ---- 4. Volver a ESP ---- */
+    const boton2 = d.querySelector('.sget-language-btn');
+    if (boton2) {
+        boton2.click();
+        await esperar(250);
+        const opcionEs = d.querySelector('.sget-language-menu.open .sget-language-option[data-value="es"]');
+        anotar(!!opcionEs, 'El menú ofrece la opción ESP');
+        if (opcionEs) {
+            opcionEs.click();
+            // setLanguage('es') recarga la página: se espera a que termine
+            await esperar(4000);
+            d = f.contentDocument;
+        }
+    }
+    anotar(idiomaDe(d) === 'es', 'Al volver a ESP la página vuelve a español (y se mantiene)',
+           'data-language=' + idiomaDe(d));
+
+    /* ---- 5. El botón de Google sobrevive al cambio de idioma ---- */
+    const zonaGoogle = d.querySelector('[data-sget-google-zona]');
+    anotar(!!zonaGoogle, 'La zona del botón de Google sigue en el modal tras cambiar de idioma');
+}
+
+run().then(pintar).catch(e => { anotar(false, 'La sonda se ejecutó sin errores', e.message); pintar(); });
+</script>
+</body>
+</html>

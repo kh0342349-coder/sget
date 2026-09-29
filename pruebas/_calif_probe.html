@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_calif_probe.html
+    -----------------------------------------------------------------------------
+    Sonda del FLUJO DE CALIFICACIÓN del pasajero (lo que estaba muerto).
+
+    Antes el formulario enviaba a `guardar_calificacion.php`, un archivo
+    inexistente: pulsar «Calificar» no guardaba nada y el conductor nunca se
+    enteraba. Aquí se comprueba el flujo real en el navegador:
+      1. el botón «Calificar» aparece en el viaje que se puede calificar,
+      2. abre el modal y las estrellas se pueden pulsar,
+      3. al enviar, la calificación queda en la tabla `calificacion`,
+      4. el conductor recibe un aviso en su buzón,
+      5. al recargar, el viaje aparece como «Calificado» y el botón desaparece.
+
+    Uso:  /pruebas/_calif_probe.html
+    -----------------------------------------------------------------------------
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda de calificación</title>
+    <style>body{margin:0;font:12px monospace}#r{padding:6px;background:#111;color:#0f0}iframe{width:1400px;height:1000px;border:0}</style>
+</head>
+<body>
+<pre id="r">ejecutando…</pre>
+<iframe id="f" src="_calif_test.php"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+const anotar = (ok, t, d = '') => { if (!ok) fallos++; salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + t + (d ? ' | ' + d : '')); };
+const info = t => salida.push('INFO  | ' + t);
+const pintar = () => document.getElementById('r').textContent =
+    'CALIF_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nCALIF_END';
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+async function run() {
+    const f = document.getElementById('f');
+    await esperar(1500);
+
+    f.contentWindow.location.href = '../Pasajero/historial_pasajero.php';
+    await esperar(2800);
+    let d = f.contentDocument, w = f.contentWindow;
+
+    /* --- 1) El botón existe donde debe --- */
+    const boton = d.querySelector('[data-sget-modal="modalCalificar"]');
+    anotar(!!boton, 'El viaje pendiente muestra el botón «Calificar»');
+    if (!boton) {
+        anotar(false, 'El modal de calificación está en la página',
+               !!d.getElementById('modalCalificar') ? 'modal sí, botón no' : 'no hay modal');
+        return pintar();
+    }
+
+    const datos = JSON.parse(boton.getAttribute('data-sget-datos') || '{}');
+    info('viaje a calificar: #' + datos.id_via_cal + ' · ' + (datos.viaje || ''));
+    anotar(datos.id_via_cal > 0, 'El botón lleva el id del viaje a calificar', 'id=' + datos.id_via_cal);
+
+    /* --- 2) El modal y las estrellas --- */
+    boton.click();
+    await esperar(700);
+    const modal = d.getElementById('modalCalificar');
+    anotar(modal && modal.dataset.abierto === '1', 'El modal de calificación se abre');
+    anotar(modal && modal.querySelector('[name="id_via_cal"]').value === String(datos.id_via_cal),
+           'El modal recibe el viaje correcto');
+
+    const estrellas = modal.querySelectorAll('[data-sget-estrella]');
+    anotar(estrellas.length === 5, 'El modal tiene 5 estrellas', 'estrellas=' + estrellas.length);
+
+    estrellas[3].click();      // 4 de 5
+    await esperar(200);
+    anotar(modal.querySelector('#cal_puntos').value === '4', 'Al pulsar una estrella se guarda la nota',
+           'puntos=' + modal.querySelector('#cal_puntos').value);
+    anotar(modal.querySelectorAll('[data-sget-estrella].es-activa').length === 4,
+           'Las estrellas anteriores se pintan como encendidas');
+
+    const comentario = modal.querySelector('#cal_comentario');
+    comentario.value = 'Prueba automática: trato amable y puntual.';
+
+    /* --- 3) Envío real por el API --- */
+    modal.querySelector('button[type="submit"]').click();
+    await esperar(1800);
+
+    // Se consulta al servidor: ¿quedó la calificación?
+    const r = await fetch('_calif_check.php?id_via=' + datos.id_via_cal, { credentials: 'same-origin' });
+    const j = await r.json();
+    info('estado en la base: ' + JSON.stringify(j));
+    anotar(j.calificaciones > 0, 'La calificación se GUARDÓ en la base de datos (antes no se guardaba nada)',
+           'calificaciones=' + j.calificaciones);
+    anotar(j.ultimo_puntos === 4, 'Se guardó la nota elegida (4)', 'puntos=' + j.ultimo_puntos);
+    anotar(!!j.comentario, 'Se guardó el comentario', j.comentario || '(vacío)');
+    anotar(j.conductor_notificado > 0, 'El CONDUCTOR recibió el aviso en su buzón',
+           'avisos=' + j.conductor_notificado);
+
+    /* --- 4) Tras recargar ya no se puede volver a calificar --- */
+    f.contentWindow.location.href = '../Pasajero/historial_pasajero.php';
+    await esperar(2600);
+    d = f.contentDocument;
+
+    // Se mira ESE viaje, no «cualquier botón de la página»: el pasajero puede
+    // tener otros viajes pendientes de calificar y entonces siempre hay alguno.
+    const sigue = d.querySelector('[data-sget-calificar-viaje="' + datos.id_via_cal + '"]');
+    anotar(!sigue, 'Al recargar, ESE viaje ya no ofrece «Calificar» (una sola vez por viaje)',
+           'sigue el botón del viaje ' + datos.id_via_cal);
+    anotar(/Calificado/i.test(d.body.textContent), 'El viaje aparece marcado como «Calificado»');
+
+    /* --- 5) El pasajero no puede calificar un viaje ajeno --- */
+    const r2 = await fetch('_calif_check.php?intento_invalido=1', { credentials: 'same-origin' });
+    const j2 = await r2.json();
+    anotar(j2.intento_fallido === true,
+           'Calificar un viaje sin reserva propia se rechaza en el servidor', JSON.stringify(j2.detalle || ''));
+}
+
+run().then(pintar).catch(e => { anotar(false, 'La sonda se ejecutó sin errores', e.message); pintar(); });
+</script>
+</body>
+</html>

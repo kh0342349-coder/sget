@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_recaudo_probe.html
+    -----------------------------------------------------------------------------
+    Sonda del MÓDULO DE RECAUDO (Admin/asignaciones.php).
+
+    El fallo que se comprueba: el módulo insertaba las reservas con
+    `estado_pago = 'Completado'`, valor que NO existe en el ENUM de la tabla
+    reserva. El INSERT fallaba, el código no lo comprobaba y aun así pintaba
+    "¡Asignación registrada con éxito!". En la práctica no se cobraba nada y el
+    módulo de Ganancias mostraba $0 siempre.
+
+    Aquí se comprueba, en un navegador real:
+      1. el cobro se registra y la reserva queda 'Confirmada' con su importe,
+      2. el cupo del viaje baja y la caja del día sube,
+      3. se puede dejar la reserva pendiente (pago al embarkar),
+      4. el pasajero recibe el aviso en su buzón,
+      5. una reserva se puede cobrar después y cancelar devolviendo el cupo.
+
+    Uso:  /pruebas/_recaudo_probe.html
+    -----------------------------------------------------------------------------
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda de recaudo</title>
+    <style>body{margin:0;font:12px monospace}#r{padding:6px;background:#111;color:#0f0}iframe{width:1400px;height:1000px;border:0}</style>
+</head>
+<body>
+<pre id="r">ejecutando…</pre>
+<iframe id="f" src="_recaudo_test.php"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+const anotar = (ok, t, d = '') => { if (!ok) fallos++; salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + t + (d ? ' | ' + d : '')); };
+const info = t => salida.push('INFO  | ' + info_(t));
+const info_ = t => t;
+const pintar = () => document.getElementById('r').textContent =
+    'RECAUDO_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nRECAUDO_END';
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+async function run() {
+    const f = document.getElementById('f');
+    f.contentWindow.addEventListener('error', (e) => salida.push('INFO  | ERROR JS en la página: ' + e.message));
+    await esperar(1500);
+
+    f.contentWindow.location.href = '../Admin/asignaciones.php';
+    await esperar(2500);
+    let d = f.contentDocument, w = f.contentWindow;
+
+    const errPhp = d.documentElement.innerHTML.match(/ERROR PHP: ([^<\n]*)/);
+    anotar(!errPhp, 'El módulo de recaudo carga sin errores PHP', errPhp ? errPhp[1] : '');
+
+    const tarjetas = d.querySelectorAll('[data-sget-fila][data-viaje]');
+    info('viajes en la pantalla: ' + tarjetas.length);
+    anotar(tarjetas.length > 0, 'Hay viajes activos donde cobrar', 'viajes=' + tarjetas.length);
+    if (!tarjetas.length) return pintar();
+
+    // KPIs de caja presentes
+    anotar(d.querySelectorAll('.sget-kpi').length >= 4, 'El módulo muestra los indicadores de caja');
+
+    // El viaje de trabajo es el que creó el fixture (PRUEBA RECAUDO), no el
+    // primero que aparezca: la pantalla puede listar otros viajes del sistema.
+    const idViaje = parseInt(tarjetas[tarjetas.length - 1].dataset.viaje, 10);
+    info('viaje de trabajo: #' + idViaje);
+
+    // El fixture ya dejó el viaje con la caja a cero; se vuelve a comprobar por
+    // si acaso, sin recargar la página (el servidor de desarrollo atiende una
+    // petición a la vez y un reload a mitad de sonda deja referencias muertas).
+    const antes = await estado(idViaje);
+    info('estado inicial: ' + JSON.stringify(antes));
+
+    /* --- 1) Abrir el modal y cobrar --- */
+    d.querySelector('[data-sget-accion="abrirRecaudo"][data-sget-viaje="' + idViaje + '"]').click();
+    await esperar(700);
+    const modal = d.getElementById('modalRecaudo');
+    anotar(modal && modal.dataset.abierto === '1', 'El modal de cobro se abre');
+    anotar(modal.querySelector('input[name="_token"]'), 'El modal de cobro lleva token CSRF');
+
+    // Pasajero registrado (el primero de la lista)
+    const sel = modal.querySelector('#selPasajero');
+    info('opciones de pasajero: ' + sel.options.length + ' | valor inicial id_usu=' + modal.querySelector('[name="id_usu"]').value);
+    if (sel.options.length < 2) { anotar(false, 'Hay pasajeros registrados para cobrar'); return pintar(); }
+    sel.selectedIndex = 1;
+    sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+    modal.querySelector('#inputPuestos').value = '2';
+    modal.querySelector('#inputPuestos').dispatchEvent(new w.Event('input', { bubbles: true }));
+    modal.querySelector('#inputConfirmar').checked = true;
+
+    const valorCalculado = parseFloat(modal.querySelector('#inputValor').value);
+    info('valor calculado automáticamente: ' + valorCalculado);
+    anotar(valorCalculado > 0, 'El importe se calcula solo con la tarifa × puestos', 'valor=' + valorCalculado);
+
+    modal.querySelector('button[type="submit"]').click();
+    await esperar(900);
+    const avisos = Array.from(d.querySelectorAll('.sget-toast')).map(t => t.textContent.trim());
+    if (avisos.length) info('avisos mostrados: ' + avisos.join(' / '));
+    const marcados = d.querySelectorAll('[data-invalid="1"]').length;
+    if (marcados) info('campos marcados con error: ' + marcados);
+
+    const despues = await esperarCambio(idViaje, 'confirmadas', e => e.confirmadas >= antes.confirmadas + 2);
+    info('después del cobro: ' + JSON.stringify(despues));
+    anotar(despues.confirmadas >= antes.confirmadas + 2,
+           'Las reservas quedan CONFIRMADAS en la base (antes el INSERT fallaba por el ENUM)',
+           antes.confirmadas + ' -> ' + despues.confirmadas);
+    anotar(despues.cupos_libres === antes.cupos_libres - 2, 'El cupo del viaje baja en 2',
+           antes.cupos_libres + ' -> ' + despues.cupos_libres);
+    anotar(despues.recaudo > antes.recaudo, 'La caja del viaje registra el importe',
+           antes.recaudo + ' -> ' + despues.recaudo);
+    anotar(despues.pasajero_notificado > 0, 'El pasajero recibió el aviso de reserva confirmada',
+           'avisos=' + despues.pasajero_notificado);
+    anotar(despues.bad_value === false, 'Ninguna reserva quedó con un estado de pago inexistente');
+
+    /* --- 2) Reserva pendiente (pago al embarkar) --- */
+    // Tras el cobro la página se recarga sola: se espera y se vuelve a tomar el
+    // documento, porque el anterior ya no existe.
+    d = await recargar(f, '../Admin/asignaciones.php', idViaje);
+    d.querySelector('[data-sget-accion="abrirRecaudo"][data-sget-viaje="' + idViaje + '"]').click();
+    await esperar(600);
+    const modal2 = d.getElementById('modalRecaudo');
+    const sel2 = modal2.querySelector('#selPasajero');
+    sel2.selectedIndex = 2;
+    sel2.dispatchEvent(new w.Event('change', { bubbles: true }));
+    modal2.querySelector('#inputPuestos').value = '1';
+    modal2.querySelector('#inputConfirmar').checked = false;   // se cobra al embarkar
+    modal2.querySelector('button[type="submit"]').click();
+
+    const tras = await esperarCambio(idViaje, 'pendientes', e => e.pendientes >= 1);
+    anotar(tras.pendientes >= 1, 'Se puede registrar una reserva PENDIENTE (cobro al embarkar)',
+           'pendientes=' + tras.pendientes);
+
+    /* --- 3) Cobrar una pendiente desde el listado --- */
+    // Otra recarga: el segundo cobro también la dispara.
+    d = await recargar(f, '../Admin/asignaciones.php', idViaje);
+    d.querySelector('[data-sget-accion="verReservas"][data-sget-viaje="' + idViaje + '"]').click();
+    await esperar(2000);
+    d = f.contentDocument;
+    const lista = d.querySelector('[data-sget-lista-reservas]');
+    const filas = lista.querySelectorAll('tbody tr');
+    info('reservas listadas: ' + filas.length);
+    anotar(filas.length > 0, 'El modal lista las reservas del viaje', 'filas=' + filas.length);
+
+    const btnCobrar = lista.querySelector('[data-sget-cobrar-reserva]');
+    anotar(!!btnCobrar, 'Las reservas pendientes ofrecen el botón de cobrar');
+    if (btnCobrar) {
+        btnCobrar.click();
+        const final = await esperarCambio(idViaje, 'pendientes', e => e.pendientes < tras.pendientes);
+        anotar(final.pendientes === tras.pendientes - 1,
+               'Al cobrar, la reserva pasa de Pendiente a Confirmada',
+               tras.pendientes + ' -> ' + final.pendientes);
+    }
+
+    /* --- 4) Cancelar y devolver el cupo --- */
+    const btnCancelar = d.querySelector('[data-sget-lista-reservas] [data-sget-cancelar-reserva]');
+    anotar(!!btnCancelar, 'Las reservas se pueden cancelar');
+    if (btnCancelar) {
+        const cuposAntes = (await estado(idViaje)).cupos_libres;
+        btnCancelar.click();
+        await esperar(900);
+        const ok = d.querySelector('#sgetConfirm button[data-sget-ok]');
+        if (ok) {
+            ok.click();
+            const fin = await esperarCambio(idViaje, 'cupos_libres', e => e.cupos_libres > cuposAntes);
+            anotar(fin.cupos_libres === cuposAntes + 1, 'Al cancelar, el cupo vuelve al viaje',
+                   cuposAntes + ' -> ' + fin.cupos_libres);
+        }
+    }
+}
+
+async function estado(idViaje) {
+    const f = document.getElementById('f');
+    const r = await fetch('../pruebas/_recaudo_check.php?id_via=' + idViaje, { credentials: 'same-origin' });
+    return r.json();
+}
+
+/**
+ * Espera a que un indicador se estabilice.
+ * El servidor de desarrollo de PHP atiende UNA petición a la vez, así que la
+ * recarga que dispara el propio módulo puede retrasar la comprobación: en vez de
+ * un tiempo fijo, se sondea hasta que el valor cambie (o se agote el plazo).
+ */
+/** Recarga la página del módulo y devuelve el documento NUEVO. */
+async function recargar(f, url, idViaje) {
+    f.contentWindow.location.href = url;
+    for (let i = 0; i < 30; i++) {
+        await esperar(400);
+        const doc = f.contentDocument;
+        if (doc && doc.querySelector('[data-sget-fila][data-viaje="' + idViaje + '"]')) return doc;
+    }
+    return f.contentDocument;
+}
+
+async function limpiar(idViaje) {
+    const r = await fetch('../pruebas/_recaudo_check.php?id_via=' + idViaje + '&limpiar=1', { credentials: 'same-origin' });
+    return r.json();
+}
+
+async function esperarCambio(idViaje, campo, comprobar, ms = 8000) {
+    const limite = Date.now() + ms;
+    let ultimo = await estado(idViaje);
+    while (Date.now() < limite) {
+        await esperar(300);
+        ultimo = await estado(idViaje);
+        if (comprobar(ultimo)) return ultimo;
+    }
+    return ultimo;
+}
+
+run().then(pintar).catch(e => { anotar(false, 'La sonda se ejecutó sin errores', e.message); pintar(); });
+</script>
+</body>
+</html>

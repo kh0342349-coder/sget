@@ -54,12 +54,26 @@ $sql_viaje = "SELECT
     LEFT JOIN vehiculo veh ON v.id_veh = veh.id_veh
     INNER JOIN rutas r ON v.id_rut_via = r.id_rut
     WHERE v.id_usu_via = ?
-      AND v.est_via NOT IN ('Finalizado', 'Terminado', 'Completado', '0', '2')
-    ORDER BY v.fec_via DESC
+      AND v.est_via IN (?, ?)
+    /* ORDEN CORREGIDO
+       Antes: `ORDER BY v.fec_via DESC` → el conductor veía el viaje MÁS ANTIGUO
+       de los que tenía abiertos, casi siempre uno de hace semanas, en vez del
+       que le toca ahora. Se ordena por urgencia real:
+         1. el que ya está en curso,
+         2. el que sale más pronto a partir de ahora,
+         3. y los pasados, al final (deben cerrarse). */
+    ORDER BY
+      (v.est_via = ?) DESC,
+      CASE WHEN v.fec_via >= CURDATE() THEN 0 ELSE 1 END,
+      CASE WHEN v.fec_via >= CURDATE() THEN TIMESTAMP(v.fec_via, v.hor_sal_via) END ASC,
+      v.fec_via DESC
     LIMIT 1";
 
 $stmt_v = $conexion->prepare($sql_viaje);
-$stmt_v->bind_param("i", $id_conductor);
+// mysqli exige variables por referencia: los estados van a variables propias.
+$viajeProgramado = Config::VIA_PROGRAMADO;
+$viajeEnCurso    = Config::VIA_EN_CURSO;
+$stmt_v->bind_param("isss", $id_conductor, $viajeProgramado, $viajeEnCurso, $viajeEnCurso);
 $stmt_v->execute();
 $res_viaje = $stmt_v->get_result();
 $viaje = $res_viaje->fetch_assoc();
@@ -104,13 +118,13 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
     <title>Reporte de Viaje - SGET</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
-    <link rel="stylesheet" href="assets/css/01-base.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/02-layout.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/03-componentes.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/04-modales.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/05-tablas.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/06-responsive.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/07-transiciones.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/06-responsive.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/07-transiciones.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
     <script>
         tailwind.config = {
@@ -354,9 +368,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
     </div>
 
     <!-- OVERLAY GENERAL PARA MODALES Y DRAWER -->
-    <div id="overlayReporte" onclick="cerrarTodosModales()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
-
-    <!-- MODAL POP-UP DE CONFIRMACIÓN PARA FINALIZAR VIAJE -->
+<!-- MODAL POP-UP DE CONFIRMACIÓN PARA FINALIZAR VIAJE -->
     <div id="modalConfirmarFinReporte" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300 text-center" id="modalConfirmBoxReporte">
             <div class="w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center text-xl mx-auto border border-emerald-500/20">
@@ -380,7 +392,10 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
     </div>
 
     <!-- PANEL LATERAL DESLIZANTE (DRAWER (+)) DE PROGRAMACIÓN -->
-    <aside id="drawerProgramarReporte" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
+    <!-- MODAL (antes panel lateral): drawerProgramarReporte -->
+<div class="sget-modal-wrap" data-sget-capa data-titulo="drawerProgramarReporte">
+    <div class="sget-overlay"></div>
+    <aside id="drawerProgramarReporte" class="sget-modal sget-modal--sm sget-scroll">
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-neon-morado"></div>
             <div class="flex items-center gap-3">
@@ -458,6 +473,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
             </button>
         </div>
     </aside>
+</div>
 
     <!-- CONTROLADORES JAVASCRIPT -->
     <script>
@@ -528,22 +544,18 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
             document.getElementById('input_fec_reporte').min = fechaHoy;
             document.getElementById('input_hor_reporte').value = horaHoy;
 
-            overlay.classList.remove('opacity-0', 'pointer-events-none');
-            overlay.classList.add('opacity-100', 'pointer-events-auto');
 
-            drawer.classList.remove('translate-x-full');
-            drawer.classList.add('translate-x-0');
+
+
         }
 
         function cerrarModalDrawer() {
             const drawer = document.getElementById('drawerProgramarReporte');
             const overlay = document.getElementById('overlayReporte');
 
-            drawer.classList.remove('translate-x-0');
-            drawer.classList.add('translate-x-full');
 
-            overlay.classList.remove('opacity-100', 'pointer-events-auto');
-            overlay.classList.add('opacity-0', 'pointer-events-none');
+
+
         }
 
         function confirmarFinalizarReporte(idViaje, nombreRuta) {
@@ -554,8 +566,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
             const modal = document.getElementById('modalConfirmarFinReporte');
             const box = document.getElementById('modalConfirmBoxReporte');
 
-            overlay.classList.remove('opacity-0', 'pointer-events-none');
-            overlay.classList.add('opacity-100', 'pointer-events-auto');
+
 
             modal.classList.remove('opacity-0', 'pointer-events-none');
             modal.classList.add('opacity-100', 'pointer-events-auto');
@@ -575,8 +586,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
             modal.classList.remove('opacity-100', 'pointer-events-auto');
             modal.classList.add('opacity-0', 'pointer-events-none');
 
-            overlay.classList.remove('opacity-100', 'pointer-events-auto');
-            overlay.classList.add('opacity-0', 'pointer-events-none');
+
         }
 
         function cerrarTodosModales() {
@@ -619,5 +629,9 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
             });
         });
     </script>
+
+    <!-- Motor común de modales + puente de compatibilidad con el JS heredado -->
+    <script src="../assets/js/sget-modal.js?v=<?= @filemtime('../assets/js/sget-modal.js') ?: '1' ?>"></script>
+    <script src="../assets/js/sget-puente.js?v=<?= @filemtime('../assets/js/sget-puente.js') ?: '1' ?>"></script>
 </body>
 </html>

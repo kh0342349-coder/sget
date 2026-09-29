@@ -46,8 +46,23 @@
         /* ---------------------------------------------------------------- */
         /* Registro / estado                                                */
         /* ---------------------------------------------------------------- */
-        pila: [],          // ids abiertos, en orden de apertura
+        pila: [],          // capas abiertas (nodos), en orden de apertura
         _porId: function (id) { return document.getElementById(id); },
+
+        /**
+         * Devuelve la CAPA (el envoltorio) de un elemento.
+         *
+         * El id de un modal puede estar en el envoltorio (.sget-modal-wrap) o,
+         * como en las páginas legacy, en la caja (.sget-modal). La visibilidad
+         * la gobierna CSS sobre `.sget-modal-wrap[data-abierto="1"]`, así que si
+         * el atributo acaba en la caja, el modal queda visible pero SIN
+         * pointer-events: no se puede pulsar nada (solo se cerraba con Escape).
+         * Por eso el atributo se escribe siempre en ambas partes.
+         */
+        _capa: function (el) {
+            if (!el) return null;
+            return el.classList && el.classList.contains('sget-modal-wrap') ? el : el.closest('[data-sget-capa]');
+        },
         _todos: function () { return Array.prototype.slice.call(document.querySelectorAll('[data-sget-capa]')); },
 
         /* ---------------------------------------------------------------- */
@@ -67,7 +82,9 @@
 
             el.dataset.abierto = '1';
             el.setAttribute('aria-hidden', 'false');
-            if (this.pila.indexOf(id) === -1) this.pila.push(id);
+            var capa = this._capa(el);
+            if (capa) { capa.dataset.abierto = '1'; capa.setAttribute('aria-hidden', 'false'); }
+            if (this.pila.indexOf(capa || el) === -1) this.pila.push(capa || el);
 
             document.body.classList.add('sget-modal-abierto');
             this._activarOverlay(true);
@@ -79,6 +96,21 @@
             }, 60);
 
             this._anunciar('Se abrió el diálogo: ' + (el.dataset.titulo || id));
+
+            /* Aviso a los módulos que necesitan montar algo DENTRO del modal
+               cuando ya está visible.
+               POR QUÉ: el botón de Google (Google Identity Services) no puede
+               renderizarse en un panel oculto, y antes solo se inicializaba
+               desde la función abrirPanel() de index.php. Los botones de la
+               cabecera usan data-sget-modal, es decir SGETModal.abrir(), así
+               que nunca se montaba y el hueco quedaba vacío.
+               Se escucha en `document` porque el motor sube las capas a <body>. */
+            try {
+                document.dispatchEvent(new CustomEvent('sget:modal-abierto', {
+                    detail: { id: id, el: el, capa: capa || el, abrir: opciones }
+                }));
+            } catch (e) { /* navegadores antiguos: se sigue sin avisar */ }
+
             return el;
         },
 
@@ -87,10 +119,33 @@
             if (!el) return;
             el.dataset.abierto = '0';
             el.setAttribute('aria-hidden', 'true');
+            var capaCerrar = this._capa(el);
+            if (capaCerrar) {
+                capaCerrar.dataset.abierto = '0';
+                capaCerrar.setAttribute('aria-hidden', 'true');
+                // Se limpian siempre las cajas hijas: si el id está en el
+                // envoltorio, la caja se queda con data-abierto="1" y
+                // estaAbierto() seguiría diciendo que el modal está abierto.
+                Array.prototype.forEach.call(
+                    capaCerrar.querySelectorAll('.sget-modal, .sget-drawer'),
+                    function (caja) { caja.dataset.abierto = '0'; }
+                );
+            }
 
 
-            var i = this.pila.indexOf(el.id);
+            /* `pila` guarda ELEMENTOS (la capa), no ids: al cerrar se busca
+               por elemento. Antes se comparaba `pila.indexOf(el.id)`, que
+               nunca encontraba nada porque la pila contenía nodos; el cuerpo se
+               quedaba con `sget-modal-abierto` y la página conservaba el scroll
+               bloqueado para siempre después de cerrar un modal. */
+            var objetivo = capaCerrar || el;
+            var i = this.pila.indexOf(objetivo);
+            if (i === -1) i = this.pila.indexOf(el);
             if (i > -1) this.pila.splice(i, 1);
+
+            // Se limpia la pila de cualquier capa que ya no esté en el DOM
+            this.pila = this.pila.filter(function (c) { return document.contains(c); });
+
             if (!this.pila.length) {
                 document.body.classList.remove('sget-modal-abierto');
             }
@@ -111,12 +166,14 @@
 
         estaAbierto: function (id) {
             var el = this._porId(id);
-            return !!el && el.dataset.abierto === '1';
+            if (!el) return false;
+            var capa = this._capa(el);
+            return el.dataset.abierto === '1' || (!!capa && capa.dataset.abierto === '1');
         },
 
         cerrarTodos: function () {
             var self = this;
-            this.pila.slice().forEach(function (id) { self.cerrar(id); });
+            this.pila.slice().forEach(function (c) { self.cerrar(typeof c === 'string' ? c : c.id); });
         },
 
         /* ---------------------------------------------------------------- */
@@ -167,12 +224,28 @@
                     nodo.innerHTML = valor;
                 });
 
+                // 3b) data-sget-src="nombre" -> atributo src (imágenes de un <img>)
+                //     Vive aquí y no en cada módulo porque TODOS los formularios con
+                //     imagen sufran lo mismo: al editar, la vista previa se
+                //     quedaba vacía porque el <img> no recibía su URL. El modal solo
+                //     rellena values, y un <img> no tiene `value`.
+                el.querySelectorAll('[data-sget-src="' + campo + '"]').forEach(function (nodo) {
+                    if (valor === '' || valor === null) { nodo.removeAttribute('src'); return; }
+                    nodo.setAttribute('src', valor);
+                });
+
                 // 4) data-sget-clase="nombre" = valor  →  alterna clases
                 el.querySelectorAll('[data-sget-clase="' + campo + '"]').forEach(function (nodo) {
                     nodo.className = nodo.className.replace(/\bsget-badge--\S+/g, '').trim() + ' ' + valor;
                 });
 
-                // 5) data-sget-mostrar="nombre:0|1" → muestra/oculta
+                // 5) data-sget-mostrar="nombre"  →  muestra/oculta según el valor
+                //    Se escribe SIN sufijo: el selector busca exactamente el
+                //    nombre del campo. Antes el comentario documentaba la forma
+                //    `nombre:0|1`, que el selector nunca encontraba: la regla
+                //    quedaba muerta para quien la usara así.
+                //    El valor decide: '0', '' y 'false' ocultan; cualquier otro
+                //    valor (incluida una URL) muestra.
                 //    Se alterna `style.display` porque el layout depende de
                 //    Tailwind (flex/grid) y `hidden` podría perder specificity.
                 el.querySelectorAll('[data-sget-mostrar="' + campo + '"]').forEach(function (nodo) {
@@ -429,7 +502,10 @@
 
         _atraparFoco: function (e) {
             if (e.key !== 'Tab' || !this.pila.length) return;
-            var capa = this._porId(this.pila[this.pila.length - 1]);
+            // `pila` contiene capas (nodos), no ids
+            var capa = this.pila[this.pila.length - 1];
+            if (!capa) return;
+            capa = typeof capa === 'string' ? this._porId(capa) : capa;
             if (!capa) return;
             var focos = Array.prototype.slice.call(capa.querySelectorAll(FOCO_SELECTOR))
                 .filter(function (el) { return el.offsetParent !== null; });
@@ -442,11 +518,47 @@
     };
 
     /* ===================================================================== */
+    /* ================================================================== */
+    /* Montaje de las capas en <body>                                      */
+    /* ================================================================== */
+    /**
+     * Sube cada capa modal al final de <body>.
+     *
+     * POR QUÉ: un modal con `position: fixed` sigue atrapado si alguno de sus
+     * ancestros crea un contexto de apilado (transform, filter,
+     * backdrop-filter, will-change, isolation) o tiene un z-index propio. En
+     * ese caso su z-index pasa a ser relativo a ese ancestro y el sidebar
+     * (z-50) puede quedar POR ENCIMA: se veía el logo del menú flotando sobre
+     * el modal y el botón de cerrar quedaba inclicable.
+     *
+     * En <body> el modal compite directamente con el resto de la página, que es
+     * lo que se quiere. Es idempotente.
+     */
+    function montarEnBody() {
+        Array.prototype.forEach.call(document.querySelectorAll('[data-sget-capa]'), function (capa) {
+            if (capa.parentElement !== document.body) document.body.appendChild(capa);
+        });
+    }
+
     /* Arranque: delegación de eventos + atajos                             */
     /* ===================================================================== */
     document.addEventListener('DOMContentLoaded', function () {
 
-        // Cualquier elemento con data-sget-modal abre su destino
+        // 1) Las capas modal se suben a <body> ANTES de cualquier otra cosa.
+        montarEnBody();
+        if (window.MutationObserver) {
+            new MutationObserver(function () {
+                if (document.querySelector('[data-sget-capa]')) {
+                    var fuera = Array.prototype.filter.call(
+                        document.querySelectorAll('[data-sget-capa]'),
+                        function (c) { return c.parentElement !== document.body; }
+                    );
+                    if (fuera.length) montarEnBody();
+                }
+            }).observe(document.documentElement, { childList: true, subtree: true });
+        }
+
+        // 2) Cualquier elemento con data-sget-modal abre su destino
         document.addEventListener('click', function (e) {
             var disparador = e.target.closest('[data-sget-modal]');
             if (disparador) {

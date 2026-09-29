@@ -12,14 +12,25 @@ function arrancar(n){
   return new Promise(function(res){
     (function intentar(){
       var d=f.contentDocument;
-      if(d&&d.body&&(d.getElementById('panelLogin')||d.getElementById('modalRuta'))) return res();
+      /* Se espera a la ÚLTIMA capa modal de la landing (panelConfigCookies, la
+         que se emite al final del HTML). Esperar solo por panelLogin hacía que la
+         comprobación se ejecutara con el documento a medio parsear: con dos
+         modales de menos, y con el login todavía sin estilos aplicados. */
+      /* Además del HTML, se espera al motor de modales: los botones se atan en
+         DOMContentLoaded, y si se pulsa el disparador antes de eso el clic se
+         pierde y el modal «no se abre» sin que haya ningún fallo real. */
+      var w=d&&d.defaultView;
+      /* readyState != loading = DOMContentLoaded ya ocurrió (y con él los
+         escuchadores del motor de modales). Antes se comprobaba solo que
+         existiera SGETModal, que se publica ANTES de ese momento. */
+      if(d&&d.body&&d.readyState!=='loading'&&(d.getElementById('panelConfigCookies')||d.getElementById('modalRuta'))&&w&&w.SGETModal) return res();
       if(n<=0) return res();
       n--; setTimeout(intentar,200);
     })();
   });
 }
 function esperar(n){var d=f.contentDocument;
-  if(d&&d.body&&d.getElementById('panelLogin')&&d.getElementById('panelRegistro'))return Promise.resolve();
+  if(d&&d.body&&d.getElementById('panelLogin')&&d.getElementById('panelConfigCookies'))return Promise.resolve();
   if(n<=0)return Promise.resolve();
   return new Promise(function(r){setTimeout(function(){r(esperar(n-1));},200);});}
 
@@ -50,7 +61,7 @@ arrancar(24).then(function(){
   var ml=d.getElementById('panelLogin');
   var card=ml.querySelector('.sget-modal');
   var cs=w.getComputedStyle(ml);
-  ok(ml.dataset.abierto==='1','el modal de login se abre');
+  ok(ml.dataset.abierto==='1','el modal de login se abre','abierto='+ml.dataset.abierto);
   ok(parseFloat(cs.opacity)>0.9,'el overlay es opaco (opacidad '+cs.opacity+')');
   var rc=card.getBoundingClientRect();
   ok(rc.width>280&&rc.height>250,'el modal tiene tamaño real ('+Math.round(rc.width)+'x'+Math.round(rc.height)+')');

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    img/anuncios/portada.svg
+
+    BANNER POR DEFECTO del módulo de anuncios (1600x700, panorámico).
+
+    POR QUÉ EXISTE
+      La migración 006 creaba un anuncio de ejemplo cuyo campo `imagen` era
+      'portada.svg', pero ese archivo nunca estuvo en `uploads/anuncios`: la
+      landing pintaba un marco vacío con el texto alt y el módulo mostraba una
+      tarjeta sin foto. Este archivo es la imagen real y la migración la copia.
+
+    NOTAS DE DISEÑO
+      · El carrusel pone los textos encima, con una cortina oscura en el 55%
+        izquierdo: aquí la composición vive en la DERECHA para no chocar.
+      · Es SVG porque pesa ~4 KB y escala a cualquier pantalla. OJO: un
+        comentario XML NO puede contener dos guiones seguidos, y un SVG con el
+        XML mal formado se sirve con 200 pero el navegador NO lo pinta (se ve
+        el texto alt sobre el fondo). Por eso las separaciones son de puntos.
+      · getimagesize() no lee el contenido de un SVG, así que la comprobación
+        de dimensiones del servicio se salta para este formato.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 700" width="1600" height="700" role="img" aria-label="SGET, Sistema Inteligente de Transporte">
+  <defs>
+    <linearGradient id="fondo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#020617"/>
+      <stop offset="45%"  stop-color="#0b2545"/>
+      <stop offset="100%" stop-color="#0c4a6e"/>
+    </linearGradient>
+
+    <radialGradient id="halo" cx="50%" cy="44%" r="52%">
+      <stop offset="0%"   stop-color="#38bdf8" stop-opacity=".45"/>
+      <stop offset="60%"  stop-color="#0ea5e9" stop-opacity=".12"/>
+      <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="barra" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#38bdf8"/>
+      <stop offset="50%"  stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#c084fc"/>
+    </linearGradient>
+
+    <pattern id="reticula" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0v48" fill="none" stroke="#7dd3fc" stroke-opacity=".10" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <!-- Fondo -->
+  <rect width="1600" height="700" fill="url(#fondo)"/>
+  <rect width="1600" height="700" fill="url(#reticula)"/>
+  <rect width="1600" height="700" fill="url(#halo)"/>
+
+  <!--
+    COMPOSICIÓN (leer antes de mover cualquier cosa)
+      El carrusel recorta la imagen con `object-fit: cover`, así que NUNCA se ve
+      el banner entero. Lo que se ve depende del marco:
+
+        · Escritorio: marco ~4:1  -> se recorta por arriba y por abajo; se ve la
+          franja central, y = 150 … 555 de los 700 px.
+        · Móvil:     marco ~0,8:1 -> se recorta por los lados; se ve la franja
+          central, x = 528 … 1072 de los 1600 px.
+
+      Por eso la ilustración vive en el CENTRO (x 560…1040) y entre
+      y = 170 … 530: es la única zona que sobrevive a los dos recortes.
+
+      Y aquí NO se escribe el nombre de la marca ni ningún texto: el carrusel
+      pinta encima el título, el subtítulo y la descripción que el
+      administrador escribe en el formulario. Un banner con "SGET" fijo
+      duplicaba ese texto y parecía un fallo, cuando lo correcto es que la
+      imagen sea solo el fondo y los textos se cambien sin tocar nada.
+  -->
+
+  <!-- Rutas: las líneas que unen las paradas -->
+  <g fill="none" stroke-linecap="round" opacity=".5">
+    <path d="M120 470 C 420 430, 620 420, 800 350 S 1180 240, 1520 190" stroke="#38bdf8" stroke-width="3" stroke-dasharray="14 12"/>
+    <path d="M60 600 C 380 560, 620 560, 900 500 S 1300 440, 1580 400" stroke="#818cf8" stroke-width="2" stroke-dasharray="6 14"/>
+  </g>
+
+  <!-- Paradas -->
+  <g>
+    <circle cx="800"  cy="350" r="11" fill="#020617" stroke="#38bdf8" stroke-width="4"/>
+    <circle cx="1180" cy="238" r="7"  fill="#020617" stroke="#c084fc" stroke-width="3"/>
+    <circle cx="420"  cy="428" r="7"  fill="#020617" stroke="#818cf8" stroke-width="3"/>
+  </g>
+
+  <!-- Autobús -->
+  <g transform="translate(660 176)">
+    <rect x="0" y="0" width="340" height="154" rx="26" fill="#f8fafc" fill-opacity=".94"/>
+    <rect x="0" y="0" width="340" height="154" rx="26" fill="none" stroke="#38bdf8" stroke-width="4"/>
+    <rect x="26" y="25" width="88" height="52" rx="10" fill="#0ea5e9" fill-opacity=".35"/>
+    <rect x="126" y="25" width="88" height="52" rx="10" fill="#0ea5e9" fill-opacity=".35"/>
+    <rect x="226" y="25" width="88" height="52" rx="10" fill="#0ea5e9" fill-opacity=".35"/>
+    <rect x="26" y="93" width="214" height="10" rx="5" fill="#94a3b8" fill-opacity=".55"/>
+    <circle cx="75"  cy="154" r="20" fill="#020617"/>
+    <circle cx="265" cy="154" r="20" fill="#020617"/>
+    <circle cx="75"  cy="154" r="8"  fill="#64748b"/>
+    <circle cx="265" cy="154" r="8"  fill="#64748b"/>
+    <!-- Rótulo de destino en el bus -->
+    <rect x="116" y="106" width="108" height="30" rx="8" fill="#020617" fill-opacity=".85"/>
+    <text x="170" y="127" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif"
+          font-size="16" font-weight="800" letter-spacing="1.6" fill="#7dd3fc">SGET</text>
+  </g>
+
+  <!-- Suelo: la línea de acento cierra la composición sin estorbar -->
+  <rect x="470" y="500" width="660" height="5" rx="2.5" fill="url(#barra)" opacity=".55"/>
+</svg>

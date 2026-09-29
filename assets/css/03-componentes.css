@@ -105,6 +105,36 @@ html.dark .sget-badge--error  { color: #f87171; }
 html.dark .sget-badge--aviso  { color: #fbbf24; }
 html.dark .sget-badge--info   { color: #38bdf8; }
 
+/* --------------------------------------------------------------------------
+   AVISO DE BLOQUE
+   --------------------------------------------------------------------------
+   Explica una situación que el listado por sí solo no deja ver: una imagen que
+   ya no está en el servidor, un módulo sin nada publicado, un permiso que
+   impide hacer algo. Es la diferencia entre un fallo silencioso y un módulo que
+   dice qué pasa. Nace en el módulo de anuncios («no se ven reflejados»).
+   -------------------------------------------------------------------------- */
+.sget-nota {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    padding: .875rem 1rem;
+    border: 1px solid var(--sget-borde);
+    border-left-width: 3px;
+    border-radius: .75rem;
+    font-size: .8125rem;
+    line-height: 1.5;
+    color: var(--sget-texto-suave);
+    background: var(--sget-superficie-2);
+}
+.sget-nota > i:first-child { flex: none; margin-top: .1rem; font-size: 1rem; }
+.sget-nota strong { color: var(--sget-texto); font-weight: 800; }
+.sget-nota--aviso   { border-left-color: var(--sget-ambars); }
+.sget-nota--aviso > i:first-child   { color: var(--sget-ambars); }
+.sget-nota--peligro { border-left-color: var(--sget-rojo); }
+.sget-nota--peligro > i:first-child { color: var(--sget-rojo); }
+.sget-nota--info    { border-left-color: var(--sget-azul); }
+.sget-nota--info > i:first-child    { color: var(--sget-azul); }
+
 /* Punto pulsante de "en vivo" */
 .sget-punto {
     width: .375rem; height: .375rem;
@@ -353,3 +383,196 @@ html.dark .sget-flash--exito { color: #34d399; }
 html.dark .sget-flash--error { color: #f87171; }
 html.dark .sget-flash--aviso { color: #fbbf24; }
 html.dark .sget-flash--info  { color: #38bdf8; }
+
+/* ==========================================================================
+   BUZÓN DE NOTIFICACIONES
+   ==========================================================================
+   La lista la pinta el servidor (para que se vea aunque el JS no haya
+   cargado) y assets/js/sget-notificaciones.js la refresca en vivo. Cada aviso
+   conserva su color por tipo, y los leídos se atenúan para que la vista de
+   un vistazo diga qué es lo que está pendiente.
+   ========================================================================== */
+.sget-noti-lista {
+    display: flex;
+    flex-direction: column;
+    gap: .625rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.sget-noti-item {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    padding: .875rem .9375rem;
+    border-radius: var(--sget-radio);
+    border: 1px solid var(--sget-borde);
+    background: var(--sget-superficie);
+    transition: border-color .2s, background .2s;
+}
+.sget-noti-item:hover { border-color: color-mix(in srgb, var(--sget-azul) 45%, var(--sget-borde)); }
+.sget-noti-item.es-leida { background: var(--sget-superficie-2); opacity: .78; }
+
+.sget-noti-item__icono {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 2.125rem;
+    height: 2.125rem;
+    border-radius: var(--sget-radio);
+    font-size: .8125rem;
+}
+.sget-noti-item__icono--rojo    { background: color-mix(in srgb, var(--sget-rojo) 14%, transparent);    color: var(--sget-rojo); }
+.sget-noti-item__icono--emerald { background: color-mix(in srgb, var(--sget-emerald) 14%, transparent); color: var(--sget-emerald); }
+.sget-noti-item__icono--ambars  { background: color-mix(in srgb, var(--sget-ambars) 14%, transparent);  color: var(--sget-ambars); }
+.sget-noti-item__icono--azul    { background: color-mix(in srgb, var(--sget-azul) 14%, transparent);    color: var(--sget-azul); }
+.sget-noti-item__icono--morado  { background: color-mix(in srgb, var(--sget-morado) 14%, transparent);  color: var(--sget-morado); }
+
+.sget-noti-item__cuerpo { flex: 1 1 auto; min-width: 0; }
+.sget-noti-item__cabecera {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+    margin-bottom: .3125rem;
+}
+.sget-noti-item__titulo {
+    margin: 0 0 .25rem;
+    font-size: .8125rem;
+    font-weight: 800;
+    line-height: 1.35;
+    color: var(--sget-texto);
+}
+.sget-noti-item__texto {
+    margin: 0 0 .375rem;
+    font-size: .75rem;
+    line-height: 1.5;
+    color: var(--sget-texto-suave);
+    white-space: pre-line;   /* los avisos traen párrafos separados por saltos */
+}
+.sget-noti-item__acciones { flex: 0 0 auto; display: flex; gap: .25rem; align-items: center; }
+
+/* Campanita con avisos sin leer: un pulso discreto, no un parpadeo agresivo */
+.sget-noti-pulsa { animation: sget-noti-pulso 2.6s ease-in-out infinite; }
+@keyframes sget-noti-pulso {
+    0%, 88%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sget-azul) 0%, transparent); }
+    92%           { box-shadow: 0 0 0 .375rem color-mix(in srgb, var(--sget-azul) 28%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .sget-noti-pulsa { animation: none; } }
+
+@media (max-width: 560px) {
+    .sget-noti-item { flex-wrap: wrap; }
+    .sget-noti-item__acciones { width: 100%; justify-content: flex-end; }
+}
+
+/* ==========================================================================
+   ANUNCIOS DE LA LANDING
+   ==========================================================================
+   La tarjeta del módulo de anuncios y la miniatura del formulario muestran el
+   MIS proportions que usa el carrusel de index.php: si se ven bien aquí, se
+   ven bien en la landing. La imagen va detrás y los textos encima, con una
+   cortina del color elegido para que el texto siempre se lea.
+   ========================================================================== */
+.sget-anuncio-card {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    min-height: 9.5rem;
+    border-radius: var(--sget-radio);
+    overflow: hidden;
+    border: 1px solid var(--sget-borde);
+    background: var(--sget-superficie-2);
+}
+.sget-anuncio-card > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.sget-anuncio-card__vacio {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 1.75rem;
+    color: var(--sget-texto-tenue);
+}
+.sget-anuncio-card__texto {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    padding: .875rem 1rem;
+    background: linear-gradient(0deg, rgba(2, 6, 23, .92) 0%, rgba(2, 6, 23, .55) 60%, transparent 100%);
+}
+.sget-anuncio-card__titulo {
+    margin: 0;
+    font-size: .9375rem;
+    font-weight: 800;
+    color: #f8fafc;
+    line-height: 1.3;
+}
+.sget-anuncio-card__sub {
+    margin: .1875rem 0 0;
+    font-size: .75rem;
+    color: #cbd5e1;
+    line-height: 1.4;
+}
+
+/* Tono del aviso (el mismo valor `color_tema` que guarda el servicio) */
+.sget-anuncio-card--azul    .sget-anuncio-card__texto { background: linear-gradient(0deg, rgba(2, 6, 23, .94), rgba(8, 47, 73, .72) 65%, transparent); }
+.sget-anuncio-card--emerald .sget-anuncio-card__texto { background: linear-gradient(0deg, rgba(2, 6, 23, .94), rgba(6, 78, 59, .72) 65%, transparent); }
+.sget-anuncio-card--ambars  .sget-anuncio-card__texto { background: linear-gradient(0deg, rgba(2, 6, 23, .94), rgba(120, 53, 15, .72) 65%, transparent); }
+.sget-anuncio-card--morado  .sget-anuncio-card__texto { background: linear-gradient(0deg, rgba(2, 6, 23, .94), rgba(76, 29, 149, .72) 65%, transparent); }
+.sget-anuncio-card--rojo    .sget-anuncio-card__texto { background: linear-gradient(0deg, rgba(2, 6, 23, .94), rgba(127, 29, 29, .72) 65%, transparent); }
+
+/* Miniatura del formulario de alta/edición */
+.sget-anuncio-preview {
+    position: relative;
+    border: 1px dashed var(--sget-borde);
+    border-radius: var(--sget-radio);
+    overflow: hidden;
+    background: var(--sget-superficie-2);
+}
+.sget-anuncio-preview img {
+    display: block;
+    width: 100%;
+    height: 9rem;
+    object-fit: cover;
+}
+.sget-anuncio-preview .sget-help {
+    display: block;
+    padding: .375rem .625rem;
+    border-top: 1px solid var(--sget-borde);
+    font-size: .625rem;
+}
+
+/* ==========================================================================
+   CALIFICACIÓN CON ESTRELLAS
+   ==========================================================================
+   Las estrellas son botones de verdad (teclado y lector de pantalla), no iconos
+   sueltos: `es-activa` =filled, `es-elegida` = la que acabas de pulsar.
+   ========================================================================== */
+.sget-estrellas {
+    display: flex;
+    gap: .25rem;
+    justify-content: center;
+    padding: .25rem 0;
+}
+.sget-estrella {
+    padding: .125rem;
+    font-size: 1.75rem;
+    line-height: 1;
+    color: var(--sget-texto-tenue);
+    transition: transform .15s, color .15s;
+    cursor: pointer;
+}
+.sget-estrella:hover { transform: scale(1.15); }
+.sget-estrella.es-activa { color: var(--sget-ambars); }
+.sget-estrella.es-elegida { transform: scale(1.1); }
+.sget-estrella:focus-visible {
+    outline: 2px solid var(--sget-azul);
+    outline-offset: 3px;
+    border-radius: .375rem;
+}

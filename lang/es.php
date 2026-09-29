@@ -9,7 +9,7 @@ $lang = [
     "vehiculos" => "Flota de Vehículos",
     "permisos" => "Permisos",
     "calificaciones" => "Calificaciones",
-    "reportes" => "Reportes Generales",
+    "reportes" => "Panel de Información",
     "configuracion" => "Configuración",
     "soporte" => "Soporte y Ayuda",
     

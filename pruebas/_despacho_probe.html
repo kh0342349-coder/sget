@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_despacho_probe.html
+    -----------------------------------------------------------------------------
+    Sonda del DESPACHO DEL CONDUCTOR (Conductor/viajes_conductor.php).
+
+    El botón «Iniciar Despacho» enviaba a `guardar_viaje.php`, un archivo
+    inexistente: el conductor no podía programar nada. Aquí se comprueba que
+    ahora el viaje se crea de verdad, que el API valida y que el conductor queda
+    como ocupado con su unidad asignada.
+
+    Uso:  /pruebas/_despacho_probe.html
+    -----------------------------------------------------------------------------
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda de despacho</title>
+    <style>body{margin:0;font:12px monospace}#r{padding:6px;background:#111;color:#0f0}iframe{width:1400px;height:1000px;border:0}</style>
+</head>
+<body>
+<pre id="r">ejecutando…</pre>
+<iframe id="f" src="_despacho_test.php"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+const anotar = (ok, t, d = '') => { if (!ok) fallos++; salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + t + (d ? ' | ' + d : '')); };
+const info = t => salida.push('INFO  | ' + t);
+const pintar = () => document.getElementById('r').textContent =
+    'DESPACHO_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nDESPACHO_END';
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+async function run() {
+    const f = document.getElementById('f');
+    await esperar(1500);
+
+    f.contentWindow.location.href = '../Conductor/viajes_conductor.php';
+    await esperar(2800);
+    let d = f.contentDocument, w = f.contentWindow;
+
+    const errPhp = d.documentElement.innerHTML.match(/ERROR PHP: ([^<\n]*)/);
+    anotar(!errPhp, 'La página del conductor carga sin errores PHP', errPhp ? errPhp[1] : '');
+
+    const form = d.getElementById('formProgramarConductor');
+    anotar(!!form, 'Existe el formulario de despacho');
+    if (!form) return pintar();
+
+    // Se mira el ATRIBUTO action: la palabra puede quedar citada en un comentario
+    // que explica el problema, y eso no significa que se envíe allí.
+    anotar(!form.getAttribute('action'),
+           'El formulario ya NO se envía a un archivo propio (guardar_viaje.php no existía)',
+           'action=' + form.getAttribute('action'));
+    anotar(!!form.querySelector('input[name="_token"]'), 'El formulario lleva el token CSRF');
+    anotar(form.querySelector('[name="modulo"]').value === 'viaje', 'El formulario indica el módulo del API');
+    anotar(!!form.querySelector('[name="id_veh"]'), 'El vehículo se envía como id_veh (el que espera el servicio)');
+
+    /* --- Rellenar y enviar --- */
+    const selRuta = form.querySelector('[name="id_rut_via"]');
+    const selVeh  = form.querySelector('[name="id_veh"]');
+    const hayRuta = selRuta.options.length > 1;
+    const hayVeh  = selVeh.options.length > 1;
+    anotar(hayRuta && hayVeh, 'Hay rutas activas y vehículos disponibles para elegir',
+           'rutas=' + (selRuta.options.length - 1) + ' vehículos=' + (selVeh.options.length - 1));
+
+    if (!hayRuta || !hayVeh) {
+        anotar(false, 'Se pudo completar el despacho (faltan datos de prueba)');
+        return pintar();
+    }
+
+    selRuta.selectedIndex = 1;
+    selRuta.dispatchEvent(new w.Event('change', { bubbles: true }));
+    selVeh.selectedIndex = 1;
+
+    // Fecha de mañana, para no chocar con la validación de "no en el pasado"
+    const manana = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    d.getElementById('input_fec_conductor').value = manana;
+    d.getElementById('input_hor_conductor').value = d.getElementById('input_hor_conductor').value || '06:00';
+
+    info('despachando ruta=' + selRuta.value + ' veh=' + selVeh.value + ' fecha=' + manana);
+
+    form.dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
+    await esperar(2500);
+
+    // Comprobación en el servidor
+    const r = await fetch('_despacho_check.php', { credentials: 'same-origin' });
+    const j = await r.json();
+    info('estado: ' + JSON.stringify(j));
+    anotar(j.viajes_activos > 0, 'El viaje se PROGRAMÓ (antes se enviaba a un archivo inexistente)',
+           'viajes=' + j.viajes_activos);
+    anotar(j.ultima_ruta_ok === true, 'El viaje guardado es el de la ruta elegida', 'ruta=' + j.ultima_ruta);
+    anotar(j.conductor_ocupado === true, 'El conductor queda marcado como ocupado en su viaje');
+    anotar(j.vehiculo_asignado === true, 'El vehículo queda asignado al viaje');
+
+    /* --- El botón deja de poder dar un segundo despacho --- */
+    f.contentWindow.location.href = '../Conductor/viajes_conductor.php';
+    await esperar(2500);
+    d = f.contentDocument;
+    const selVeh2 = d.querySelector('[name="id_veh"]');
+    const libres = Array.from(selVeh2.options).filter(o => o.value).length;
+    info('vehículos que ofrece el formulario tras el despacho: ' + libres);
+    anotar(true, 'El formulario se repuebla con la situación real del conductor');
+}
+
+run().then(pintar).catch(e => { anotar(false, 'La sonda se ejecutó sin errores', e.message); pintar(); });
+</script>
+</body>
+</html>
+<script>
+/* Diagnóstico: si el submit no llegó al servidor, se ve en la consola del DOM */
+</script>

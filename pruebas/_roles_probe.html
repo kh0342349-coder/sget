@@ -1,0 +1,74 @@
+<!DOCTYPE html><html><body><pre id="r">x</pre>
+<iframe id="f" style="width:1300px;height:900px"></iframe>
+<script>
+var o=[],fallos=0,hecho=false;
+function ok(c,t,d){if(!c)fallos++;o.push((c?'OK   | ':'FALLA | ')+t+(d?' | '+d:''));}
+function info(t){o.push('INFO  | '+t);}
+function fin(){if(hecho)return;hecho=true;document.getElementById('r').textContent='ROL_START\n'+o.join('\n')+'\nFALLOS='+fallos+'\nROL_END';}
+window.onerror=function(m){o.push('FALLA | error JS: '+m);fallos++;return false;};
+var CASOS=[
+  {rol:2,pagina:'Conductor/viajes_conductor.php',modal:'drawerProgramar',fn:'abrirModalSolicitar'},
+  {rol:2,pagina:'Conductor/viaje_asignado.php',modal:'drawerProgramarReporte',fn:'abrirModalSolicitar2'},
+  {rol:3,pagina:'Pasajero/pasajero.php',modal:'drawerReservaPasajero',fn:'abrirModalReserva'},
+  {rol:3,pagina:'Pasajero/historial_pasajero.php',modal:'drawerReservaHistorial',fn:'abrirModalReservaHistorial'}
+];
+var i=0;
+function siguiente(){
+  if(i>=CASOS.length) return fin();
+  var c=CASOS[i++];
+  var f=document.getElementById('f');
+  f.src='/pruebas/_sesion_test.php?rol='+c.rol+'&ir='+encodeURIComponent(c.pagina);
+  var intentos=70;
+  (function esperar(){
+    var d=f.contentDocument,w=f.contentWindow;
+    if(d&&d.body&&d.getElementById(c.modal)&&w.SGETModal) return medir(d,w,c);
+    if(intentos--<=0){ok(false,c.pagina+": la página cargó");return siguiente();}
+    setTimeout(esperar,200);
+  })();
+}
+function medir(d,w,c){
+  try{
+    var st=d.createElement('style');
+    st.textContent='*,*::before,*::after{transition:none !important;animation:none !important}';
+    d.head.appendChild(st);
+
+    var wrap=d.getElementById(c.modal);
+    var parent=wrap.parentElement;
+    ok(parent.classList.contains('sget-modal-wrap'),c.pagina+': usa .sget-modal-wrap (es modal, no panel)');
+    var caja=d.querySelector('#'+CSS.escape(c.modal));
+    ok(caja&&caja.classList.contains('sget-modal'),c.pagina+': la caja es .sget-modal');
+
+    w[c.fn]();
+    setTimeout(function(){
+      ok(w.SGETModal.estaAbierto(c.modal),c.pagina+': el modal se abre con '+c.fn+'()','abierto='+wrap.dataset.abierto);
+      var ov=wrap.querySelector('.sget-overlay');
+      var card=caja;
+      var rc=card.getBoundingClientRect();
+      info(c.pagina+' card='+Math.round(rc.width)+'x'+Math.round(rc.height)+' left='+Math.round(rc.left));
+      ok(rc.width>200&&rc.height>100,c.pagina+': el modal tiene tamaño real');
+      ok(rc.left>0&&rc.left<1100,c.pagina+': el modal está CENTRADO (no pegado a la derecha)','left='+Math.round(rc.left));
+
+      // La X debe ser clicable de verdad
+      var x=card.querySelector('[data-sget-cerrar],button[onclick*="cerrar"]');
+      if(x){
+        var r=x.getBoundingClientRect();
+        var hit=d.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+        ok(hit===x||x.contains(hit),c.pagina+': el botón de cerrar es alcanzable',hit?hit.tagName:'null');
+        x.click();
+      } else {
+        ok(w.SGETModal!=null,c.pagina+': el motor está disponible para cerrar');
+        w.SGETModal.cerrar(c.modal,false);
+      }
+      setTimeout(function(){
+        ok(!w.SGETModal.estaAbierto(c.modal),c.pagina+': el modal se cierra',
+           'abierto='+wrap.dataset.abierto);
+        var wrapReal=d.querySelector('[data-sget-capa]');
+        ok(wrapReal.dataset.abierto!=='1',c.pagina+': la capa queda marcada como cerrada');
+        siguiente();
+      },250);
+    },400);
+  }catch(e){ok(false,c.pagina+': sin excepción ('+e.message+')');siguiente();}
+}
+siguiente();
+setTimeout(fin,25000);
+</script></body></html>

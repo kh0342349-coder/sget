@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_shot_admin.html
+    Sonda de captura: abre la sesión de un rol y carga el módulo pedido dentro de
+    un iframe a pantalla completa. Sirve para revisar visualmente los módulos
+    internos (las capturas con --screenshot no heredan la cookie de sesión).
+
+    /pruebas/_shot_admin.html?rol=1&pagina=Admin/anuncios.php
+-->
+<html lang="es"><head><meta charset="UTF-8"><title>Captura de módulo</title>
+<style>html,body{margin:0;height:100%}iframe{width:100vw;height:100vh;border:0}</style></head>
+<body>
+<iframe id="f" src="_sesion_test.php?rol=1"></iframe>
+<script>
+  const p = new URLSearchParams(location.search);
+  const rol = p.get('rol') || '1';
+  const pagina = p.get('pagina') || 'Admin/admin.php';
+  const f = document.getElementById('f');
+  f.src = '_sesion_test.php?rol=' + rol;
+  setTimeout(() => { f.src = '../' + pagina; }, 1500);
+</script>
+</body></html>

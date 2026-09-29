@@ -247,6 +247,82 @@ html.dark {
 }
 
 /* -------------------------------------------------------------------------- */
+/* BOTÓN DE GOOGLE en el modal de inicio de sesión                            */
+/* -------------------------------------------------------------------------- */
+/* Separador "o continúa con" + hueco reservado para el botón oficial.
+   While Google Identity Services carga se muestra un esqueleto; si el SDK no
+   llega (sin internet, bloqueado por extensión, client_id no válido) el hueco
+   se sustituye por un aviso, nunca queda un vacío mudo. */
+.sget-sep-google {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .625rem;
+    margin: 1.25rem 0 .5rem;
+    justify-content: center;
+}
+.sget-sep-google__linea {
+    flex: 1 1 2rem;
+    height: 1px;
+    background: var(--sget-borde);
+}
+.sget-sep-google__texto {
+    flex: 0 0 auto;
+    font-size: .6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--sget-texto-suave);
+}
+/* Contenedor del botón: tamaño fijo para que el esqueleto y el botón real
+   ocupen lo mismo y la página no salte al montarse. */
+.sget-google-montaje {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    min-height: 44px;
+    margin-top: .75rem;
+}
+.sget-google-cargando {
+    display: inline-flex;
+    gap: .375rem;
+    align-items: center;
+    height: 44px;
+    padding: 0 1.75rem;
+    border: 1px solid var(--sget-borde);
+    border-radius: 999px;
+    background: var(--sget-superficie-2);
+}
+.sget-google-cargando__barra {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--sget-texto-suave);
+    opacity: .45;
+    animation: sget-google-pulso 1.1s ease-in-out infinite;
+}
+.sget-google-cargando__barra:nth-child(2) { animation-delay: .18s; }
+.sget-google-cargando__barra:nth-child(3) { animation-delay: .36s; }
+
+@keyframes sget-google-pulso {
+    0%, 100% { opacity: .25; transform: translateY(0); }
+    50%      { opacity: .9;  transform: translateY(-2px); }
+}
+
+.sget-google-aviso {
+    flex: 1 1 100%;
+    margin: 0;
+    text-align: center;
+    line-height: 1.5;
+}
+.sget-google-aviso[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .sget-google-cargando__barra { animation: none; opacity: .6; }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Responsive general                                                          */
 /* -------------------------------------------------------------------------- */
 @media (max-width: 640px) {
@@ -266,3 +342,210 @@ html.dark {
 
 /* Puntos de anclaje sin el salto brusco del header fijo */
 html { scroll-padding-top: 6rem; }
+
+/* -------------------------------------------------------------------------- */
+/* CARRUSEL DE ANUNCIOS (contenido administrable)                             */
+/* -------------------------------------------------------------------------- */
+/* Bloques panorámicos con los textos encima. El `min-height` y el recorte
+   `cover` garantizan que se vean bien tanto en el móvil (vertical estrecho)
+   como en el escritorio, sin deformar la imagen que subió el administrador. */
+.sget-anuncio-carrusel {
+    position: relative;
+    border-radius: 1.5rem;
+    overflow: hidden;
+    border: 1px solid rgb(148 163 184 / .25);
+    box-shadow: 0 25px 60px -20px rgb(2 6 23 / .55);
+}
+
+.sget-anuncio-carrusel__pista { position: relative; }
+
+.sget-anuncio-carrusel__item {
+    position: relative;
+    display: none;
+    align-items: flex-end;
+    min-height: 20rem;
+    background: #0b1220;
+}
+.sget-anuncio-carrusel__item.es-activo { display: flex; animation: sget-anuncio-entra .5s ease both; }
+
+.sget-anuncio-carrusel__item > img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Cortina para que el texto siempre tenga contraste, sea cual sea la imagen */
+.sget-anuncio-carrusel__velo {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgb(2 6 23 / .88) 0%, rgb(2 6 23 / .55) 45%, rgb(2 6 23 / .12) 100%);
+}
+
+.sget-anuncio-carrusel__texto {
+    position: relative;
+    z-index: 1;
+    padding: 2rem 2.25rem;
+    max-width: 42rem;
+    color: #f8fafc;
+}
+.sget-anuncio-carrusel__titulo {
+    margin: 0 0 .5rem;
+    font-size: 1.75rem;
+    font-weight: 900;
+    line-height: 1.15;
+    text-wrap: balance;
+}
+.sget-anuncio-carrusel__sub {
+    margin: 0 0 .5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+.sget-anuncio-carrusel__desc {
+    margin: 0 0 1.25rem;
+    font-size: .875rem;
+    line-height: 1.6;
+    color: #cbd5e1;
+    max-width: 34rem;
+}
+.sget-anuncio-carrusel__boton {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .75rem 1.25rem;
+    border-radius: 999px;
+    font-size: .8125rem;
+    font-weight: 800;
+    color: #0b1220;
+    background: #f8fafc;
+    transition: transform .2s, box-shadow .2s, background .2s;
+}
+.sget-anuncio-carrusel__boton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px -8px rgb(56 189 248 / .55);
+}
+
+/* Tonos: el mismo `color_tema` que elige el administrador */
+.sget-anuncio-carrusel__texto--azul    .sget-anuncio-carrusel__boton { background: #38bdf8; }
+.sget-anuncio-carrusel__texto--emerald .sget-anuncio-carrusel__boton { background: #34d399; }
+.sget-anuncio-carrusel__texto--ambars  .sget-anuncio-carrusel__boton { background: #fbbf24; }
+.sget-anuncio-carrusel__texto--morado  .sget-anuncio-carrusel__boton { background: #a78bfa; }
+.sget-anuncio-carrusel__texto--rojo    .sget-anuncio-carrusel__boton { background: #fb7185; }
+
+.sget-anuncio-carrusel__texto--azul    .sget-anuncio-carrusel__titulo { color: #7dd3fc; }
+.sget-anuncio-carrusel__texto--emerald .sget-anuncio-carrusel__titulo { color: #6ee7b7; }
+.sget-anuncio-carrusel__texto--ambars  .sget-anuncio-carrusel__titulo { color: #fcd34d; }
+.sget-anuncio-carrusel__texto--morado  .sget-anuncio-carrusel__titulo { color: #c4b5fd; }
+.sget-anuncio-carrusel__texto--rojo    .sget-anuncio-carrusel__titulo { color: #fda4af; }
+
+/* Flechas */
+.sget-anuncio-carrusel__flecha {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 999px;
+    color: #0b1220;
+    background: rgb(248 250 252 / .85);
+    backdrop-filter: blur(6px);
+    transition: background .2s, transform .2s;
+    cursor: pointer;
+}
+.sget-anuncio-carrusel__flecha:hover { background: #f8fafc; }
+.sget-anuncio-carrusel__flecha--izq { left: .75rem; }
+.sget-anuncio-carrusel__flecha--der { right: .75rem; }
+.sget-anuncio-carrusel__flecha:active { transform: translateY(-50%) scale(.94); }
+
+/* Puntos */
+.sget-anuncio-carrusel__puntos {
+    position: absolute;
+    z-index: 2;
+    bottom: .875rem;
+    right: 1.5rem;
+    display: flex;
+    gap: .375rem;
+}
+.sget-anuncio-carrusel__punto {
+    width: .5rem;
+    height: .5rem;
+    border-radius: 999px;
+    background: rgb(248 250 252 / .45);
+    transition: width .25s, background .25s;
+    cursor: pointer;
+}
+.sget-anuncio-carrusel__punto.es-activo { width: 1.5rem; background: #f8fafc; }
+
+@keyframes sget-anuncio-entra {
+    from { opacity: 0; transform: scale(1.02); }
+    to   { opacity: 1; transform: none; }
+}
+
+@media (max-width: 640px) {
+    .sget-anuncio-carrusel__item { min-height: 26rem; }
+    .sget-anuncio-carrusel__texto { padding: 1.5rem 1.25rem 2.5rem; }
+    .sget-anuncio-carrusel__titulo { font-size: 1.35rem; }
+    .sget-anuncio-carrusel__desc { font-size: .8125rem; }
+    .sget-anuncio-carrusel__velo {
+        background: linear-gradient(0deg, rgb(2 6 23 / .92) 10%, rgb(2 6 23 / .55) 60%, rgb(2 6 23 / .2) 100%);
+    }
+    .sget-anuncio-carrusel__flecha { display: none; }   /* en móvil se desliza con el dedo */
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sget-anuncio-carrusel__item.es-activo { animation: none; }
+    .sget-anuncio-carrusel__boton { transition: none; }
+}
+
+/* --------------------------------------------------------------------------
+   AVISO «NO HAY ANUNCIOS VISIBLES»
+   --------------------------------------------------------------------------
+   Se pinta SOLO cuando quien mira la portada tiene permiso para administrar
+   anuncios, así que el público nunca lo ve. Sustituye al carrusel cuando no hay
+   nada que mostrar y evita el aquarium: "no aparece nada y no sé por qué".
+   -------------------------------------------------------------------------- */
+.sget-anuncio-vacio {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    padding: 1.5rem;
+    border: 1.5px dashed rgb(148 163 184 / .35);
+    border-radius: 1.25rem;
+    background: rgb(15 23 42 / .35);
+}
+.sget-anuncio-vacio > div { flex: 1 1 22rem; min-width: 0; }
+
+.sget-anuncio-vacio__icono {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: .875rem;
+    font-size: 1.25rem;
+    color: #38bdf8;
+    background: rgb(56 189 248 / .12);
+    border: 1px solid rgb(56 189 248 / .25);
+}
+.sget-anuncio-vacio__titulo {
+    margin: 0 0 .25rem;
+    font-size: 1.0625rem;
+    font-weight: 800;
+    color: #f1f5f9;
+}
+.sget-anuncio-vacio__texto {
+    margin: 0;
+    font-size: .875rem;
+    line-height: 1.5;
+    color: #94a3b8;
+}
+
+@media (max-width: 640px) {
+    .sget-anuncio-vacio { padding: 1.125rem; gap: 1rem; }
+}

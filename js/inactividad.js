@@ -29,6 +29,7 @@
     let cierreAutomaticoMs = inicioTemporizadorMs + (SEGUNDOS_CONTEO_FINAL * 1000);
     let overflowAnterior = '';
     let elementosInhabilitados = [];
+    let observadorRamas = null;
 
     const eventosActividad = ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'];
 
@@ -124,14 +125,105 @@
             });
     }
 
+    /** Marca como inutilizable (inert) una rama del DOM y recuerda su estado. */
+    function inutilizarRama(elemento) {
+        if (!elemento || elemento === document.body) return;
+        if (elemento.dataset.sgetInertPorInactividad === '1') return;
+
+        elemento.dataset.sgetInertPorInactividad = '1';
+        elementosInhabilitados.push({
+            elemento,
+            inertPrevio: elemento.inert,
+            ariaPrevia: elemento.getAttribute('aria-hidden')
+        });
+        elemento.inert = true;
+        elemento.setAttribute('aria-hidden', 'true');
+    }
+
+    /**
+     * El motor de modales (assets/js/sget-modal.js) MUEVE las capas a <body>
+     * con su propio MutationObserver. Si eso ocurre con la sesión ya
+     * bloqueada, esas capas pasan a ser hijas de <body> DESPUÉS de que se
+     * calculó el conjunto de ramas a inutilizar, y quedan fuera del bloqueo.
+     * Este observador las recoge para que no se abra ese hueco.
+     */
+    function vigilarNuevasRamas() {
+        if (observadorRamas || typeof MutationObserver === 'undefined') return;
+
+        observadorRamas = new MutationObserver((mutaciones) => {
+            if (!sesionBloqueada) return;
+            const modal = document.getElementById('modalBloqueoInactividad');
+
+            mutaciones.forEach((mutacion) => {
+                Array.from(mutacion.addedNodes).forEach((nodo) => {
+                    if (nodo.nodeType !== 1) return;
+                    if (modal && (nodo === modal || nodo.contains(modal))) return;
+                    inutilizarRama(nodo);
+                });
+            });
+        });
+
+        observadorRamas.observe(document.body, { childList: true });
+    }
+
     function obtenerElementosEnfocables(modal) {
         return Array.from(modal.querySelectorAll(
             'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
         )).filter((elemento) => elemento.offsetParent !== null);
     }
 
+    /**
+     * Sube el modal de bloqueo a <body>.
+     *
+     * POR QUÉ: el modal se emite dentro de `includes/header.php`, es decir dentro
+     * de `.sget-shell`, que tiene `margin-left: var(--sget-sidebar-ancho)` y una
+     * animación de entrada (`sget-entrada`, en 07-transiciones.css). Una
+     * animación de `transform` convierte al elemento en BLOQUE CONTENEDOR de sus
+     * descendientes `position: fixed`: el `inset: 0` del bloqueo ya no se medía
+     * contra la ventana, sino contra `.sget-shell`, así que el velo empezaba 288 px
+     * a la derecha… justo donde termina el sidebar. El menú lateral quedaba
+     * FUERA del velo y se podía seguir usando con la sesión bloqueada.
+     *
+     * Igual que hace el motor de modales (`montarEnBody` en sget-modal.js): en
+     * <body> el bloqueo compite con toda la página, que es lo que se quiere.
+     */
+    function anclarModalAlBody(modal) {
+        if (!modal || modal.parentElement === document.body) return modal;
+        document.body.appendChild(modal);
+        return modal;
+    }
+
+    /**
+     * Red de seguridad: si un clic o una pulsación apunta a algo que está FUERA
+     * del modal, se anula y el foco vuelve al campo de contraseña.
+     * `inert` ya cubre esto en los navegadores modernos, pero depende del
+     * navegador y de que el HTML esté bien construit; aqui no se depende de eso.
+     */
+    function vigilarFondoInaccesible() {
+        const modal = document.getElementById('modalBloqueoInactividad');
+        if (!modal) return;
+
+        const anular = (evento) => {
+            if (!sesionBloqueada) return;
+            if (modal.contains(evento.target)) return;
+
+            evento.preventDefault();
+            evento.stopImmediatePropagation();
+
+            if (evento.type === 'focusin') {
+                const input = document.getElementById('inputPasswordModal');
+                if (input) input.focus();
+            }
+        };
+
+        ['mousedown', 'click', 'contextmenu', 'keydown', 'focusin'].forEach((tipo) => {
+            document.addEventListener(tipo, anular, true);
+        });
+    }
+
     function habilitarFondo(modal, activo) {
         if (!activo) {
+            if (observadorRamas) { observadorRamas.disconnect(); observadorRamas = null; }
             elementosInhabilitados.forEach(({ elemento, inertPrevio, ariaPrevia }) => {
                 elemento.inert = inertPrevio;
                 if (ariaPrevia === null) {
@@ -139,6 +231,7 @@
                 } else {
                     elemento.setAttribute('aria-hidden', ariaPrevia);
                 }
+                delete elemento.dataset.sgetInertPorInactividad;
             });
             elementosInhabilitados = [];
             document.documentElement.style.overflow = overflowAnterior;
@@ -157,14 +250,7 @@
 
             Array.from(padre.children).forEach((elemento) => {
                 if (elemento === ramaActual) return;
-
-                elementosInhabilitados.push({
-                    elemento,
-                    inertPrevio: elemento.inert,
-                    ariaPrevia: elemento.getAttribute('aria-hidden')
-                });
-                elemento.inert = true;
-                elemento.setAttribute('aria-hidden', 'true');
+                inutilizarRama(elemento);
             });
 
             ramaActual = padre;
@@ -207,6 +293,9 @@
     }
 
     function bloquearFondo(modal) {
+        if (modal.dataset.sgetFondoBloqueado === '1') return;
+        modal.dataset.sgetFondoBloqueado = '1';
+
         // Un clic sobre el backdrop no debe alcanzar ningún elemento situado detrás.
         modal.addEventListener('mousedown', (evento) => {
             if (evento.target === modal) {
@@ -247,7 +336,7 @@
     function bloquearInterfaz({ restaurar }) {
         sesionBloqueada = true;
 
-        const modal = document.getElementById('modalBloqueoInactividad');
+        const modal = anclarModalAlBody(document.getElementById('modalBloqueoInactividad'));
         if (!modal) {
             // Sin modal no hay forma de pedir la contraseña: se cierra la sesión
             // en lugar de dejar al usuario en una pantalla inaccesible.
@@ -269,6 +358,8 @@
         modal.style.display = 'flex';
         habilitarFondo(modal, true);
         bloquearFondo(modal);
+        vigilarFondoInaccesible();
+        vigilarNuevasRamas();
 
         const inputPass = document.getElementById('inputPasswordModal');
         if (inputPass) {
@@ -419,6 +510,13 @@
         const bloqueadaEnServidor = configuracion.inicialmenteBloqueada === true;
         const estadoCliente = leerBloqueoCliente();
         const bloqueadaEnCliente = estadoCliente !== null;
+
+        // El bloqueo se ancla a <body> ANTES de nada: si la sesión llega ya
+        // bloqueada, el velo debe cubrir la ventana completa desde el primer
+        // pintado (si no, el sidebar queda fuera mientras se aplica el inert).
+        if (bloqueadaEnServidor || bloqueadaEnCliente) {
+            anclarModalAlBody(document.getElementById('modalBloqueoInactividad'));
+        }
 
         if (bloqueadaEnServidor || bloqueadaEnCliente) {
             if (estadoCliente && !bloqueadaEnServidor) {

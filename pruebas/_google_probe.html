@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_google_probe.html
+    -----------------------------------------------------------------------------
+    Sonda de navegador REAL para el botón "Continuar con Google" del modal de
+    inicio de sesión.
+
+    Comprueba el problema que había: el botón se montaba solo cuando el modal
+    se abría con abrirPanel(), y la cabecera / las tarjetas de la landing usan
+    data-sget-modal, así que el hueco quedaba vacío.
+
+    Escenarios:
+      1) Apertura con data-sget-modal (el caso que fallaba).
+      2) Apertura con abrirPanel() (navegación entre modales).
+      3) Idempotencia: abrir y cerrar varias veces no duplica el botón.
+      4) Tema oscuro: se repinta el botón.
+
+    Se ejecuta con Chrome headless --dump-dom y se parsea desde
+    pruebas/google-visual.js. No forma parte de la aplicación.
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda del botón de Google</title>
+    <style>body{font:13px monospace}#resultado{white-space:pre-wrap}iframe{width:1280px;height:900px;border:1px solid #ccc}</style>
+</head>
+<body>
+<div id="resultado">ejecutando…</div>
+<iframe id="marco" src="../index.php"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+
+function anotar(ok, titulo, detalle) {
+    if (!ok) fallos++;
+    salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + titulo + (detalle ? ' | ' + detalle : ''));
+}
+function info(t) { salida.push('INFO  | ' + t); }
+function pintar() {
+    document.getElementById('resultado').textContent =
+        'GOOGLE_PROBE_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nGOOGLE_PROBE_END';
+}
+
+/* Estado visible del botón de Google dentro del panel de login. */
+function estado(win) {
+    const doc = win.document;
+    const zona = doc.querySelector('[data-sget-google-zona]');
+    const cont = doc.querySelector('[data-sget-google]');
+    if (!zona || !cont) return { error: 'no existe la zona [data-sget-google-zona]' };
+
+    // El botón oficial de Google es un <iframe> generado por GSI.
+    const iframes = cont.querySelectorAll('iframe');
+    const r = cont.getBoundingClientRect();
+
+    return {
+        sdk: !!(win.google && win.google.accounts && win.google.accounts.id),
+        montado: iframes.length > 0,
+        iframes: iframes.length,
+        ancho: Math.round(r.width),
+        alto: Math.round(r.height),
+        huecoVisible: !cont.hidden,
+        avisoVisible: !doc.querySelector('[data-sget-google-aviso]').hidden,
+        avisoTexto: (doc.querySelector('[data-sget-google-texto]').textContent || '').trim().slice(0, 90),
+        cargando: !!doc.querySelector('[data-sget-google-cargando]'),
+    };
+}
+
+const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function esperarBoton(doc, win, ms) {
+    const limite = Date.now() + ms;
+    while (Date.now() < limite) {
+        const e = estado(win);
+        if (e.montado || e.avisoVisible) return e;
+        await esperar(200);
+    }
+    return estado(win);
+}
+
+async function run() {
+    await esperar(2500);                       // carga del iframe
+    const marco = document.getElementById('marco');
+    const win = marco.contentWindow, doc = marco.contentDocument;
+
+    if (!doc || !doc.getElementById('panelLogin')) {
+        anotar(false, 'El modal de login existe en la página', 'no se encontró #panelLogin');
+        return pintar();
+    }
+
+    /* --- 1) Apertura por data-sget-modal (el caso que fallaba) --- */
+    const disparador = doc.querySelector('[data-sget-modal="panelLogin"]');
+    anotar(!!disparador, 'Existe un disparador data-sget-modal="panelLogin"');
+
+    if (disparador) {
+        disparador.click();
+        await esperar(300);
+        const abierto = doc.getElementById('panelLogin').dataset.abierto === '1';
+        anotar(abierto, 'El modal se abre con data-sget-modal');
+
+        const e = await esperarBoton(doc, win, 12000);
+        info('estado tras data-sget-modal: ' + JSON.stringify(e));
+
+        if (e.error) {
+            anotar(false, 'La zona del botón de Google está en el marcado', e.error);
+        } else {
+            anotar(e.montado || e.avisoVisible,
+                   'El botón de Google se monta (o avisa) al abrir con data-sget-modal',
+                   'sin botón y sin aviso = hueco vacío (el bug original)');
+            anotar(e.montado, 'Google Identity Services dibuja el botón oficial (iframe)',
+                   e.montado ? 'iframes=' + e.iframes : 'iframes=' + e.iframes + ' aviso="' + e.avisoTexto + '"');
+            anotar(e.ancho > 100 && e.alto > 20, 'El botón tiene tamaño visible',
+                   e.ancho + 'x' + e.alto);
+        }
+    }
+
+    /* --- 2) Idempotencia: reabrir no duplica --- */
+    if (typeof win.cerrarPanel === 'function') win.cerrarPanel('panelLogin');
+    await esperar(200);
+    const otro = doc.querySelectorAll('[data-sget-modal="panelLogin"]')[1];
+    if (otro) {
+        otro.click();
+        await esperar(400);
+        const e2 = await esperarBoton(doc, win, 8000);
+        anotar(e2.iframes <= 1, 'Abrir de nuevo NO duplica el botón', 'iframes=' + e2.iframes);
+    }
+
+    /* --- 3) Apertura con abrirPanel() (navegación entre modales) --- */
+    if (typeof win.abrirPanel === 'function') {
+        win.abrirPanel('panelRegistro');
+        await esperar(300);
+        win.abrirPanel('panelLogin');
+        await esperar(300);
+        const e3 = await esperarBoton(doc, win, 8000);
+        anotar(e3.iframes <= 1, 'abrirPanel() también monta un único botón', 'iframes=' + e3.iframes);
+    }
+
+    /* --- 4) Cambio de tema: se repinta --- */
+    try {
+        doc.documentElement.classList.add('dark');
+        doc.dispatchEvent(new win.CustomEvent('sget:tema', { detail: { tema: 'dark' } }));
+        await esperar(400);
+        const e4 = await esperarBoton(doc, win, 8000);
+        anotar(e4.iframes <= 1, 'El cambio de tema no deja botones apilados', 'iframes=' + e4.iframes);
+    } catch (e) {
+        info('no se pudo simular el cambio de tema: ' + e.message);
+    }
+}
+
+run().then(pintar).catch(e => { anotar(false, 'La sonda se ejecutó sin errores', e.message); pintar(); });
+</script>
+</body>
+</html>

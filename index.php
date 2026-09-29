@@ -17,6 +17,44 @@ if (session_status() === PHP_SESSION_NONE) {
 // Ruta de conexión a la base de datos
 require_once 'assets/conexion.php';
 
+/* -----------------------------------------------------------------------------
+ * ANUNCIOS DE LA LANDING
+ * -----------------------------------------------------------------------------
+ * Los banners los administra el administrador desde Admin/anuncios.php: sube la
+ * imagen, los textos, el enlace y la vigencia. Aquí solo se pintan los que están
+ * vigentes, en el orden que él definió.
+ *
+ * Antes estos textos estaban escritos a mano en el HTML, así que anunciar una
+ * promoción obligaba a editar código y subir la página.
+ * -------------------------------------------------------------------------- */
+$anunciosLanding = [];
+try {
+    $anunciosLanding = AnuncioService::vigentes();   // solo activos y dentro de fecha
+} catch (Throwable $e) {
+    $anunciosLanding = [];                          // la landing nunca debe caerse por esto
+}
+
+// Solo se calculan si no hay nada que pintar, y solo hacen falta para el aviso
+// que ve el administrador: son dos consultas y no se ejecutan siempre.
+$anunciosTotales   = 0;
+$anunciosInactivos = 0;
+$puedeVerAnuncios  = false;
+
+if (empty($anunciosLanding)) {
+    try {
+        // tieneAcceso() ya devuelve false si no hay sesión, y el Admin tiene
+        // acceso total: no hace falta comprobar el rol a mano.
+        $puedeVerAnuncios = Auth::tieneAcceso('anuncios');
+        if ($puedeVerAnuncios) {
+            $r = AnuncioService::resumen();
+            $anunciosTotales   = (int)($r['total'] ?? 0);
+            $anunciosInactivos = (int)($r['total'] ?? 0) - (int)($r['activos'] ?? 0);
+        }
+    } catch (Throwable $e) {
+        $puedeVerAnuncios = false;
+    }
+}
+
 // Consulta SQL ajustada para traer imagen de ruta (img_rut) y valor del viaje (val_via)
 $query_viajes = "SELECT 
                     v.id_via,
@@ -123,6 +161,137 @@ if (!$resultado_viajes) {
 
             </div>
         </section>
+
+        <!-- ================================================================== -->
+        <!-- CARRUSEL DE ANUNCIOS (contenido administrable desde Admin/anuncios) -->
+        <!-- ================================================================== -->
+        <?php if (!empty($anunciosLanding)): ?>
+            <section id="anuncios" class="px-6 pt-10" aria-label="Anuncios y promociones">
+                <div class="max-w-7xl mx-auto sget-anuncio-carrusel" data-sget-carrusel
+                     data-sget-vista-url="<?= htmlspecialchars(Config::basePath() . '/procesos/anuncio_vista.php', ENT_QUOTES, 'UTF-8') ?>">
+                    <div class="sget-anuncio-carrusel__pista" data-sget-carrusel-pista>
+                        <?php foreach ($anunciosLanding as $i => $an):
+                            $url  = !empty($an['url_imagen']) ? $an['url_imagen'] : '';
+                            $href = !empty($an['enlace']) ? $an['enlace'] : '';
+                            $tono = (string)($an['color_tema'] ?? 'azul');
+                            // El atributo de carga diferida se calcula en PHP y se
+                            // imprime como unidad: escribir un ternario con comillas
+                            // dobles dentro del HTML dejaba el archivo entero con un
+                            // error de sintaxis.
+                            $cargaDiferida = $i === 0 ? 'loading="eager"' : 'loading="lazy"';
+                        ?>
+                            <article class="sget-anuncio-carrusel__item<?= $i === 0 ? ' es-activo' : '' ?>"
+                                     data-sget-slide="<?= (int)$an['id_ann'] ?>"
+                                     aria-hidden="<?= $i === 0 ? 'false' : 'true' ?>">
+
+                                <?php if ($url !== ''): ?>
+                                    <img src="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>"
+                                         alt="<?= htmlspecialchars((string)$an['titulo'], ENT_QUOTES, 'UTF-8') ?>"
+                                         <?= $cargaDiferida ?>>
+                                <?php endif; ?>
+
+                                <div class="sget-anuncio-carrusel__velo"></div>
+
+                                <div class="sget-anuncio-carrusel__texto sget-anuncio-carrusel__texto--<?= htmlspecialchars($tono, ENT_QUOTES, 'UTF-8') ?>">
+                                    <p class="sget-anuncio-carrusel__titulo">
+                                        <?= htmlspecialchars((string)$an['titulo'], ENT_QUOTES, 'UTF-8') ?>
+                                    </p>
+
+                                    <?php if (!empty($an['subtitulo'])): ?>
+                                        <p class="sget-anuncio-carrusel__sub">
+                                            <?= htmlspecialchars((string)$an['subtitulo'], ENT_QUOTES, 'UTF-8') ?>
+                                        </p>
+                                    <?php endif; ?>
+
+                                    <?php if (!empty($an['descripcion'])): ?>
+                                        <p class="sget-anuncio-carrusel__desc">
+                                            <?= htmlspecialchars((string)$an['descripcion'], ENT_QUOTES, 'UTF-8') ?>
+                                        </p>
+                                    <?php endif; ?>
+
+                                    <?php if ($href !== ''): ?>
+                                        <?php
+                                        // Un enlace interno se abre en la misma pestaña (el
+                                        // usuario va a reservar); uno externo, en otra.
+                                        $esInterno = !preg_match('~^https?://~i', $href);
+                                        ?>
+                                        <a class="sget-anuncio-carrusel__boton"
+                                           href="<?= htmlspecialchars($href, ENT_QUOTES, 'UTF-8') ?>"
+                                           <?= $esInterno ? '' : 'target="_blank" rel="noopener"' ?>>
+                                            <?= htmlspecialchars((string)($an['boton_texto'] ?: 'Más información'), ENT_QUOTES, 'UTF-8') ?>
+                                            <i class="fas fa-arrow-right"></i>
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <?php if (count($anunciosLanding) > 1): ?>
+                        <button type="button" class="sget-anuncio-carrusel__flecha sget-anuncio-carrusel__flecha--izq"
+                                data-sget-carrusel-move="-1" aria-label="Anuncio anterior">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button type="button" class="sget-anuncio-carrusel__flecha sget-anuncio-carrusel__flecha--der"
+                                data-sget-carrusel-move="1" aria-label="Anuncio siguiente">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+
+                        <div class="sget-anuncio-carrusel__puntos" role="tablist" aria-label="Ir a un anuncio">
+                            <?php foreach ($anunciosLanding as $i => $an): ?>
+                                <button type="button" role="tab"
+                                        class="sget-anuncio-carrusel__punto<?= $i === 0 ? ' es-activo' : '' ?>"
+                                        data-sget-carrusel-ir="<?= (int)$i ?>"
+                                        aria-selected="<?= $i === 0 ? 'true' : 'false' ?>"
+                                        aria-label="<?= htmlspecialchars((string)$an['titulo'], ENT_QUOTES, 'UTF-8') ?>"></button>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </section>
+        <?php elseif ($puedeVerAnuncios): ?>
+            <!--
+                NO HAY ANUNCIOS VISIBLES, PERO QUIEN ESTÁ MIRANDO ES EL ADMIN.
+
+                POR QUÉ ESTE BLOQUE
+                  El carrusel desaparece en silencio cuando no hay anuncios
+                  publicados. Para el visitante público está bien (una portada sin
+                  promociones), pero el administrador se quedaba sin forma de
+                  saber si el módulo estaba roto, si su anuncio estaba oculto o si
+                  la imagen no se había subido. Este aviso solo se pinta si quien
+                  mira la portada tiene permiso para administrar anuncios, así que
+                  el público nunca ve un mensaje de administration.
+            -->
+            <section id="anuncios" class="px-6 pt-10" aria-label="Aviso de anuncios">
+                <div class="max-w-7xl mx-auto">
+                    <div class="sget-anuncio-vacio">
+                        <span class="sget-anuncio-vacio__icono"><i class="fas fa-image"></i></span>
+                        <div>
+                            <p class="sget-anuncio-vacio__titulo">
+                                <?= $anunciosTotales === 0
+                                    ? 'Todavía no hay ningún anuncio en la landing'
+                                    : 'Ninguno de tus anuncios se está viendo ahora mismo' ?>
+                            </p>
+                            <p class="sget-anuncio-vacio__texto">
+                                <?php if ($anunciosTotales === 0): ?>
+                                    Sube el primero y aparecerá de inmediato en esta página.
+                                <?php elseif ($anunciosInactivos > 0): ?>
+                                    Tienes <?= (int)$anunciosInactivos ?> anuncio(s) sin publicar. Los que estén fuera de su
+                                    fecha de vigencia también dejan de mostrarse.
+                                <?php else: ?>
+                                    Todos están publicados: revisa su fecha de vigencia y comprueba que la
+                                    imagen siga en el servidor.
+                                <?php endif; ?>
+                            </p>
+                        </div>
+                        <a class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-900 text-sm font-extrabold transition-colors whitespace-nowrap"
+                           href="Admin/anuncios.php">
+                            <i class="fas fa-sliders"></i> Revisar anuncios
+                        </a>
+                    </div>
+                </div>
+            </section>
+        <?php endif; ?>
 
         <div class="max-w-7xl mx-auto px-6"><div class="divider-glow"></div></div>
 
@@ -237,8 +406,8 @@ if (!$resultado_viajes) {
                     <div class="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-500 flex items-center justify-center text-xl font-bold group-hover:scale-110 transition-transform">
                         <i class="fas fa-chart-line"></i>
                     </div>
-                    <h3 class="font-extrabold text-lg text-slate-900 dark:text-white">Reportes y Métricas</h3>
-                    <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Historiales detallados de uso de flota para la toma estratégica de decisiones.</p>
+                    <h3 class="font-extrabold text-lg text-slate-900 dark:text-white">Panel de Información</h3>
+                    <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">Información general del sistema, historiales de viajes, usuarios y rutas, y las ganancias reales del negocio.</p>
                 </div>
             </div>
         </section>
@@ -261,6 +430,12 @@ if (!$resultado_viajes) {
 
     <!-- INCLUSIÓN DEL MODAL AUTENTICACIÓN -->
     <?php include 'modal_auth.php'; ?>
+
+    <!-- Botón de Google Identity Services (se monta al abrirse el modal) -->
+    <script src="assets/js/sget-google.js?v=<?= @filemtime('assets/js/sget-google.js') ?: '1' ?>"></script>
+
+    <!-- Carrusel de anuncios de la landing (rotación + conteo de vistas) -->
+    <script src="assets/js/sget-anuncios.js?v=<?= @filemtime('assets/js/sget-anuncios.js') ?: '1' ?>"></script>
 
     <!-- BANNER FLOTANTE DE AVISO DE COOKIES CON GALLETA CAFÉ Y SOPORTE CLARO/OSCURO -->
     <div id="cookieBanner" class="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-md bg-white/95 dark:bg-[#0f172a]/95 text-slate-800 dark:text-white p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl z-[100] backdrop-blur-md hidden transition-all duration-300">
@@ -469,48 +644,19 @@ if (!$resultado_viajes) {
             }
         }
 
-        // --- LÓGICA DE MODALES Y GOOGLE SIGN-IN ---
-        window.inicializarBotonGoogle = function(panel) {
-            if (window.google && google.accounts && google.accounts.id) {
-                google.accounts.id.initialize({
-                    client_id: "916674198156-4uh6adhaklk2bpsvli6hnmrgg0bgktlp.apps.googleusercontent.com",
-                    callback: handleGoogleResponse
-                });
+        // --- LÓGICA DE MODALES ---
+        /* ------------------------------------------------------------------
+           BOTÓN DE INICIO DE SESIÓN CON GOOGLE
+           ------------------------------------------------------------------
+           El montaje vive ahora en assets/js/sget-google.js. Antes estaba aquí,
+           dentro de abrirPanel(), y por eso el botón casi nunca aparecía: la
+           cabecera y las tarjetas de la landing abren el modal con
+           data-sget-modal="panelLogin", que pasa por SGETModal.abrir() sin
+           llamar nunca a esta función.
 
-                let googleContainer = panel.querySelector('.g_id_signin');
-                
-                if (!googleContainer) {
-                    const form = panel.querySelector('form');
-                    if (form) {
-                        const divisor = document.createElement('div');
-                        divisor.className = 'relative flex py-2 items-center my-4';
-                        divisor.innerHTML = `
-                            <div class="flex-grow border-t border-slate-200 dark:border-white/10"></div>
-                            <span data-i18n-text class="flex-shrink mx-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">O INICIA CON</span>
-                            <div class="flex-grow border-t border-slate-200 dark:border-white/10"></div>
-                        `;
-
-                        googleContainer = document.createElement('div');
-                        googleContainer.className = 'g_id_signin flex justify-center';
-
-                        form.parentNode.insertBefore(divisor, form.nextSibling);
-                        form.parentNode.insertBefore(googleContainer, divisor.nextSibling);
-                    }
-                }
-
-                if (googleContainer) {
-                    googleContainer.innerHTML = '';
-                    google.accounts.id.renderButton(googleContainer, {
-                        theme: 'outline',
-                        size: 'large',
-                        type: 'standard',
-                        shape: 'pill',
-                        width: 250,
-                        locale: (document.documentElement.getAttribute('data-language') === 'en' ? 'en' : 'es')
-                    });
-                }
-            }
-        }
+           sget-google.js se monta al escuchar el evento `sget:modal-abierto`
+           que emite el motor de modales, así que da igual por dónde se abra.
+        ------------------------------------------------------------------ */
 
         /* ------------------------------------------------------------------
            ADAPTADORES DEL MOTOR COMÚN DE MODALES (assets/js/sget-modal.js)
@@ -533,17 +679,9 @@ if (!$resultado_viajes) {
                 return;
             }
 
+            // SGETModal.abrir() emite `sget:modal-abierto`, que es lo que
+            // dispara el montaje del botón de Google y del reCAPTCHA con tema.
             SGETModal.abrir(idPanel);
-
-            // El botón de Google solo puede inicializarse con el panel visible
-            if (idPanel === 'panelLogin' || idPanel === 'panelRegistro') {
-                setTimeout(() => {
-                    const panel = document.getElementById(idPanel);
-                    if (panel && typeof inicializarBotonGoogle === 'function') {
-                        inicializarBotonGoogle(panel);
-                    }
-                }, 120);
-            }
         }
 
         function cerrarPanel(idPanel) {
@@ -563,6 +701,19 @@ if (!$resultado_viajes) {
         /* ------------------------------------------------------------------------
            COMPORTAMIENTO ADICIONAL DE LA LANDING
            ------------------------------------------------------------------------ */
+        /* ------------------------------------------------------------------
+           CARRUSEL DE ANUNCIOS
+           ------------------------------------------------------------------
+           El carrusel (rotación, puntos, flechas, deslizamiento y conteo de
+           vistas) vive AHORA en assets/js/sget-anuncios.js, no aquí dentro.
+
+           POR QUÉ SE SACÓ
+             La landing era la última página con lógica escrita en el HTML, y la
+             regla de la casa dice lo contrario: el comportamiento se resuelve con
+             atributos data-sget-*, y lo que no cabe así, en assets/js/. Este
+             bloque no era un parche de la landing sino un módulo entero, con su
+             rotación, su gesto de deslizamiento y su pausa con reduced-motion.
+        ------------------------------------------------------------------ */
         // Escape ya lo resuelve el motor común (cierra la capa superior).
 
         // Navegación interna entre modales (login <-> registro, política)

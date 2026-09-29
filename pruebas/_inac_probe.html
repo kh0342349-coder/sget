@@ -1,0 +1,65 @@
+<!DOCTYPE html><html><body><pre id="r">x</pre>
+<iframe id="f" src="/pruebas/_sesion_test.php?rol=1&ir=Admin%2Frutas.php" style="width:1300px;height:900px"></iframe>
+<script>
+var o=[],fallos=0,hecho=false;
+function ok(c,t,d){if(!c)fallos++;o.push((c?'OK   | ':'FALLA | ')+t+(d?' | '+d:''));}
+function info(t){o.push('INFO  | '+t);}
+function fin(){if(hecho)return;hecho=true;document.getElementById('r').textContent='INAC_START\n'+o.join('\n')+'\nFALLOS='+fallos+'\nINAC_END';}
+window.onerror=function(m){o.push('FALLA | error JS: '+m);fallos++;fin();return false;};
+function arrancar(n,cb){(function t(){var d=document.getElementById('f').contentDocument;
+  if(d&&d.body&&d.getElementById('modalBloqueoInactividad'))return cb(d);
+  if(n<=0){o.push('FALLA | no cargó');fallos++;return fin();}
+  setTimeout(t,200);})();}
+arrancar(30,function(d){
+ try{
+  var w=d.defaultView;
+  var st=d.createElement('style');
+  st.textContent='*,*::before,*::after{transition:none !important;animation:none !important}';
+  d.head.appendChild(st);
+
+  var m=d.getElementById('modalBloqueoInactividad');
+  var caja=m.querySelector('.sget-inactividad-caja');
+  var velo=m.querySelector('.sget-inactividad-velo');
+  // El bloqueo arranca oculto; la sonda lo muestra para poder medirlo.
+  m.style.display='flex';
+  var cs=w.getComputedStyle(m);
+  info('modal display='+cs.display+' z-index='+cs.zIndex);
+  info('velo z-index='+w.getComputedStyle(velo).zIndex+' | caja z-index='+w.getComputedStyle(caja).zIndex);
+  info('velo fondo='+w.getComputedStyle(velo).backgroundColor);
+
+  ok(parseInt(cs.zIndex)>100,'el bloqueo va por encima del sidebar (z-50)','z='+cs.zIndex);
+  ok(w.getComputedStyle(caja).zIndex>w.getComputedStyle(velo).zIndex,'la caja va por encima del velo');
+
+  // La caja debe ser opaca en tema claro
+  w.SGETTheme.set('light');
+  var cc=w.getComputedStyle(caja);
+  info('claro caja bg='+cc.backgroundColor+' color='+cc.color);
+  var lum=c=>{var mm=String(c).match(/rgba?\(([^)]+)\)/);if(!mm)return null;var p=mm[1].split(',').map(parseFloat);
+    return (0.2126*p[0]+0.7152*p[1]+0.0722*p[2])/255;};
+  ok(lum(cc.backgroundColor)>0.55,'[claro] la caja del bloqueo es clara',cc.backgroundColor);
+  ok(Math.abs(lum(cc.color)-lum(cc.backgroundColor))>0.4,'[claro] el texto contrasta',
+     cc.color+' sobre '+cc.backgroundColor);
+
+  // El velo no puede dejar ver el sidebar
+  var lv=w.getComputedStyle(velo);
+  var alfa = lv.backgroundColor.indexOf('rgba')>-1 ? parseFloat(lv.backgroundColor.split(',')[3]) : 1;
+  ok(alfa>=0.4,'el velo es suficientemente opaco para tapar el sidebar','alfa='+alfa);
+
+  // ¿El botón de desbloquear y el campo son utilizables?
+  var btn=d.getElementById('btnDesbloquearModal');
+  var r=btn.getBoundingClientRect();
+  ok(r.width>200&&r.height>36,'el botón Desbloquear tiene tamaño real',Math.round(r.width)+'x'+Math.round(r.height));
+  var inp=d.getElementById('inputPasswordModal');
+  ok(inp.getBoundingClientRect().height>30,'el campo de contraseña tiene alto real',
+     Math.round(inp.getBoundingClientRect().height));
+
+  // El elemento en el punto del botón debe ser el botón, no el velo
+  var cx=r.left+r.width/2, cy=r.top+r.height/2;
+  var hit=d.elementFromPoint(cx,cy);
+  info('elementFromPoint sobre Desbloquear = '+(hit?hit.tagName+'#'+hit.id:'-'));
+  ok(hit===btn,'el botón Desbloquear es clicable (no lo tapa el velo)',hit?hit.tagName+'#'+hit.id:'-');
+ }catch(e){o.push('FALLA | excepción: '+e.message);fallos++;}
+ fin();
+});
+setTimeout(fin,9000);
+</script></body></html>

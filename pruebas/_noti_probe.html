@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_noti_probe.html
+    -----------------------------------------------------------------------------
+    Sonda del BUZÓN DE NOTIFICACIONES para pasajero y conductor.
+
+    Comprueba el flujo COMPLETO en un navegador real:
+      1. la campanita de la cabecera muestra el contador de no leídas,
+      2. el modal se abre y lista los avisos con su tipo,
+      3. «marcar como leída» FUNCIONA (antes no hacía nada en Pasajero y
+         Conductor porque el manejador vivía en sget-page.js, que ahí no se
+         carga) y el contador baja sin recargar la página,
+      4. «marcar todas» vacía el contador,
+      5. se puede eliminar un aviso concreto.
+
+    Uso:  /pruebas/_noti_probe.html?rol=3   (o ?rol=2)
+    -----------------------------------------------------------------------------
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda del buzón</title>
+    <style>body{margin:0;font:12px monospace}#r{padding:6px;background:#111;color:#0f0}iframe{width:1400px;height:950px;border:0}</style>
+</head>
+<body>
+<pre id="r">ejecutando…</pre>
+<iframe id="f"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+const anotar = (ok, t, d = '') => { if (!ok) fallos++; salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + t + (d ? ' | ' + d : '')); };
+const info = t => salida.push('INFO  | ' + t);
+const pintar = () => document.getElementById('r').textContent =
+    'NOTI_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nNOTI_END';
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+const params = new URLSearchParams(location.search);
+const ROL = params.get('rol') === '2' ? 2 : 3;
+const PAGINA = ROL === 2 ? '../Conductor/conductor.php' : '../Pasajero/pasajero.php';
+
+async function run() {
+    const f = document.getElementById('f');
+    f.style.width = '1400px';
+    f.style.height = '950px';
+
+    // 1) Sesión con buzón sembrado
+    f.contentWindow.location.href = '_noti_test.php?rol=' + ROL;
+    await esperar(1500);
+
+    // 2) La página real del rol
+    f.contentWindow.location.href = PAGINA;
+    await esperar(3000);
+
+    let d = f.contentDocument, w = f.contentWindow;
+
+    // --- La campanita ---
+    const bell = d.querySelector('[data-sget-noti-bell]');
+    anotar(!!bell, 'La cabecera tiene la campanita de notificaciones');
+    if (!bell) return pintar();
+
+    const contador = bell.querySelector('[data-sget-noti-contador]');
+    const leidas = Number(contador ? contador.textContent.trim() : 0);
+    info('contador inicial: ' + leidas);
+    anotar(leidas >= 1, 'La campanita muestra las notificaciones sin leer', 'contador=' + leidas);
+
+    // El JS del buzón debe estar cargado en páginas de pasajero/conductor
+    anotar(typeof w.SGETNotificaciones === 'object', 'El JS del buzón está cargado en esta página',
+            typeof w.SGETNotificaciones);
+
+    // --- Abrir el buzón ---
+    bell.click();
+    await esperar(800);
+    const modal = d.getElementById('modalNotificaciones');
+    anotar(modal && modal.dataset.abierto === '1', 'El buzón se abre al pulsar la campanita',
+            modal ? modal.dataset.abierto : 'no existe');
+
+    const items = d.querySelectorAll('[data-sget-noti-lista] .sget-noti-item');
+    info('avisos en la lista: ' + items.length);
+    anotar(items.length >= 2, 'El buzón lista los avisos del usuario', 'items=' + items.length);
+
+    const tipos = Array.from(d.querySelectorAll('[data-sget-noti-lista] .sget-badge'))
+        .map(b => b.textContent.trim()).filter(Boolean);
+    info('tipos visibles: ' + tipos.join(' | '));
+    anotar(tipos.length >= 2, 'Cada aviso muestra su tipo (reserva, cancelación, asignación…)');
+
+    const textoAviso = d.querySelector('[data-sget-noti-lista] .sget-noti-item__titulo');
+    anotar(!!textoAviso && textoAviso.textContent.trim().length > 3, 'Los avisos tienen título legible',
+           textoAviso ? textoAviso.textContent.trim().slice(0, 40) : '—');
+
+    // --- Marcar UNA como leída (el botón que no funcionaba) ---
+    const antes = Number(contador.textContent.trim());
+    const btnLeer = d.querySelector('[data-sget-noti="leer"]');
+    anotar(!!btnLeer, 'Hay un botón «marcar como leída» en los avisos sin leer');
+    if (btnLeer) {
+        btnLeer.click();
+        await esperar(1200);
+
+        const despues = Number(contador.textContent.trim());
+        anotar(despues === antes - 1, 'Marcar como leída BAJA el contador de la cabecera',
+               antes + ' -> ' + despues);
+
+        // Sin recargar: el aviso pasa a estado leído en el DOM
+        const sinLeer = d.querySelectorAll('[data-sget-noti-lista] .sget-noti-item:not(.es-leida)').length;
+        anotar(sinLeer === antes - 1, 'El aviso se repinta como leído sin recargar la página',
+               'sin leer=' + sinLeer + ' (antes ' + antes + ')');
+    }
+
+    // --- Eliminar un aviso ---
+    const btnBorrar = d.querySelector('[data-sget-noti="eliminar"]');
+    if (btnBorrar) {
+        const total = d.querySelectorAll('[data-sget-noti-lista] .sget-noti-item').length;
+        btnBorrar.click();
+        await resumen(1200);
+        const queda = d.querySelectorAll('[data-sget-noti-lista] .sget-noti-item').length;
+        anotar(queda === total - 1, 'Eliminar un aviso lo quita de la lista', total + ' -> ' + queda);
+    } else {
+        anotar(false, 'Hay un botón para eliminar avisos');
+    }
+
+    // --- Marcar todas ---
+    const btnTodas = d.querySelector('[data-sget-noti-todas]');
+    anotar(!!btnTodas, 'El buzón ofrece «marcar todas como leídas»');
+    if (btnTodas) {
+        btnTodas.click();
+        await esperar(1200);
+        const pend = Number(contador.textContent.trim() || 0);
+        anotar(pend === 0, 'Tras «marcar todas» el contador queda en 0', 'contador=' + pend);
+        anotar(contador.hidden, 'El contador se oculta cuando no hay nada sin leer');
+    }
+
+    // --- El buzón no rompe la página ---
+    anotar(d.querySelectorAll('[data-sget-noti-bell]').length === 1, 'Solo hay una campanita en la cabecera');
+}
+
+function resumen(ms) { return esperar(ms); }
+
+run().then(pintar).catch(e => { anotar(false, 'La sonda se ejecutó sin errores', e.message); pintar(); });
+</script>
+</body>
+</html>

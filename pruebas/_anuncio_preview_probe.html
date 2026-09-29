@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_anuncio_preview_probe.html
+    -----------------------------------------------------------------------------
+    Sonda puntual: comprueba que al abrir «Nuevo anuncio» DESPUÉS de haber
+    editado uno, la vista previa de la imagen anterior no se queda pegada.
+
+    POR QUÉ EXISTE
+      La caja de vista previa es un <div> con estilo, no un campo del formulario:
+      form.reset() no la toca. Al editar un anuncio, la previsualización se
+      muestra; y al abrir después «Nuevo anuncio», seguía ahí la foto del
+      anuncio anterior, aunque no hubiera ningún archivo elegido. El
+      administrador podía guardar creyendo que la imagen ya venía puesta.
+
+    Uso:  /pruebas/_anuncio_preview_probe.html
+    -----------------------------------------------------------------------------
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda de la vista previa del anuncio</title>
+    <style>body{margin:0;font:12px monospace}#r{padding:6px;background:#111;color:#0f0}iframe{width:1400px;height:1000px;border:0}</style>
+</head>
+<body>
+<pre id="r">ejecutando…</pre>
+<iframe id="f" src="_sesion_admin.php"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+const anotar = (ok, t, d = '') => { if (!ok) fallos++; salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + t + (d ? ' | ' + d : '')); };
+const info = t => salida.push('INFO  | ' + t);
+const pintar = () => document.getElementById('r').textContent =
+    'PREVIEW_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nPREVIEW_END';
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+async function run() {
+    const f = document.getElementById('f');
+    await esperar(1500);
+
+    f.contentWindow.location.href = '../Admin/anuncios.php';
+    await esperar(2500);
+    let d = f.contentDocument, w = f.contentWindow;
+
+    const errPhp = d.documentElement.innerHTML.match(/ERROR PHP: ([^<\n]*)/);
+    anotar(!errPhp, 'El módulo carga sin errores PHP', errPhp ? errPhp[1] : '');
+
+    /* ---------- 1) Editar un anuncio: la vista previa SÍ debe verse ---------- */
+    // OJO: el primer boton con ese data-sget-modal es el de la cabecera
+    // («Nuevo anuncio»). Para editar hay que buscar el que trae los datos.
+    const btnEditar = d.querySelector('button[data-sget-datos]');
+    anotar(!!btnEditar, 'Hay un botón «Editar» en el listado');
+    if (!btnEditar) return;
+
+    btnEditar.click();
+    await esperar(700);
+
+    let modal = d.getElementById('modalAnuncio');
+    const caja = modal.querySelector('[data-sget-preview-caja]');
+    const img  = modal.querySelector('#anuncio_preview');
+    anotar(caja && caja.style.display !== 'none', 'Al editar, la vista previa de la imagen actual se ve');
+    anotar(img && img.getAttribute('src') && img.getAttribute('src').length > 10,
+           'La vista previa apunta a la imagen guardada', img ? String(img.getAttribute('src')).slice(0, 40) : 'sin src');
+
+    /* ---------- 2) Cerrar y abrir «Nuevo anuncio»: la vista previa debe ------- */
+    /* ---------- desaparecer, porque no hay ningún archivo elegido.             */
+    d.querySelectorAll('#modalAnuncio [data-sget-cerrar]').forEach(b => b.click());
+    await esperar(500);
+
+    const btnNuevo = d.querySelector('button[data-sget-modal="modalAnuncio"][data-sget-nuevo]');
+    anotar(!!btnNuevo, 'Hay un botón «Nuevo anuncio»');
+    if (!btnNuevo) return;
+
+    btnNuevo.click();
+    await esperar(700);
+
+    modal = d.getElementById('modalAnuncio');
+    const caja2 = modal.querySelector('[data-sget-preview-caja]');
+    const img2  = modal.querySelector('#anuncio_preview');
+    const nombre2 = modal.querySelector('[data-sget-preview-nombre]');
+
+    anotar(caja2 && caja2.style.display === 'none',
+           'Al abrir «Nuevo anuncio» la vista previa del anuncio anterior se oculta',
+           caja2 ? 'display=' + JSON.stringify(caja2.style.display) : 'no existe');
+    anotar(!img2 || !img2.getAttribute('src'),
+           'La vista previa no arrastra la imagen del anuncio anterior',
+           img2 ? String(img2.getAttribute('src')).slice(0, 40) : 'sin img');
+    anotar(!nombre2 || nombre2.textContent.trim() === '',
+           'El nombre del archivo anterior se borra', nombre2 ? nombre2.textContent.trim() : '');
+
+    /* ---------- 3) El formulario de alta está limpio ---------- */
+    const form = modal.querySelector('form[data-sget-form]');
+    anotar(form.querySelector('[name="titulo"]').value === '', 'El título está vacío');
+    anotar(form.querySelector('[name="id_ann"]').value === '0', 'El id vuelve a 0 (modo alta)');
+    anotar(form.querySelector('[name="imagen"]').files.length === 0, 'No queda ningún archivo adjunto');
+    anotar(form.querySelector('[name="activo"]').checked === true,
+           '«Publicado» viene marcado por defecto en un anuncio nuevo');
+}
+
+run().then(pintar).catch(e => { anotar(false, 'La sonda se ejecutó sin errores', e.message + ' ' + (e.stack || '')); pintar(); });
+</script>
+</body>
+</html>

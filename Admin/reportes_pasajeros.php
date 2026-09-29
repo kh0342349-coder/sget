@@ -1,128 +1,207 @@
 <?php
-session_start();
-include '../assets/conexion.php';
+/**
+ * Admin/reportes_pasajeros.php
+ * -----------------------------------------------------------------------------
+ * MÓDULO: REPORTES Y QUEJAS DE LOS PASAJEROS  (Admin)
+ * -----------------------------------------------------------------------------
+ * QUÉ CAMBIÓ
+ *   La página existía pero estaba muerta por partida triple:
+ *     · su formulario enviaba a `actualizar_reporte.php`, un archivo inexistente;
+ *     · no estaba enlazada desde el menú lateral;
+ *     · y el SQL estaba escrito a mano, con estados en minúsculas que no
+ *       coincidían con los de la tabla.
+ *
+ *   Ahora el flujo funciona de verdad: el pasajero reporta desde su panel, el
+ *   administrador lo ve aquí, lo asigna a un viaje, lo resuelve y el pasajero
+ *   recibe el avance en su buzón (services/ReporteService.php).
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-// Seguridad
-if (!isset($_SESSION['rol']) || $_SESSION['rol'] != 1) {
-    header("Location: ../index.php");
-    exit();
-}
+require_once __DIR__ . '/../core/bootstrap.php';
 
-// CONSULTA
-$sql = "SELECT r.*, u.nom_usu, v.nom_via 
-        FROM reportes_pasajeros r
-        LEFT JOIN usuario u ON r.id_usu_rep = u.id_usu
-        LEFT JOIN viaje v ON r.id_via_rep = v.id_via
-        ORDER BY r.fecha DESC";
+Auth::requerirAdmin();
+Auth::requerirAcceso('reportes_pasajeros');
 
-$res = $conexion->query($sql);
+if (!empty($_GET['ok']))       Flash::exito((string)$_GET['ok']);
+elseif (!empty($_GET['error'])) Flash::error((string)$_GET['error']);
+
+$reportes = ReporteService::todos();
+$resumen  = ReporteService::resumen();
+$viajes   = Database::all(
+    "SELECT v.id_via, v.fec_via, v.hor_sal_via, v.id_usu_via, r.nom_rut, u.nom_usu AS conductor
+       FROM viaje v
+       LEFT JOIN rutas r    ON r.id_rut = v.id_rut_via
+       LEFT JOIN usuario u ON u.id_usu = v.id_usu_via
+      ORDER BY v.fec_via DESC, v.hor_sal_via DESC
+      LIMIT 120"
+);
+
+$tituloPagina = 'Reportes de pasajeros';
+include __DIR__ . '/../views/partials/head.php';
 ?>
+<?php include __DIR__ . '/../includes/sidebar.php'; ?>
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Reportes de Pasajeros</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-</head>
+<div class="sget-shell">
+    <?php include __DIR__ . '/../includes/header.php'; ?>
 
-<body class="bg-gray-100 flex min-h-screen">
+    <main class="sget-main">
+        <header class="sget-page-head">
+            <div>
+                <h1 class="sget-page-title">
+                    <i class="fas fa-comment-dots text-amber-500"></i> Reportes y quejas
+                </h1>
+                <p class="sget-page-sub">
+                    Incidencias que reportan los pasajeros sobre sus viajes. Al cambiar el estado,
+                    el pasajero recibe el aviso en su buzón.
+                </p>
+            </div>
+        </header>
 
-    <?php include '../includes/sidebar.php'; ?>
+        <?= Flash::render() ?>
 
-<!-- CONTENIDO -->
-<main class="flex-1 ml-64 p-8">
+        <section class="sget-grid sget-grid--kpi">
+            <?php
+            $kpis = [
+                ['fa-inbox',        'var(--sget-azul)',    'Pendientes',  (int)$resumen['pendientes'], 'sget-badge--error'],
+                ['fa-user-check',   'var(--sget-ambars)',  'Asignados',   (int)$resumen['asignados'],  'sget-badge--aviso'],
+                ['fa-circle-check', 'var(--sget-emerald)', 'Resueltos',   (int)$resumen['completados'], 'sget-badge--exito'],
+                ['fa-box-archive',  'var(--sget-morado)',  'Cerrados',    (int)$resumen['cerrados'],   'sget-badge--neutro'],
+            ];
+            foreach ($kpis as [$icono, $color, $titulo, $valor, $tono]): ?>
+                <div class="sget-card sget-kpi">
+                    <span class="sget-kpi__icono"
+                          style="background:color-mix(in srgb,<?= $color ?> 14%,transparent);color:<?= $color ?>">
+                        <i class="fas <?= $icono ?>"></i></span>
+                    <div style="min-width:0">
+                        <p class="sget-label"><?= $titulo ?></p>
+                        <p class="sget-kpi__valor" style="font-size:1.25rem"><?= $valor ?></p>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </section>
 
-    <h1 class="text-3xl font-black text-gray-800 mb-6">Reportes de Pasajeros</h1>
+        <?php if (empty($reportes)): ?>
+            <div class="sget-vacio">
+                <span class="sget-vacio__icono"><i class="fas fa-comment-dots"></i></span>
+                <h2 class="sget-label" style="font-size:.875rem">No hay reportes registrados</h2>
+                <p class="sget-page-sub" style="margin:0">
+                    Cuando un pasajero reporte una incidencia desde su panel, aparecerá aquí.
+                </p>
+            </div>
+        <?php else: ?>
 
-    <div class="bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden">
+            <div class="sget-toolbar">
+                <div class="sget-search">
+                    <i class="fas fa-magnifying-glass"></i>
+                    <input type="search" id="buscarReporte" class="sget-input" data-sget-buscar
+                       placeholder="Buscar por folio, pasajero o texto del reporte… (Ctrl+K)">
+                </div>
+                <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="*">Todos</button>
+                <?php foreach (ReporteService::ESTADOS as $estado): ?>
+                    <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="<?= $estado ?>">
+                        <?= ReporteService::etiquetaEstado($estado) ?>
+                    </button>
+                <?php endforeach; ?>
+            </div>
 
-        <table class="w-full text-left">
-            <thead class="bg-gray-50 text-xs uppercase text-gray-400">
-                <tr>
-                    <th class="p-5">Pasajero</th>
-                    <th class="p-5">Descripción</th>
-                    <th class="p-5">Estado</th>
-                    <th class="p-5">Viaje</th>
-                    <th class="p-5 text-center">Acción</th>
-                </tr>
-            </thead>
+            <div class="sget-table-box">
+                <div class="sget-table-wrap">
+                    <table class="sget-table sget-table--compacta">
+                        <thead><tr>
+                            <th>Folio</th><th>Fecha</th><th>Pasajero</th><th>Motivo</th>
+                            <th>Viaje</th><th class="sget-centro">Estado</th>
+                            <th class="acciones">Acciones</th>
+                        </tr></thead>
+                        <tbody>
+                        <?php foreach ($reportes as $r):
+                            $estado = (string)$r['estado'];
+                            $id     = (int)$r['id_rep'];
+                        ?>
+                            <tr data-sget-fila data-estado="<?= htmlspecialchars($estado, ENT_QUOTES, 'UTF-8') ?>">
+                                <td data-label="Folio" class="sget-mono">#<?= $id ?></td>
+                                <td data-label="Fecha" class="sget-mono sget-suave sget-nowrap">
+                                    <?= htmlspecialchars((string)($r['fecha_legible'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                </td>
+                                <td data-label="Pasajero" class="sget-truncar">
+                                    <?= htmlspecialchars((string)($r['pasajero'] ?? 'Desconocido'), ENT_QUOTES, 'UTF-8') ?>
+                                    <br><span class="sget-help sget-mono">
+                                        <?= htmlspecialchars((string)($r['num_doc_usu'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                    </span>
+                                </td>
+                                <td data-label="Motivo" class="sget-truncar" style="max-width:22rem">
+                                    <?= htmlspecialchars((string)$r['descripcion'], ENT_QUOTES, 'UTF-8') ?>
+                                </td>
+                                <td data-label="Viaje" class="sget-truncar">
+                                    <?php if (!empty($r['id_via_rep'])): ?>
+                                        #<?= (int)$r['id_via_rep'] ?>
+                                        <span class="sget-help sget-linea-1">
+                                            <?= htmlspecialchars((string)($r['nom_via'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span class="sget-help">Sin asignar</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="Estado" class="sget-centro">
+                                    <span class="sget-badge <?= ReporteService::claseEstado($estado) ?>">
+                                        <?= ReporteService::etiquetaEstado($estado) ?>
+                                    </span>
+                                </td>
+                                <td class="acciones" data-label="Acciones">
+                                    <div style="display:flex;gap:.375rem;justify-content:flex-end">
+                                        <select class="sget-select" style="width:auto;min-width:8.5rem"
+                                                data-sget-estado-reporte="<?= $id ?>">
+                                            <?php foreach (ReporteService::ESTADOS as $opcion): ?>
+                                                <option value="<?= $opcion ?>" <?= $estado === $opcion ? 'selected' : '' ?>>
+                                                    <?= ReporteService::etiquetaEstado($opcion) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
 
-            <tbody>
-                <?php if ($res && $res->num_rows > 0): ?>
-                    <?php while($row = $res->fetch_assoc()): ?>
-                        <tr class="border-b hover:bg-gray-50">
+                                        <select class="sget-select" style="width:auto;min-width:9rem"
+                                                data-sget-viaje-reporte="<?= $id ?>">
+                                            <option value="0">Sin asignar</option>
+                                            <?php foreach ($viajes as $v):
+                                                $sel = (int)($r['id_via_rep'] ?? 0) === (int)$v['id_via']; ?>
+                                                <option value="<?= (int)$v['id_via'] ?>" <?= $sel ? 'selected' : '' ?>>
+                                                    #<?= (int)$v['id_via'] ?> · <?= htmlspecialchars(mb_substr((string)$v['nom_rut'], 0, 22), ENT_QUOTES, 'UTF-8') ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
 
-                            <td class="p-5 font-bold">
-                                <?php echo $row['nom_usu']; ?>
-                            </td>
+                                        <button type="button" class="sget-icon-btn sget-icon-btn--exito"
+                                                title="Guardar los cambios del reporte" aria-label="Guardar"
+                                                data-sget-accion="guardarReporte" data-sget-modulo="reporte"
+                                                data-sget-dato='<?= htmlspecialchars(json_encode(['id' => $id], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
+                                            <i class="fas fa-floppy-disk"></i>
+                                        </button>
 
-                            <td class="p-5">
-                                <?php echo $row['descripcion']; ?>
-                            </td>
+                                        <button type="button" class="sget-icon-btn sget-icon-btn--peligro"
+                                                title="Eliminar reporte" aria-label="Eliminar reporte"
+                                                data-sget-accion="eliminarReporte" data-sget-modulo="reporte"
+                                                data-sget-dato='<?= htmlspecialchars(json_encode(['id' => $id], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'
+                                                data-sget-titulo="Eliminar reporte"
+                                                data-sget-texto='Se eliminará el reporte <strong>#<?= $id ?></strong> de forma permanente.'
+                                                data-sget-ok="Sí, eliminar">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    <p class="sget-sin-resultados" data-sget-sin-resultados hidden>Ningún reporte coincide.</p>
+                </div>
+            </div>
+        <?php endif; ?>
+    </main>
+</div>
 
-                            <td class="p-5">
-                                <?php
-                                $estado = $row['estado'];
-
-                                if ($estado == 'pendiente') {
-                                    echo "<span class='bg-yellow-100 text-yellow-700 px-3 py-1 rounded-full text-xs font-bold'>Pendiente</span>";
-                                } elseif ($estado == 'asignado') {
-                                    echo "<span class='bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold'>Asignado</span>";
-                                } else {
-                                    echo "<span class='bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold'>Completado</span>";
-                                }
-                                ?>
-                            </td>
-
-                            <td class="p-5">
-                                <?php echo $row['nom_via'] ?? 'Sin asignar'; ?>
-                            </td>
-
-                            <td class="p-5 text-center">
-                                <form method="POST" action="actualizar_reporte.php" class="flex flex-col gap-2">
-
-                                    <input type="hidden" name="id" value="<?php echo $row['id_rep']; ?>">
-
-                                    <select name="estado" class="border p-1 rounded text-xs">
-                                        <option value="pendiente">Pendiente</option>
-                                        <option value="asignado">Asignado</option>
-                                        <option value="completado">Completado</option>
-                                    </select>
-
-                                    <select name="id_via" class="border p-1 rounded text-xs">
-                                        <?php
-                                        $viajes = $conexion->query("SELECT * FROM viaje");
-                                        while($v = $viajes->fetch_assoc()){
-                                            echo "<option value='".$v['id_via']."'>".$v['nom_via']."</option>";
-                                        }
-                                        ?>
-                                    </select>
-
-                                    <button class="bg-green-600 text-white text-xs py-1 rounded hover:bg-green-700">
-                                        Guardar
-                                    </button>
-
-                                </form>
-                            </td>
-
-                        </tr>
-                    <?php endwhile; ?>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="5" class="text-center p-10 text-gray-400">
-                            No hay reportes registrados
-                        </td>
-                    </tr>
-                <?php endif; ?>
-            </tbody>
-        </table>
-
-    </div>
-
-</main>
-
-</body>
-</html>
+<?php
+// El buscador y los filtros los cablea assets/js/sget-page.js a partir de
+// [data-sget-buscar] / [data-sget-filtro] / [data-sget-fila]. El guardado de
+// cada fila lo hace la acción `guardarReporte` del mismo archivo, para que no
+// haya dos manejadores enviando el mismo formulario dos veces.
+$jsExtra = ['sget-page.js'];
+include __DIR__ . '/../views/partials/foot.php';

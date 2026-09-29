@@ -93,20 +93,20 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 ?>
 
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Calificar Servicio - SGET</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
-    <link rel="stylesheet" href="assets/css/01-base.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/02-layout.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/03-componentes.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/04-modales.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/05-tablas.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/06-responsive.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/07-transiciones.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/06-responsive.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/07-transiciones.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
     <script>
         tailwind.config = {
@@ -380,7 +380,10 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
     </div>
 
     <!-- PANEL LATERAL DESLIZANTE (DRAWER) DE BÚSQUEDA Y RESERVA -->
-    <aside id="drawerReservaCalificación" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
+    <!-- MODAL (antes panel lateral): drawerReservaCalificación -->
+<div class="sget-modal-wrap" data-sget-capa data-titulo="drawerReservaCalificación">
+    <div class="sget-overlay"></div>
+    <aside id="drawerReservaCalificación" class="sget-modal sget-modal--sm sget-scroll">
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-neon-morado"></div>
             <div class="flex items-center gap-3">
@@ -430,6 +433,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             </button>
         </div>
     </aside>
+</div>
 
     <!-- CONTROLADORES JAVASCRIPT -->
     <script>
@@ -443,8 +447,6 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             const modal = document.getElementById('modalLecturaOpinion');
             const box = document.getElementById('modalOpinionBox');
 
-            overlay.classList.remove('opacity-0', 'pointer-events-none');
-            overlay.classList.add('opacity-100', 'pointer-events-auto');
 
             modal.classList.remove('opacity-0', 'pointer-events-none');
             modal.classList.add('opacity-100', 'pointer-events-auto');
@@ -464,8 +466,6 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             modal.classList.remove('opacity-100', 'pointer-events-auto');
             modal.classList.add('opacity-0', 'pointer-events-none');
 
-            overlay.classList.remove('opacity-100', 'pointer-events-auto');
-            overlay.classList.add('opacity-0', 'pointer-events-none');
         }
 
         function abrirModalReservaCalificación() {
@@ -476,22 +476,14 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             document.getElementById('input_fecha_calificacion').value = hoy;
             document.getElementById('input_fecha_calificacion').min = hoy;
 
-            overlay.classList.remove('opacity-0', 'pointer-events-none');
-            overlay.classList.add('opacity-100', 'pointer-events-auto');
 
-            drawer.classList.remove('translate-x-full');
-            drawer.classList.add('translate-x-0');
         }
 
         function cerrarModalDrawerCalificación() {
             const drawer = document.getElementById('drawerReservaCalificación');
             const overlay = document.getElementById('overlayCalificación');
 
-            drawer.classList.remove('translate-x-0');
-            drawer.classList.add('translate-x-full');
 
-            overlay.classList.remove('opacity-100', 'pointer-events-auto');
-            overlay.classList.add('opacity-0', 'pointer-events-none');
         }
 
         function cerrarTodosModalesCalificación() {
@@ -547,5 +539,9 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
             });
         });
     </script>
+
+    <!-- Motor común de modales + puente de compatibilidad con el JS heredado -->
+    <script src="../assets/js/sget-modal.js?v=<?= @filemtime('../assets/js/sget-modal.js') ?: '1' ?>"></script>
+    <script src="../assets/js/sget-puente.js?v=<?= @filemtime('../assets/js/sget-puente.js') ?: '1' ?>"></script>
 </body>
 </html>

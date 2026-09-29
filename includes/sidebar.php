@@ -182,10 +182,31 @@ if (!function_exists('tiene_acceso_sb')) {
             </a>
             <?php endif; ?>
 
+            <?php if (tiene_acceso_sb('reportes_pasajeros', $permisos_denegados_array)): ?>
+            <a href="reportes_pasajeros.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('reportes_pasajeros.php', $pagina_actual); ?>">
+                <i class="fas fa-comment-dots text-sm shrink-0 <?php echo verificarIconoActivo('reportes_pasajeros.php', $pagina_actual); ?>"></i>
+                <span class="sidebar-text truncate"><?php echo $lang['reportes_pasajeros'] ?? 'Reportes de Pasajeros'; ?></span>
+            </a>
+            <?php endif; ?>
+
+            <?php if (tiene_acceso_sb('anuncios', $permisos_denegados_array)): ?>
+            <a href="anuncios.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('anuncios.php', $pagina_actual); ?>">
+                <i class="fas fa-images text-sm shrink-0 <?php echo verificarIconoActivo('anuncios.php', $pagina_actual); ?>"></i>
+                <span class="sidebar-text truncate"><?php echo $lang['anuncios'] ?? 'Anuncios'; ?></span>
+            </a>
+            <?php endif; ?>
+
+            <?php if (tiene_acceso_sb('comunicados', $permisos_denegados_array)): ?>
+            <a href="comunicados.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('comunicados.php', $pagina_actual); ?>">
+                <i class="fas fa-bullhorn text-sm shrink-0 <?php echo verificarIconoActivo('comunicados.php', $pagina_actual); ?>"></i>
+                <span class="sidebar-text truncate"><?php echo $lang['comunicados'] ?? 'Comunicados'; ?></span>
+            </a>
+            <?php endif; ?>
+
             <?php if (tiene_acceso_sb('reportes', $permisos_denegados_array)): ?>
             <a href="reportes.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('reportes.php', $pagina_actual); ?>">
-                <i class="fas fa-file-invoice-dollar text-sm shrink-0 <?php echo verificarIconoActivo('reportes.php', $pagina_actual); ?>"></i>
-                <span class="sidebar-text truncate"><?php echo $lang['reportes'] ?? 'Reportes Generales'; ?></span>
+                <i class="fas fa-chart-pie text-sm shrink-0 <?php echo verificarIconoActivo('reportes.php', $pagina_actual); ?>"></i>
+                <span class="sidebar-text truncate"><?php echo $lang['reportes'] ?? 'Panel de Información'; ?></span>
             </a>
             <?php endif; ?>
         

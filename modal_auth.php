@@ -67,12 +67,12 @@
                 <?php unset($_SESSION['msg_success_login']); ?>
             <?php endif; ?>
 
-            <form action="validar.php" method="POST" class="space-y-4">
+            <form action="validar.php" method="POST" id="formLogin" novalidate class="space-y-4">
                 <div class="sget-field" data-campo="documento">
                     <label class="sget-label" for="loginDocumento">
                         <?= $lang['mdl_doc'] ?? 'N° DOCUMENTO' ?><span class="sget-label__req">*</span>
                     </label>
-                    <input type="text" id="loginDocumento" name="documento" placeholder="Ej: 113050" required
+                    <input type="text" id="loginDocumento" name="documento" placeholder="Ej: 113050"
                            autocomplete="username" inputmode="numeric" data-sget-autofocus
                            class="sget-input sget-input--mono">
                     <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
@@ -83,7 +83,7 @@
                         <?= $lang['mdl_pass'] ?? 'CONTRASEÑA' ?><span class="sget-label__req">*</span>
                     </label>
                     <div style="position:relative">
-                        <input type="password" id="loginClave" name="clave" placeholder="••••••" required
+                        <input type="password" id="loginClave" name="clave" placeholder="••••••"
                                autocomplete="current-password"
                                class="sget-input sget-input--mono" style="padding-right:2.75rem">
                         <button type="button" data-ver-clave="#loginClave" aria-label="Mostrar contraseña"
@@ -105,7 +105,39 @@
                 </button>
             </form>
 
-            <div class="g_id_signin flex justify-center"></div>
+            <!-- =================================================================== -->
+            <!-- BOTÓN DE GOOGLE (Google Identity Services)                        -->
+            <!-- =================================================================== -->
+            <!--
+                El contenedor NO lleva la clase `g_id_signin`: esa clase la
+                genera Google DENTRO del propio contenedor, y reutilizarla como
+                marca del hueco vacío impedía distinguir el nodo original del
+                botón ya montado (y se perdía al repintar por tema).
+                El montaje lo hace assets/js/sget-google.js al abrirse el panel.
+            -->
+            <div class="sget-sep-google" data-sget-google-zona>
+                <span class="sget-sep-google__linea" aria-hidden="true"></span>
+                <span class="sget-sep-google__texto">o continúa con</span>
+                <span class="sget-sep-google__linea" aria-hidden="true"></span>
+
+                <!-- Marcador de carga: se sustituye por el botón oficial -->
+                <div class="sget-google-montaje" data-sget-google>
+                    <span class="sget-google-cargando" data-sget-google-cargando>
+                        <span class="sget-google-cargando__barra"></span>
+                        <span class="sget-google-cargando__barra"></span>
+                        <span class="sget-google-cargando__barra"></span>
+                    </span>
+                </div>
+
+                <!-- Aviso si Google no está disponible (sin internet, SDK bloqueado…) -->
+                <p class="sget-help sget-google-aviso" data-sget-google-aviso hidden>
+                    <i class="fas fa-circle-info"></i>
+                    <span data-sget-google-texto>
+                        El acceso con Google no está disponible en este momento.
+                        Ingresa con tu número de documento y contraseña.
+                    </span>
+                </p>
+            </div>
 
             <div style="padding-top:1.25rem;text-align:center">
                 <p class="sget-help">
@@ -166,7 +198,7 @@
                     <label class="sget-label" for="reg_tipo_doc">
                         <?= $lang['mdl_tipo_doc'] ?? 'Tipo de Documento' ?><span class="sget-label__req">*</span>
                     </label>
-                    <select id="reg_tipo_doc" name="tipo_doc" required data-sget-autofocus class="sget-select">
+                    <select id="reg_tipo_doc" name="tipo_doc" data-sget-autofocus class="sget-select">
                         <option value="" disabled selected>Selecciona un tipo</option>
                         <option value="CC">Cédula de Ciudadanía (CC)</option>
                         <option value="TI">Tarjeta de Identidad (TI)</option>
@@ -182,7 +214,7 @@
                         <?= $lang['mdl_doc'] ?? 'Número de Documento' ?>
                         <span class="sget-label__opt" style="color:#059669;font-weight:800">(Tu ID de ingreso)</span>
                     </label>
-                    <input type="text" id="reg_documento" name="documento" required
+                    <input type="text" id="reg_documento" name="documento"
                            placeholder="Ej: 1007123456" autocomplete="username" inputmode="numeric"
                            class="sget-input sget-input--mono">
                     <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
@@ -193,7 +225,7 @@
                     <label class="sget-label" for="reg_nombre">
                         <?= $lang['mdl_nombre_completo'] ?? 'Nombre Completo' ?><span class="sget-label__req">*</span>
                     </label>
-                    <input type="text" id="reg_nombre" name="nom_usu" required
+                    <input type="text" id="reg_nombre" name="nom_usu"
                            placeholder="Tu nombre y apellido" autocomplete="name" maxlength="100"
                            class="sget-input">
                     <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
@@ -204,7 +236,7 @@
                     <label class="sget-label" for="reg_correo">
                         <?= $lang['mdl_correo'] ?? 'Correo Electrónico' ?><span class="sget-label__req">*</span>
                     </label>
-                    <input type="email" id="reg_correo" name="corre_usu" required
+                    <input type="email" id="reg_correo" name="corre_usu"
                            placeholder="correo@ejemplo.com" autocomplete="email" maxlength="100"
                            class="sget-input">
                     <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
@@ -216,7 +248,7 @@
                         <?= $lang['mdl_pass'] ?? 'Contraseña' ?><span class="sget-label__req">*</span>
                     </label>
                     <div style="position:relative">
-                        <input type="password" id="reg_pass" name="clave_usu" required
+                        <input type="password" id="reg_pass" name="clave_usu"
                                placeholder="Mínimo 6 caracteres" autocomplete="new-password" minlength="6"
                                class="sget-input" style="padding-right:2.75rem">
                         <button type="button" data-ver-clave="#reg_pass" aria-label="Mostrar contraseña"
@@ -232,7 +264,7 @@
                     <label class="sget-label" for="reg_pass_confirm">
                         <?= $lang['mdl_confirm_pass'] ?? 'Confirmar Contraseña' ?><span class="sget-label__req">*</span>
                     </label>
-                    <input type="password" id="reg_pass_confirm" name="confirmar_clave" required
+                    <input type="password" id="reg_pass_confirm" name="confirmar_clave"
                            placeholder="Repite tu contraseña" autocomplete="new-password" minlength="6"
                            class="sget-input">
                     <span class="sget-error" id="error_pass_match">
@@ -242,7 +274,7 @@
 
                 <!-- POLÍTICA DE DATOS -->
                 <label class="sget-check" for="acepta_politica" style="padding-top:.5rem">
-                    <input type="checkbox" id="acepta_politica" name="acepta_politica" value="1" required>
+                    <input type="checkbox" id="acepta_politica" name="acepta_politica" value="1">
                     <span>
                         <?= $lang['mdl_acepto_politica'] ?? 'Acepto la' ?>
                         <button type="button" data-sget-ir-a="panelPolitica"
@@ -275,6 +307,39 @@
 
 <script>
 /* ==========================================================================
+   Validación del formulario de INICIO DE SESIÓN.
+   Se sustituye el `required` nativo del navegador: ese globo del sistema
+   ("Rellene este campo") no se puede Estilizar y tapaba el modal.
+   ========================================================================== */
+document.getElementById('formLogin').addEventListener('submit', function (e) {
+    var doc   = document.getElementById('loginDocumento');
+    var clave = document.getElementById('loginClave');
+    var errores = {};
+
+    if (!doc.value.trim()) {
+        errores.documento = 'Escribe tu número de documento.';
+    } else if (doc.value.trim().length < 5) {
+        errores.documento = 'El número de documento parece incompleto.';
+    }
+    if (!clave.value) {
+        errores.clave = 'Escribe tu contraseña.';
+    }
+
+    if (Object.keys(errores).length) {
+        e.preventDefault();
+        SGETModal.errores(errores, document.getElementById('formLogin'));
+        SGETModal.toast('Revisa los campos marcados.', 'error');
+        return;
+    }
+
+    var boton = e.target.querySelector('button[type="submit"]');
+    if (boton) {
+        boton.disabled = true;
+        boton.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Ingresando...';
+    }
+});
+
+/* ==========================================================================
    Validación del formulario de registro.
    Usa el sistema de errores del motor común (data-campo → .sget-error).
    ========================================================================== */
@@ -292,6 +357,22 @@ function validarRegistro(event) {
     }
     if (!document.getElementById('acepta_politica').checked) {
         errores.acepta_politica = 'Debes aceptar la política de tratamiento de datos para registrarte.';
+    }
+
+    var tipo = document.getElementById('reg_tipo_doc');
+    if (tipo && !tipo.value) errores.tipo_doc = 'Selecciona el tipo de documento.';
+
+    var num = document.getElementById('reg_documento');
+    if (num && !num.value.trim()) errores.num_doc = 'Escribe tu número de documento.';
+    else if (num && num.value.trim().length < 5) errores.num_doc = 'El número de documento parece incompleto.';
+
+    var nom = document.getElementById('reg_nombre');
+    if (nom && nom.value.trim().length < 3) errores.nom_usu = 'Escribe tu nombre completo.';
+
+    var cor = document.getElementById('reg_correo');
+    if (cor && !cor.value.trim()) errores.corre_usu = 'Escribe tu correo electrónico.';
+    else if (cor && cor.value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cor.value.trim())) {
+        errores.corre_usu = 'El correo no tiene un formato válido.';
     }
 
     if (Object.keys(errores).length) {

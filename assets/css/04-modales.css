@@ -13,10 +13,10 @@
    fila que se estaba editando. Un velo suave y temático cumple la función de
    separar el fondo sin ocultar el contexto. */
 .sget-overlay {
-    position: fixed;
+    position: absolute;   /* absolute, no fixed: así no compite con el modal */
     inset: 0;
     background: var(--sget-overlay);
-    z-index: var(--sget-z-overlay);
+    z-index: 0;
     opacity: 0;
     pointer-events: none;
     transition: opacity var(--sget-transicion);
@@ -30,6 +30,9 @@
     position: fixed;
     inset: 0;
     z-index: var(--sget-z-modal);
+    /* Contexto de apilado propio: el overlay y el modal compiten DENTRO de
+       esta capa, no contra el resto de la página. */
+    isolation: isolate;
     display: grid;
     place-items: center;
     padding: 1rem;
@@ -41,7 +44,17 @@
 .sget-modal-wrap[data-abierto="1"] { opacity: 1; pointer-events: auto; }
 
 .sget-modal {
+    position: relative;
+    z-index: 1;          /* por encima del overlay que lo acompaña */
     width: 100%;
+    /* Sin esto, un hijo ancho (un <select> con textos largos, una tabla) hace
+       que min-width:auto del ítem de grid/supera al max-width y el modal se
+       estira de lado a lado, perdiendo la forma de modal. */
+    min-width: 0;
+    max-width: 100%;
+    /* Recorta el contenido: una tabla o un <select> ancho dentro del modal
+      acaba saliéndose y tapar el botón de cerrar. El cuerpo interior hace scroll. */
+    overflow: hidden;
     color: var(--sget-texto);
     max-width: 34rem;
     max-height: calc(100dvh - 2rem);
@@ -97,9 +110,15 @@
 .sget-modal__body {
     padding: 1.5rem;
     overflow-y: auto;
+    overflow-x: hidden;   /* el contenido ancho se desplaza, no estira el modal */
     flex: 1;
     min-height: 0;
+    min-width: 0;
 }
+
+/* Los hijos flexibles también deben poder encogerse; sin esto, cualquier
+   hijo con contenido ancho ensancha el modal entero. */
+.sget-modal > *, .sget-drawer > * { min-width: 0; }
 
 .sget-modal__foot {
     display: flex;
@@ -127,7 +146,11 @@
 .sget-drawer-wrap[data-abierto="1"] { opacity: 1; pointer-events: auto; }
 
 .sget-drawer {
+    position: relative;
+    z-index: 1;          /* por encima del overlay que lo acompaña */
     width: 100%;
+    min-width: 0;        /* ver .sget-modal */
+    overflow: hidden;
     color: var(--sget-texto);
     max-width: 30rem;
     height: 100%;

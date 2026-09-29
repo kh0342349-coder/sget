@@ -1,78 +1,157 @@
 <?php
-// El bloqueo se conserva en la sesión PHP para sobrevivir a recargas y navegación.
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-if (empty($_SESSION['inactividad_contexto'])) {
-    try {
-        $_SESSION['inactividad_contexto'] = bin2hex(random_bytes(16));
-    } catch (Exception $e) {
-        $_SESSION['inactividad_contexto'] = hash('sha256', uniqid('', true));
-    }
-}
+/**
+ * includes/modal_inactividad.php
+ * -----------------------------------------------------------------------------
+ * BLOQUEO DE SESIÓN POR INACTIVIDAD
+ * -----------------------------------------------------------------------------
+ * REFACTOR: la versión anterior llevaba todos los colores FIJOS en estilo
+ * inline (background:#0f172a, color:#f8fafc, rgba(15,23,42,.85) + blur). Eso
+ * producía dos fallos reportados:
+ *   · en tema claro se veía un cuadro negro dentro de una página blanca;
+ *   · el fondo era semitransparente, así que el sidebar se veía "a través" del
+ *     bloqueo y parecía que se podía seguir usando.
+ * Ahora usa el sistema de diseño (tokens del tema) y un fondo opaco, y el
+ * bloqueo se aplica sobre TODA la ventana con `inert` (lo hace js/inactividad.js
+ * sobre las ramas del DOM hermanas).
+ *
+ * IDs que js/inactividad.js necesita (no renombrar sin actualizar el JS):
+ *   modalBloqueoInactividad · inputPasswordModal · btnDesbloquearModal
+ *   mensajeErrorModal · contenedorTemporizadorInactividad · temporizadorRegresivoModal
+ * -----------------------------------------------------------------------------
+ */
 
 $inactividadInicialmenteBloqueada = !empty($_SESSION['sesion_bloqueada']);
-$inactividadContexto = hash('sha256', (string) $_SESSION['inactividad_contexto']);
+$inactividadContexto = hash('sha256', (string)($_SESSION['inactividad_contexto'] ?? bin2hex(random_bytes(16))));
+
 $inactividadConfig = [
     'inicialmenteBloqueada' => $inactividadInicialmenteBloqueada,
-    'contexto' => $inactividadContexto,
-    // El navegador NO debe decidir el plazo: lo recibe desde core/Config.php
-    // para que cambiarlo en un solo sitio sincronice servidor y cliente.
-    'minutosInactividad' => Config::MINUTOS_INACTIVIDAD,
-    'segundosGracia'     => Config::SEGUNDOS_GRACIA_INACTIVIDAD,
-    'bloqueadaEn' => isset($_SESSION['inactividad_bloqueada_en'])
-        ? (int) $_SESSION['inactividad_bloqueada_en']
-        : null,
-    'temporizadorIniciaEn' => isset($_SESSION['inactividad_temporizador_inicia_en'])
-        ? (int) $_SESSION['inactividad_temporizador_inicia_en']
-        : null,
-    'cierraEn' => isset($_SESSION['inactividad_cierra_en'])
-        ? (int) $_SESSION['inactividad_cierra_en']
-        : null
+    'contexto'              => $inactividadContexto,
+    // El plazo llega desde el servidor: el cliente no decide cuánto se espera.
+    'minutosInactividad'    => Config::MINUTOS_INACTIVIDAD,
+    'segundosGracia'        => Config::SEGUNDOS_GRACIA_INACTIVIDAD,
+    'bloqueadaEn'           => isset($_SESSION['inactividad_bloqueada_en']) ? (int) $_SESSION['inactividad_bloqueada_en'] : null,
+    'temporizadorIniciaEn'  => isset($_SESSION['inactividad_temporizador_inicia_en']) ? (int) $_SESSION['inactividad_temporizador_inicia_en'] : null,
+    'cierraEn'              => isset($_SESSION['inactividad_cierra_en']) ? (int) $_SESSION['inactividad_cierra_en'] : null,
 ];
-$inactividadDisplay = $inactividadInicialmenteBloqueada ? 'flex' : 'none';
+
+/** Resuelve una ruta interna desde Admin/, Conductor/, Pasajero/ o la raíz. */
+function obtenerRutaCs(string $ruta): string
+{
+    $uri = str_replace('\\', '/', $_SERVER['REQUEST_URI'] ?? '');
+    return preg_match('~/(admin|conductor|pasajero)/~i', $uri) ? '../' . $ruta : $ruta;
+}
 ?>
 <div id="modalBloqueoInactividad"
-     role="dialog"
-     aria-modal="true"
+     role="dialog" aria-modal="true"
      aria-labelledby="tituloBloqueoInactividad"
      aria-describedby="descripcionBloqueoInactividad"
-     style="display: <?= $inactividadDisplay ?>; position: fixed; inset: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(6px); z-index: 99999; align-items: center; justify-content: center;">
-    <div style="background: #0f172a; padding: 2rem; border-radius: 1.5rem; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); width: 100%; max-width: 380px; text-align: center; color: #f8fafc;">
+     style="display: <?= $inactividadInicialmenteBloqueada ? 'flex' : 'none' ?>">
 
-        <div style="background: rgba(245, 158, 11, 0.15); width: 56px; height: 56px; border-radius: 1.25rem; border: 1px solid rgba(245, 158, 11, 0.3); display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem auto;">
-            <span style="font-size: 26px;">🔒</span>
+    <div class="sget-inactividad-velo"></div>
+
+    <div class="sget-inactividad-caja" role="document">
+        <span class="sget-inactividad-icono"><i class="fas fa-lock"></i></span>
+
+        <h3 id="tituloBloqueoInactividad">Sesión bloqueada por inactividad</h3>
+        <p id="descripcionBloqueoInactividad">
+            Ingresa la contraseña de tu cuenta para reanudar la sesión.
+        </p>
+
+        <div id="mensajeErrorModal" class="sget-flash sget-flash--error" role="alert" aria-live="assertive" style="display:none"></div>
+
+        <div style="text-align:left">
+            <input type="password" id="inputPasswordModal" class="sget-input"
+                   autocomplete="current-password" placeholder="Contraseña actual"
+                   aria-label="Contraseña actual">
         </div>
 
-        <h3 id="tituloBloqueoInactividad" style="margin: 0 0 0.5rem 0; font-size: 1.25rem; font-weight: 800; color: #fff;">Sesión Bloqueada por Inactividad</h3>
-        <p id="descripcionBloqueoInactividad" style="margin: 0 0 1.25rem 0; font-size: 0.85rem; color: #94a3b8; font-weight: 500;">Ingresa la contraseña de tu cuenta para reanudar la sesión.</p>
+        <button id="btnDesbloquearModal" type="button" class="sget-btn sget-btn--primario sget-btn--bloque">
+            <i class="fas fa-unlock"></i> Desbloquear sesión
+        </button>
 
-        <div id="mensajeErrorModal" role="alert" aria-live="assertive" style="display: none; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 0.75rem; border-radius: 0.75rem; font-size: 0.8rem; font-weight: 700; margin-bottom: 1rem;"></div>
+        <div id="contenedorTemporizadorInactividad" style="display:none;margin-top:1rem"></div>
+        <span id="temporizadorRegresivoModal" style="display:none"></span>
 
-        <div style="margin-bottom: 1.25rem; text-align: left;">
-            <input type="password" id="inputPasswordModal" autocomplete="current-password" placeholder="Contraseña actual" aria-label="Contraseña actual" style="width: 100%; padding: 0.85rem 1rem; border-radius: 0.85rem; border: 1px solid #334155; background: #1e293b; color: #fff; box-sizing: border-box; outline: none; font-size: 0.85rem;" required>
-        </div>
-
-        <button id="btnDesbloquearModal" type="button" style="width: 100%; padding: 0.85rem; border: none; border-radius: 0.85rem; background: #0284c7; color: #fff; font-weight: 800; font-size: 0.8rem; letter-spacing: 0.05em; cursor: pointer; transition: all 0.2s; box-shadow: 0 10px 15px -3px rgba(2, 132, 199, 0.3);">DESBLOQUEAR SESIÓN</button>
-
-        <div style="margin-top: 1.25rem;">
-            <a id="enlaceCerrarSesionInactividad" href="<?= htmlspecialchars(obtenerRutaCs('assets/cerrar.php'), ENT_QUOTES, 'UTF-8') ?>" style="color: #64748b; font-size: 0.8rem; font-weight: 600; text-decoration: underline;">Cerrar sesión</a>
-        </div>
+        <p style="margin:1.25rem 0 0">
+            <a id="enlaceCerrarSesionInactividad" class="sget-help"
+               href="<?= htmlspecialchars(obtenerRutaCs('assets/cerrar.php'), ENT_QUOTES, 'UTF-8') ?>">
+                Cerrar sesión
+            </a>
+        </p>
     </div>
 </div>
 
-<?php
-// La ruta se resuelve en PHP para que el enlace quede correcto desde Admin,
-// Conductor, Pasajero o desde la raíz.
-function obtenerRutaCs($ruta) {
-    $requestUri = str_replace('\\', '/', $_SERVER['REQUEST_URI'] ?? '');
-    $esSubcarpeta = preg_match('~/(admin|conductor|pasajero)/~i', $requestUri);
-
-    return $esSubcarpeta ? '../' . $ruta : $ruta;
-}
-?>
 <script>
-window.SGET_INACTIVITY_CONFIG = <?= json_encode($inactividadConfig, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    /* El bloqueo tiene que tapar la VENTANA COMPLETA, sidebar incluido.
+       Este partial se emite dentro de `.sget-shell` (lo incluye header.php), y
+       `.sget-shell` tiene una animación de entrada que lo convierte en bloque
+       contenedor: un `position: fixed` con `inset: 0` anclado ahí solo cubría
+       la columna del contenido y dejaba el menú lateral totalmente utilizable.
+       Por eso el modal se sube a <body> de inmediato, sin esperar al JS del
+       bloqueo (mismo criterio que `montarEnBody()` en assets/js/sget-modal.js). */
+    (function () {
+        var bloqueo = document.getElementById('modalBloqueoInactividad');
+        if (bloqueo && bloqueo.parentElement !== document.body) {
+            document.body.appendChild(bloqueo);
+        }
+    })();
 </script>
-<script src="<?php echo obtenerRutaCs('js/inactividad.js'); ?>"></script>
+
+<style>
+    /* El bloqueo de inactividad es un caso especial: necesita tapar la página
+       entera, incluido el sidebar, así que NO usa .sget-modal-wrap. */
+    #modalBloqueoInactividad {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;                 /* por encima del sidebar (z-50) */
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+    }
+
+    /* Velo opaco: si fuera semitransparente se vería el sidebar "detrás" */
+    .sget-inactividad-velo {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        background: var(--sget-overlay-osc);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+    }
+
+    .sget-inactividad-caja {
+        position: relative;
+        z-index: 1;                     /* por encima del velo */
+        width: 100%;
+        max-width: 24rem;
+        text-align: center;
+        padding: 2rem 1.5rem;
+        border-radius: var(--sget-radio-lg);
+        background: var(--sget-superficie);
+        color: var(--sget-texto);
+        border: 1px solid var(--sget-borde);
+        box-shadow: 0 25px 60px -12px rgba(0, 0, 0, .7);
+    }
+
+    .sget-inactividad-icono {
+        display: grid;
+        place-items: center;
+        width: 3.5rem; height: 3.5rem;
+        margin: 0 auto 1.25rem;
+        border-radius: var(--sget-radio);
+        font-size: 1.375rem;
+        background: color-mix(in srgb, var(--sget-ambars) 15%, transparent);
+        color: var(--sget-ambars);
+        border: 1px solid color-mix(in srgb, var(--sget-ambars) 35%, transparent);
+    }
+
+    .sget-inactividad-caja h3 { margin: 0 0 .5rem; font-size: 1.125rem; font-weight: 800; }
+    .sget-inactividad-caja p  { margin: 0 0 1.25rem; font-size: .8125rem; color: var(--sget-texto-suave); }
+    .sget-inactividad-caja .sget-input { margin-bottom: 1rem; }
+</style>
+
+<script>
+    window.SGET_INACTIVITY_CONFIG = <?= json_encode($inactividadConfig,
+        JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+</script>
+<script src="<?= obtenerRutaCs('js/inactividad.js') ?>"></script>

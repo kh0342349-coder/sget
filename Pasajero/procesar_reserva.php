@@ -21,72 +21,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    // 3. Validar disponibilidad real del viaje y capacidad del vehículo antes de insertar
-    $sql_verificar = "SELECT v.*, r.nom_rut, u.nom_usu as conductor, ve.cap_veh, 
-                             (SELECT COUNT(*) FROM reserva WHERE id_via_res = v.id_via) as ocupados
-                      FROM viaje v
-                      LEFT JOIN rutas r ON v.id_rut_via = r.id_rut
-                      LEFT JOIN usuario u ON v.id_usu_via = u.id_usu
-                      LEFT JOIN vehiculo ve ON v.id_veh = ve.id_veh
-                      WHERE v.id_via = ? AND v.est_via IN ('Programado', 'En curso')";
-                      
-    $stmt = $conexion->prepare($sql_verificar);
-    $stmt->bind_param("i", $id_via);
-    $stmt->execute();
-    $resultado = $stmt->get_result();
+    // 3. La reserva la crea services/ReservaService.php
+// ANTES: esta página tenía su propio INSERT, con la cuenta de cupos calculada a
+// mano y sin transacción. Dos pasajeros que reservaban a la vez podían pasar la
+// misma comprobación y sobrevender el viaje. Además no se notificaba a nadie y
+// `cup_dis` se quedaba desfasado.
+try {
+    $resultado = ReservaService::crear((int)$id_via, (int)$id_usuario, $puestos_solicitados, [
+        'metodo'   => 'Efectivo al Abordar',
+        'confirmar' => false,   // el pago se hace al embarcar: queda pendiente
+    ]);
+} catch (Throwable $e) {
+    error_log('[SGET][procesar_reserva] ' . $e->getMessage());
+    $resultado = ['ok' => false, 'ids' => [], 'puestos' => 0, 'mensaje' => 'No se pudo registrar la reserva.'];
+}
 
-    if ($resultado->num_rows === 0) {
-        $_SESSION['error'] = "El viaje seleccionado no existe o ya no se encuentra activo.";
-        header("Location: viajes_pasajero.php");
-        exit();
-    }
+if (!$resultado['ok']) {
+    $_SESSION['error'] = $resultado['mensaje'];
+    header("Location: viajes_pasajero.php");
+    exit();
+}
 
-    $viaje = $resultado->fetch_assoc();
-    $cupos_totales = intval($viaje['cap_veh']);
-    $ocupados = intval($viaje['ocupados']);
-    $disponibles = $cupos_totales - $ocupados;
+// Comprobante de la reserva
+$id_nueva_reserva = (int)($resultado['ids'][0] ?? 0);
 
-    if ($puestos_solicitados > $disponibles) {
-        $_SESSION['error'] = "Lo sentimos, no hay suficientes puestos disponibles. Solo quedan $disponibles cupos.";
-        header("Location: viajes_pasajero.php");
-        exit();
-    }
+// Datos que se pintan en el comprobante (se leen del viaje ya reservado)
+$viaje = Database::one(
+    "SELECT v.fec_via, v.hor_sal_via, v.val_via, r.nom_rut
+       FROM viaje v
+       LEFT JOIN rutas r ON r.id_rut = v.id_rut_via
+      WHERE v.id_via = ?",
+    [(int)$id_via]
+) ?: ['fec_via' => date('Y-m-d'), 'hor_sal_via' => '00:00:00', 'val_via' => 0, 'nom_rut' => 'Ruta'];
 
-    // 4. Registrar la reserva en la base de datos (con método de pago presencial y estado pendiente)
-    $stmt_insert = $conexion->prepare("INSERT INTO reserva (id_via_res, id_usu_res, fech_res, metodo_pago, estado_pago) VALUES (?, ?, NOW(), 'Efectivo al Abordar', 'Pendiente')");
-    
+$nombre_ruta     = (string)($viaje['nom_rut'] ?: 'Ruta');
+$fecha_viaje     = (string)$viaje['fec_via'];
+$hora_viaje      = date('h:i A', strtotime((string)$viaje['hor_sal_via']));
+$valor_unitario  = (float)$viaje['val_via'];
+$total_pagar     = $valor_unitario * $puestos_solicitados;
+
+{
+    $nombre_pasajero = $_SESSION['nombre_usuario'] ?? 'Pasajero';
     $exito = true;
-    for ($i = 0; $i < $puestos_solicitados; $i++) {
-        $stmt_insert->bind_param("ii", $id_via, $id_usuario);
-        if (!$stmt_insert->execute()) {
-            $exito = false;
-            break;
-        }
-    }
-
-    if ($exito) {
-        $nombre_pasajero = $_SESSION['nombre_usuario'] ?? "Pasajero";
-        $nombre_ruta = $viaje['nom_rut'] ?? "Ruta General";
-        $fecha_viaje = $viaje['fec_via'];
-        $hora_viaje = date("h:i A", strtotime($viaje['hor_sal_via']));
-        $valor_unitario = floatval($viaje['val_via']);
-        $total_pagar = $valor_unitario * $puestos_solicitados;
-        ?>
-        <!DOCTYPE html>
-        <html lang="es" class="dark">
+?>
+<!DOCTYPE html>
+<html lang="es">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Comprobante de Reserva - SGET</title>
             <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
-    <link rel="stylesheet" href="assets/css/01-base.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/02-layout.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/03-componentes.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/04-modales.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/05-tablas.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/06-responsive.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/07-transiciones.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/06-responsive.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/07-transiciones.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
             <script>
@@ -151,14 +143,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </body>
         </html>
         <?php
-        exit();
-    } else {
-        $_SESSION['error'] = "Ocurrió un error al procesar tu reserva. Inténtalo de nuevo.";
-        header("Location: viajes_pasajero.php");
-        exit();
-    }
+    exit();
+}
 
 } else {
+    // Solo se acepta POST: una recarga suelta no debe crear reservas.
     header("Location: viajes_pasajero.php");
     exit();
 }

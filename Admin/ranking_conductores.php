@@ -27,7 +27,7 @@ $query_ranking = "SELECT u.id_usu, u.nom_usu, u.corre_usu, COUNT(v.id_via) as to
 $resultado_ranking = $conexion->query($query_ranking);
 ?>
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

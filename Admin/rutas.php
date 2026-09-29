@@ -83,7 +83,7 @@ include __DIR__ . '/../views/partials/head.php';
         <div class="sget-toolbar">
             <div class="sget-search">
                 <i class="fas fa-magnifying-glass"></i>
-                <input type="search" id="buscarRuta" class="sget-input" placeholder="Buscar ruta, salida o destino… (Ctrl+K)">
+                <input type="search" id="buscarRuta" class="sget-input" data-sget-buscar" placeholder="Buscar ruta, salida o destino… (Ctrl+K)">
             </div>
             <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="*">Todas</button>
             <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="1">Activas</button>

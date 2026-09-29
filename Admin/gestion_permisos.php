@@ -30,7 +30,12 @@ $modulosAdmin = [
     'asignaciones' => 'Asignaciones y Recaudo',
     'gestion_permisos' => 'Gestión de Permisos',
     'ranking_conductores' => 'Ranking de Conductores',
-    'reportes' => 'Reportes Analíticos',
+    'anuncios'    => 'Anuncios de la Landing',
+    'reportes_pasajeros' => 'Reportes y Quejas',
+    'comunicados' => 'Comunicados y Avisos',
+    // La clave sigue siendo 'reportes' para no romper los perfiles ya guardados;
+    // la etiqueta refleja lo que el módulo hace hoy: consultar información.
+    'reportes' => 'Panel de Información',
     'rutas' => 'Gestión de Rutas',
     'usuarios' => 'Gestión de Usuarios',
     'vehiculos' => 'Control de Vehículos',
@@ -121,7 +126,7 @@ $nombresRoles = [
 ];
 ?>
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

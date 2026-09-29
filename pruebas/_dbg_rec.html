@@ -1,0 +1,27 @@
+<!DOCTYPE html><html><body><pre id="r">x</pre>
+<iframe id="f" src="_recaudo_test.php" style="width:1400px;height:1000px"></iframe>
+<script>
+const o=[];const w2=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{const f=document.getElementById('f');
+ f.contentWindow.addEventListener('error',e=>o.push('ERROR JS: '+e.message+' @ '+e.lineno));
+ await w2(2500);
+ f.contentWindow.location.href='../Admin/asignaciones.php';await w2(2500);
+ const d=f.contentDocument;
+ const card=d.querySelector('[data-sget-fila][data-viaje]');
+ const id=card.dataset.viaje;
+ o.push('viaje='+id);
+ d.querySelector('[data-sget-accion="abrirRecaudo"][data-sget-viaje="'+id+'"]').click();await w2(800);
+ const m=d.getElementById('modalRecaudo');
+ const sel=m.querySelector('#selPasajero');
+ sel.selectedIndex=1; sel.dispatchEvent(new f.contentWindow.Event('change',{bubbles:true}));
+ o.push('id_usu='+m.querySelector('[name=id_usu]').value);
+ m.querySelector('#inputPuestos').value='2';
+ m.querySelector('#inputPuestos').dispatchEvent(new f.contentWindow.Event('input',{bubbles:true}));
+ o.push('valor='+m.querySelector('#inputValor').value);
+ const c=new f.contentWindow.FormData(m);
+ c.append('_token', window.SGETModal||'' );
+ o.push('token-manda='+String(c.get('_token')).slice(0,10));c.set('_token', m.querySelector('[name=_token]').value);
+ const r=await f.contentWindow.fetch('../api/index.php',{method:'POST',body:c,headers:{'X-Requested-With':'XMLHttpRequest'},credentials:'same-origin'});
+ o.push('respuesta='+await r.text());
+ document.getElementById('r').textContent='DBG4_START\n'+o.join('\n')+'\nDBG4_END';})();
+</script></body></html>

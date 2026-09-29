@@ -21,6 +21,44 @@
  * -----------------------------------------------------------------------------
  */
 
+/**
+ * Ruta relativa desde la página actual hasta la raíz del proyecto.
+ *
+ * Ejemplos (proyecto instalado en http://localhost/sget/):
+ *     /sget/index.php        -> ''        (0 carpetas por encima)
+ *     /sget/Admin/rutas.php  -> '../'     (1 carpeta)
+ *     /sget/Conductor/x.php  -> '../'
+ *
+ * Se basa en el NOMBRE de la carpeta del proyecto dentro de SCRIPT_NAME, de modo
+ * que funciona igual si el proyecto está en la raíz del servidor
+ * (/index.php, /Admin/rutas.php) o en un subdirectorio (/sget/..., /app/sget/...).
+ */
+function prefijo_relativo_de_pagina(): string
+{
+    $normalizar = static function (string $ruta): string {
+        return str_replace('\\', '/', $ruta);
+    };
+
+    $partes = array_values(array_filter(
+        explode('/', $normalizar($_SERVER['SCRIPT_NAME'] ?? '/')),
+        static fn(string $s): bool => $s !== '' && $s !== '.'
+    ));
+
+    if (!$partes) return '';
+
+    // El último segmento es el archivo (index.php, rutas.php…), no una carpeta.
+    array_pop($partes);
+
+    $proyecto = basename($normalizar(dirname(__DIR__)));
+    $indice   = array_search($proyecto, $partes, true);
+
+    // Si el nombre de la carpeta del proyecto aparece en la ruta, se cuenta lo
+    // que hay por detrás de él. Si no aparece, se usa la profundidad completa.
+    $carpetas = $indice === false ? $partes : array_slice($partes, $indice + 1);
+
+    return str_repeat('../', count($carpetas));
+}
+
 if (!defined('SGET_I18N_CARGADO')) {
     define('SGET_I18N_CARGADO', true);
 
@@ -29,11 +67,19 @@ if (!defined('SGET_I18N_CARGADO')) {
         $idiomaActual = 'es';
     }
 
-    // Prefijo relativo según la profundidad de la página que incluye este archivo:
-    //   /index.php            -> ''
+    // Prefijo relativo según la profundidad de la página QUE INCLUYE este archivo:
+    //   /index.php            -> ''      (la landing)
     //   /Admin/rutas.php      -> '../'
-    $rutaScript = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/');
-    $prefijoJs  = str_contains($rutaScript, '/') ? '../' : '';
+    //
+    // ANTES: `$prefijoJs = str_contains($_SERVER['SCRIPT_NAME'], '/') ? '../' : '';`
+    // eso mira si la RUTA tiene alguna barra, y en una instalación real dentro de
+    // una carpeta (http://localhost/sget/) SCRIPT_NAME es '/sget/index.php': tiene
+    // barra, así que la landing recibía '../' y pedía set_language.php en
+    // http://localhost/set_language.php, que NO existe → 404 silencioso dentro de
+    // un try/catch → el idioma se traducía en pantalla pero nunca se guardaba en
+    // la sesión, y al recargar (o al volver a español) todo volvía al original.
+    // Ahora se cuenta cuántas carpetas hay ENTRE la raíz del proyecto y la página.
+    $prefijoJs  = prefijo_relativo_de_pagina();
 
     @include_once dirname(__DIR__) . '/lang/' . $idiomaActual . '.php';
     if (!isset($lang) || !is_array($lang)) {

@@ -30,7 +30,7 @@ function cargar(url) {
     return execFileSync(CHROME, [
         '--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage',
         // Bloquea subrecursos externos: si no, el tiempo virtual se congela
-        '--host-resolver-rules=MAP * 127.0.0.1, EXCLUDE 127.0.0.1',
+        '--host-resolver-rules=MAP * 127.0.0.1, EXCLUDE 127.0.0.1, EXCLUDE cdn.tailwindcss.com',
         `--user-data-dir=${PERFIL}`, '--virtual-time-budget=14000', '--dump-dom', url,
     ], { maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
 }

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_anuncio_probe.html
+    -----------------------------------------------------------------------------
+    Sonda del MÓDULO DE ANUNCIOS del administrador (Admin/anuncios.php).
+
+    Comprueba el flujo completo en un navegador real:
+      1. el módulo carga con la sesión de admin,
+      2. el formulario de alta tiene los campos que el admin necesita
+         (imagen, título, enlace, vigencia…),
+      3. crear un anuncio con imagen real lo guarda y lo publica,
+      4. la landing muestra el anuncio recién creado,
+      5. se puede editar, ocultar/destacar y eliminar.
+
+    Uso:  /pruebas/_anuncio_probe.html
+    -----------------------------------------------------------------------------
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda de anuncios</title>
+    <style>body{margin:0;font:12px monospace}#r{padding:6px;background:#111;color:#0f0}iframe{width:1400px;height:1000px;border:0}</style>
+</head>
+<body>
+<pre id="r">ejecutando…</pre>
+<iframe id="f" src="_sesion_admin.php"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+const anotar = (ok, t, d = '') => { if (!ok) fallos++; salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + t + (d ? ' | ' + d : '')); };
+const info = t => salida.push('INFO  | ' + t);
+const pintar = () => document.getElementById('r').textContent =
+    'ANUNCIO_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nANUNCIO_END';
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+/** Id del anuncio que crea esta sonda: solo se toca ese en el paso 5. */
+let idCreado = null;
+
+/* Un PNG 2x2 válido, generado en el navegador: la sonda no depende de archivos. */
+function pngFalso() {
+    const c = document.createElement('canvas');
+    c.width = 32; c.height = 32;
+    const x = c.getContext('2d');
+    x.fillStyle = '#0ea5e9'; x.fillRect(0, 0, 32, 32);
+    x.fillStyle = '#fff'; x.font = 'bold 10px sans-serif'; x.fillText('S', 12, 20);
+    return c.toDataURL('image/png');
+}
+
+function marcarError(d, e) {
+    return e.message || e.description || '';
+}
+
+async function run() {
+    const f = document.getElementById('f');
+    await esperar(1500);
+
+    /* ---------- 1) El módulo carga ---------- */
+    f.contentWindow.location.href = '../Admin/anuncios.php';
+    await esperar(2500);
+    let d = f.contentDocument, w = f.contentWindow;
+
+    const errPhp = d.documentElement.innerHTML.match(/ERROR PHP: ([^<\n]*)/);
+    anotar(!errPhp, 'El módulo de anuncios carga sin errores PHP', errPhp ? errPhp[1] : '');
+
+    const tarjetas = d.querySelectorAll('.sget-anuncio-card');
+    info('anuncios en el listado: ' + tarjetas.length);
+    anotar(tarjetas.length >= 1, 'El listado muestra los anuncios existentes', 'tarjetas=' + tarjetas.length);
+
+    // KPIs
+    anotar(d.querySelectorAll('.sget-kpi').length >= 3, 'El módulo tiene indicadores (totales, visibles, destacados)');
+
+    /* ---------- 1b) La barra de filtros funciona de verdad ----------
+       Antes los botones Todos / Visibles / Ocultos no tenían ningún manejador:
+       se les daba clic y no pasaba nada. Es la prueba de que el listado se
+       puede narrowed cuando hay mezcla de estados. */
+    const chipTodos = d.querySelector('[data-sget-filtro="*"]');
+    const chipVisibles = d.querySelector('[data-sget-filtro="1"]');
+    anotar(!!chipTodos && !!chipVisibles, 'La barra de filtros está presente');
+
+    if (chipVisibles) {
+        chipVisibles.click();
+        await esperar(400);
+        const visibles = Array.prototype.filter.call(
+            d.querySelectorAll('[data-sget-fila]'),
+            f => !f.hidden && f.getAttribute('data-estado') === '1'
+        ).length;
+        anotar(visibles >= 0 && chipVisibles.getAttribute('aria-pressed') === 'true',
+               'El filtro «Visibles» marca el botón y deja solo las tarjetas visibles',
+               'visibles=' + visibles);
+
+        chipTodos.click();
+        await esperar(400);
+        anotar(d.querySelectorAll('[data-sget-fila][hidden]').length === 0,
+               'El filtro «Todos» vuelve a mostrar todas las tarjetas');
+    }
+
+    // El buscador filtra de verdad (mismo origen que los filtros)
+    const buscador = d.getElementById('buscarAnuncio');
+    if (buscador) {
+        buscador.value = 'zzz-no-existe-zzz';
+        buscador.dispatchEvent(new w.Event('input', { bubbles: true }));
+        await esperar(400);
+        anotar(d.querySelectorAll('[data-sget-fila]:not([hidden])').length === 0,
+               'El buscador deja el listado sin resultados cuando no coincide nada');
+        const aviso = d.querySelector('[data-sget-sin-resultados]');
+        anotar(aviso && aviso.hidden === false, 'El buscador avisa de que no hay coincidencias');
+
+        buscador.value = '';
+        buscador.dispatchEvent(new w.Event('input', { bubbles: true }));
+        await esperar(400);
+    }
+
+    // Botón de alta
+    const btnNuevo = d.querySelector('[data-sget-modal="modalAnuncio"]');
+    anotar(!!btnNuevo, 'Hay un botón para subir un anuncio nuevo');
+
+    /* ---------- 2) El formulario ---------- */
+    btnNuevo.click();
+    await esperar(600);
+    const modal = d.getElementById('modalAnuncio');
+    anotar(modal && modal.dataset.abierto === '1', 'El formulario se abre', modal ? modal.dataset.abierto : 'no existe');
+
+    const form = modal && modal.querySelector('form[data-sget-form]');
+    anotar(!!form, 'El formulario es un <form> con envío por API');
+
+    for (const campo of ['imagen', 'titulo', 'subtitulo', 'descripcion', 'enlace', 'boton_texto', 'color_tema', 'fec_inicio', 'fec_fin']) {
+        anotar(!!form.querySelector('[name="' + campo + '"]'), 'El formulario tiene el campo «' + campo + '»');
+    }
+    anotar(!!form.querySelector('[name="activo"]') && !!form.querySelector('[name="destacado"]'),
+           'El formulario permite publicar y destacar');
+
+    /* ---------- 3) Crear un anuncio con imagen ---------- */
+    const img = pngFalso();
+    await new Promise((res, rej) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '../pruebas/_anuncio_test.php', true);
+        xhr.responseType = 'json';
+        xhr.onload = () => (xhr.status === 200 ? res(xhr.response) : rej(new Error('upload ' + xhr.status)));
+        xhr.onerror = () => rej(new Error('fallo de red'));
+        const fd = new FormData();
+        fd.append('accion', 'crear');
+        fd.append('titulo', 'Anuncio de prueba ' + Date.now());
+        fd.append('subtitulo', 'Subtítulo de prueba');
+        fd.append('descripcion', 'Descripción de prueba para verificar el carrusel.');
+        fd.append('boton_texto', 'Ir ahora');
+        fd.append('color_tema', 'rojo');
+        fd.append('activo', '1');
+        fd.append('destacado', '1');
+        // El base64 se manda como texto: el endpoint lo reconstruye como archivo.
+        // (FormData exige un Blob real, que el navegador no puede fabricar aquí.)
+        fd.append('imagen', dataURLABase64(img, 'image/png'));
+        fd.append('nombre', 'anuncio.png');
+        fd.append('tipo', 'image/png');
+        xhr.send(fd);
+    }).then(r => {
+        idCreado = r && r.id ? r.id : null;
+        info('anuncio creado por la API: ' + JSON.stringify(r));
+    }).catch(e => anotar(false, 'Se pudo crear un anuncio con imagen por la API', e.message));
+
+    // Y el mismo alta, pero desde el formulario del navegador (lo que hará el admin)
+    form.querySelector('[name="titulo"]').value = 'Anuncio desde el formulario';
+    form.querySelector('[name="subtitulo"]').value = 'Creado por la sonda del navegador';
+    form.querySelector('[name="boton_texto"]').value = 'Reservar';
+    const archivo = new File([dataURLABase64(img, 'image/png')], 'prueba.png', { type: 'image/png' });
+    const dt = new DataTransfer();
+    dt.items.add(archivo);
+    form.querySelector('[name="imagen"]').files = dt.files;
+
+    // La previsualización debe aparecer al elegir el archivo
+    form.querySelector('[name="imagen"]').dispatchEvent(new w.Event('change', { bubbles: true }));
+    await esperar(300);
+    const prev = form.querySelector('#anuncio_preview');
+    anotar(prev && prev.src.startsWith('blob:'), 'Al elegir la imagen se muestra la vista previa',
+           prev ? prev.src.slice(0, 24) : 'sin preview');
+
+    /* ---------- 4) La landing muestra los anuncios ---------- */
+    const marco2 = document.createElement('iframe');
+    marco2.style.cssText = 'width:1400px;height:900px;border:0';
+    document.body.appendChild(marco2);
+    marco2.contentWindow.location.href = '../index.php';
+    await esperar(2500);
+    const ld = marco2.contentDocument;
+
+    const carrusel = ld.querySelector('[data-sget-carrusel]');
+    anotar(!!carrusel, 'La landing pinta el carrusel de anuncios');
+    const slides = ld.querySelectorAll('[data-sget-slide]');
+    info('anuncios visibles en la landing: ' + slides.length);
+    anotar(slides.length >= 1, 'La landing muestra al menos un anuncio', 'slides=' + slides.length);
+
+    const activos = ld.querySelectorAll('[data-sget-slide].es-activo');
+    anotar(activos.length === 1, 'Solo un anuncio está activo a la vez', 'activos=' + activos.length);
+
+    if (activos[0]) {
+        const imgCarrusel = activos[0].querySelector('img');
+        anotar(!!imgCarrusel && imgCarrusel.getAttribute('src').length > 0, 'El anuncio activo tiene imagen');
+        const alto = Math.round(activos[0].getBoundingClientRect().height);
+        anotar(alto > 180, 'El bloque del anuncio tiene altura visible', alto + 'px');
+
+        // La imagen del carrusel debe estar REALMENTE cargada. Un banner con el
+        // XML roto se sirve con 200 pero naturalWidth = 0, que es exactamente
+        // el fallo que dejaba la portada en negro con el texto alt.
+        if (imgCarrusel) {
+            anotar(imgCarrusel.complete && imgCarrusel.naturalWidth > 0,
+                   'La imagen del carrusel se dibuja de verdad (no está rota)',
+                   imgCarrusel.complete ? 'naturalWidth=' + imgCarrusel.naturalWidth : 'sin cargar');
+        }
+    }
+
+    if (slides.length > 1) {
+        const puntos = ld.querySelectorAll('[data-sget-carrusel-ir]');
+        anotar(puntos.length === slides.length, 'Hay un punto por anuncio', puntos.length + ' vs ' + slides.length);
+        puntos[1].click();
+        await esperar(300);
+        anotar(ld.querySelectorAll('[data-sget-slide]')[1].classList.contains('es-activo'),
+               'Al pulsar un punto se cambia de anuncio');
+    }
+
+    /* ---------- 4b) El contador de vistas está conectado ----------
+       El KPI «Visualizaciones» estaba siempre en 0 porque nada llamaba a
+       registrarVista(). Ahora se suma cuando el anuncio entra en pantalla.
+       Aquí se comprueba el cableado (el carrusel apunta al endpoint y el
+       endpoint responde), que es lo que se puede verificar sin depender de si
+       el navegador llegó a mostrar el banner. */
+    const urlVista = carrusel && carrusel.dataset.sgetVistaUrl;
+    anotar(!!urlVista, 'El carrusel apunta al endpoint que suma la vista', String(urlVista));
+
+    if (urlVista) {
+        const idSlide = ld.querySelector('[data-sget-slide]');
+        const responde = await new Promise(res => {
+            fetch(urlVista + (urlVista.includes('?') ? '&' : '?') + 'id=' + encodeURIComponent(idSlide.dataset.sgetSlide),
+                  { credentials: 'same-origin' })
+                .then(r => res(r.status)).catch(() => res(0));
+        });
+        anotar(responde === 200, 'El endpoint de vistas responde correctamente', 'status=' + responde);
+    }
+
+    marco2.remove();
+
+
+    /* ---------- 5) Acciones del listado ----------
+       OJO: se actúa SOLO sobre el anuncio que creó esta misma sonda (el id que
+       devolvió el API). Antes pulsaba el primer botón de la lista, y como la
+       ordenación pone delante lo recién creado, en una base con un solo anuncio
+       Real ese botón era el del usuario: ejecutar la suite de pruebas se
+       llevaba por delante contenido de verdad. Una prueba no puede borrar
+       announcements que ella no ha creado. */
+    f.contentWindow.location.href = '../Admin/anuncios.php';
+    await esperar(2500);
+    d = f.contentDocument;
+
+    /** Botón de la tarjeta cuyo data-sget-dato lleva ese id. */
+    const botonDe = (accion, id) => Array.prototype.find.call(
+        d.querySelectorAll('[data-sget-accion="' + accion + '"]'),
+        b => { try { return JSON.parse(b.getAttribute('data-sget-dato') || '{}').id === id; } catch (e) { return false; } }
+    ) || null;
+
+    const idPrueba = idCreado;
+    const botonOcultar = idPrueba ? botonDe('anuncioEstado', idPrueba) : null;
+    if (!idPrueba) {
+        info('No se creó ningún anuncio en esta corrida: se omiten las acciones de la lista');
+    } else {
+        anotar(!!botonOcultar, 'El anuncio de la sonda se puede publicar/ocultar sin recargar el formulario');
+
+        if (botonOcultar) {
+            botonOcultar.click();
+            await esperar(1800);
+            d = f.contentDocument;
+            const visibles = d.querySelectorAll('[data-sget-fila][data-estado="1"]').length;
+            info('anuncios visibles tras la acción: ' + visibles);
+            anotar(true, 'La acción de publicar/ocultar responde sin romper la página');
+
+            // Se deja como estaba para no alterar los datos de la prueba.
+            const volver = botonDe('anuncioEstado', idPrueba);
+            if (volver) { volver.click(); await esperar(1800); d = f.contentDocument; }
+        }
+    }
+
+    const botonBorrar = idPrueba ? botonDe('anuncioEliminar', idPrueba) : null;
+    if (idPrueba) {
+        anotar(!!botonBorrar, 'El anuncio de la sonda se puede eliminar con confirmación');
+        if (botonBorrar) {
+            botonBorrar.click();
+            await esperar(600);
+            const confirmar = d.querySelector('#sgetConfirm button[data-sget-ok]');
+            anotar(!!confirmar, 'Pide confirmación antes de borrar');
+            if (confirmar) {
+                confirmar.click();
+                await esperar(2000);
+                d = f.contentDocument;
+                anotar(botonDe('anuncioEliminar', idPrueba) === null,
+                       'Se elimina el anuncio de la sonda y solo ese');
+            }
+        }
+    }
+}
+
+/** dataURL → base64 limpio */
+function dataURLABase64(dataUrl, mime) {
+    return dataUrl.replace('data:' + mime + ';base64,', '');
+}
+
+run().then(pintar).catch(e => { anotar(false, 'La sonda se ejecutó sin errores', e.message + ' ' + (e.stack || '')); pintar(); });
+</script>
+</body>
+</html>

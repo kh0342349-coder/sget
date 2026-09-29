@@ -141,6 +141,10 @@ foreach ($catalogoOpciones as$opcion) {
             <?php echo $etiquetaRolHeader; ?> &nbsp;/&nbsp; <span class="text-slate-900 dark:text-white font-extrabold"><?php echo $submoduloTexto; ?></span>
         </div>
 
+        <?php /* El buscador global solo se muestra si realmente hay algo que buscar.
+                 Conductor y Pasajero tienen 3-4 pantallas: un buscador vacío
+                 empujaba el contenido y obligaba a desplazarse. */ ?>
+        <?php if (count($opcionesSGET) >= 5): ?>
         <div class="relative w-full max-w-xs md:max-w-sm ml-1">
             <div class="relative flex items-center">
                 <i class="fas fa-search absolute left-4 text-slate-400 text-xs pointer-events-none"></i>
@@ -149,6 +153,12 @@ foreach ($catalogoOpciones as$opcion) {
             </div>
             <div id="resultadosBusquedaHeader" class="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden hidden z-50 max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-white/5 custom-scrollbar"></div>
         </div>
+        <?php else: ?>
+        <span class="hidden md:inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-xs font-semibold truncate max-w-[14rem]">
+            <i class="fas fa-map-marker-alt text-sky-400"></i>
+            <?= htmlspecialchars($submoduloTexto, ENT_QUOTES, 'UTF-8') ?>
+        </span>
+        <?php endif; ?>
     </div>
 
     <div class="flex items-center space-x-3 sm:space-x-4 shrink-0">
@@ -158,18 +168,15 @@ foreach ($catalogoOpciones as$opcion) {
             try { $__noLeidas = NotificacionService::noLeidas($idUsuarioSesión); } catch (Throwable $e) { $__noLeidas = 0; }
         } ?>
         <div class="relative shrink-0">
-            <button type="button" data-sget-modal="modalNotificaciones"
+            <button type="button" data-sget-modal="modalNotificaciones" data-sget-noti-bell
                     class="w-10 h-10 rounded-2xl bg-slate-200/50 dark:bg-white/5 text-slate-700 dark:text-slate-300
                            hover:bg-sky-500/20 hover:text-sky-500 transition-all flex items-center justify-center
                            border border-slate-300/50 dark:border-white/10 text-sm shadow-sm cursor-pointer relative"
                     title="Notificaciones" aria-label="Notificaciones<?= $__noLeidas ? ', ' . $__noLeidas . ' sin leer' : '' ?>">
                 <i class="fas fa-bell text-xs"></i>
-                <?php if ($__noLeidas > 0): ?>
-                    <span class="sget-badge sget-badge--error"
-                          style="position:absolute;top:-.375rem;right:-.375rem;padding:.125rem .375rem;font-size:.5rem;min-width:1.125rem;justify-content:center">
-                        <?= $__noLeidas > 9 ? '9+' : $__noLeidas ?>
-                    </span>
-                <?php endif; ?>
+                <span class="sget-badge sget-badge--error" data-sget-noti-contador
+                      style="position:absolute;top:-.375rem;right:-.375rem;padding:.125rem .375rem;font-size:.5rem;min-width:1.125rem;justify-content:center"
+                      <?= $__noLeidas > 0 ? '' : 'hidden' ?>><?= $__noLeidas > 9 ? '9+' : $__noLeidas ?></span>
             </button>
         </div>
 
@@ -180,10 +187,21 @@ foreach ($catalogoOpciones as$opcion) {
         </div>
 
         <div class="relative shrink-0">
-            <select id="headerLanguageSelector" data-sget-language aria-label="Language" style="min-width: 108px;" class="sget-language-selector h-10 px-2 rounded-2xl bg-slate-100 dark:bg-slate-900/80 text-xs font-black text-slate-700 dark:text-slate-200 border border-slate-300/50 dark:border-white/10 cursor-pointer focus:outline-none transition-all">
-                <option value="es" <?php echo $idiomaActual === 'es' ? 'selected' : ''; ?>>🇪🇸 ESP</option>
-                <option value="en" <?php echo $idiomaActual === 'en' ? 'selected' : ''; ?>>🇺🇸 ENG</option>
-            </select>
+            <?php // El selector envía a set_language.php con un POST real: si i18n.js
+                   // falla o el navegador tiene el JS desactivado, cambiar el idioma
+                   // sigue funcionando. Con JS, i18n.js lo intercepta y no recarga. ?>
+            <form method="POST" action="<?= Config::basePath() ?>/set_language.php" class="contents" data-sget-idioma-form>
+                <input type="hidden" name="idioma" value="<?= htmlspecialchars($idiomaActual, ENT_QUOTES, 'UTF-8') ?>">
+                <select id="headerLanguageSelector" data-sget-language name="idioma" aria-label="Idioma / Language"
+                        title="Cambiar idioma"
+                        class="sget-language-selector h-10 px-2 rounded-2xl bg-slate-100 dark:bg-slate-900/80 text-xs font-black
+                               text-slate-700 dark:text-slate-200 border border-slate-300/50 dark:border-white/10
+                               cursor-pointer focus:outline-none transition-all">
+                    <option value="es" <?= $idiomaActual === 'es' ? 'selected' : ''; ?>>🇪🇸 ESP</option>
+                    <option value="en" <?= $idiomaActual === 'en' ? 'selected' : ''; ?>>🇺🇸 ENG</option>
+                </select>
+                <noscript><button type="submit" class="sget-btn sget-btn--sm" style="margin-left:.5rem">Aplicar</button></noscript>
+            </form>
         </div>
 
         <!-- BOTÓN DE MODO OSCURO / CLARO -->

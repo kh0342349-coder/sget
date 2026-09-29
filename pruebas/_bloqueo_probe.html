@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_bloqueo_probe.html
+    -----------------------------------------------------------------------------
+    Sonda del BLOQUEO DE SESIÓN POR INACTIVIDAD (js/inactividad.js).
+
+    Reproduce el flujo REAL (no solo "enseñar" el modal con display:flex):
+      1. abre una sesión de administrador ya bloqueada,
+      2. carga un módulo del panel, donde el JS detecta el bloqueo y lo aplica,
+      3. comprueba que la página entera queda inutilizable, SIDEBAR INCLUIDO.
+
+    Lo que se verifica:
+      · el velo tapa el sidebar (elementFromPoint sobre un enlace del menú),
+      · el sidebar queda `inert` y sin foco,
+      · el scroll está bloqueado,
+      · el Tab no se escapa del modal,
+      · un clic real sobre el sidebar NO navega.
+
+    Uso:  http://127.0.0.1:8899/pruebas/_bloqueo_probe.html
+    -----------------------------------------------------------------------------
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda del bloqueo de sesión</title>
+    <style>body{margin:0;font:12px monospace}#r{padding:6px;background:#111;color:#0f0}iframe{width:1400px;height:900px;border:0}</style>
+</head>
+<body>
+<pre id="r">ejecutando…</pre>
+<iframe id="f" src="_sesion_admin.php?bloquear=1"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+const anotar = (ok, t, d = '') => { if (!ok) fallos++; salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + t + (d ? ' | ' + d : '')); };
+const info = t => salida.push('INFO  | ' + t);
+const pintar = () => document.getElementById('r').textContent =
+    'BLOQUEO_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nBLOQUEO_END';
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+async function run() {
+    const marco = document.getElementById('f');
+    await esperar(1500);
+
+    // Página real del panel (el JS aplica el bloqueo al arrancar)
+    marco.contentWindow.location.href = '../Admin/usuarios.php';
+    await esperar(3000);
+
+    const doc = marco.contentDocument, win = marco.contentWindow;
+    const modal = doc.getElementById('modalBloqueoInactividad');
+
+    if (!modal) { anotar(false, 'El módulo incluye el modal de bloqueo', 'no existe #modalBloqueoInactividad'); return pintar(); }
+    anotar(true, 'El módulo incluye el modal de bloqueo');
+
+    // ¿El flujo real lo dejó abierto?
+    const abierto = getComputedStyle(modal).display !== 'none';
+    anotar(abierto, 'El bloqueo se aplicó automáticamente (flujo real de inactividad.js)',
+           'display=' + getComputedStyle(modal).display);
+    if (!abierto) return pintar();
+
+    /* ---------------- SIDEBAR ---------------- */
+    const sidebar = doc.querySelector('.sget-sidebar') || doc.getElementById('sidebar') || doc.querySelector('aside');
+    if (!sidebar) {
+        anotar(false, 'Se encontró el sidebar en la página');
+    } else {
+        info('sidebar: <' + sidebar.tagName.toLowerCase() + ' id="' + (sidebar.id || '-') + '" class="' + sidebar.className.slice(0, 60) + '">');
+
+        // 1) inert
+        anotar(sidebar.inert === true, 'El sidebar queda marcado inert', 'inert=' + sidebar.inert);
+
+        // 2) aria-hidden
+        anotar(sidebar.getAttribute('aria-hidden') === 'true', 'El sidebar queda aria-hidden para lectores de pantalla',
+               'aria-hidden=' + sidebar.getAttribute('aria-hidden'));
+
+        // 3) Prueba de impacto real: ¿qué elemento hay ENCIMA de un enlace del menú?
+        const enlace = sidebar.querySelector('a.sidebar-link, a[href]');
+        if (!enlace) {
+            anotar(false, 'El sidebar tiene enlaces de navegación');
+        } else {
+            const r = enlace.getBoundingClientRect();
+            const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+            const hit = doc.elementFromPoint(cx, cy);
+            info('elementFromPoint sobre «' + enlace.textContent.trim().slice(0, 24) + '» = ' +
+                 (hit ? hit.tagName.toLowerCase() + (hit.id ? '#' + hit.id : '') +
+                    (hit.className && typeof hit.className === 'string' ? '.' + hit.className.split(' ')[0] : '') : 'nada'));
+
+            anotar(hit !== enlace && !enlace.contains(hit),
+                   'ENCIMA de un enlace del sidebar está el bloqueo (no el enlace)',
+                   hit ? hit.tagName.toLowerCase() + '.' + String(hit.className).split(' ')[0] : 'nada');
+            anotar(modal.contains(hit), 'El elemento que recibe el clic pertenece al modal de bloqueo',
+                   hit ? hit.tagName.toLowerCase() : 'nada');
+
+            // 4) Clic real de ratón sobre el sidebar: no debe navegar
+            const antes = win.location.pathname;
+            const realista = new win.MouseEvent('click', { bubbles: true, cancelable: true, clientX: cx, clientY: cy });
+            hit ? hit.dispatchEvent(realista) : enlace.dispatchEvent(realista);
+            await esperar(700);
+            anotar(win.location.pathname === antes, 'Un clic sobre el sidebar NO navega a otro módulo',
+                   antes + ' -> ' + win.location.pathname);
+
+            // 5) Si el elemento de encima es el propio velo, el clic se anula
+            if (hit && hit === modal) {
+                anotar(true, 'El clic cae en la capa del bloqueo (se cancela en el backdrop)');
+            }
+        }
+    }
+
+    /* ---------------- El resto de la página ---------------- */
+    // `inert` no se propaga como propiedad: hay que buscar el ancestro marcado.
+    const inertAncestro = (nodo) => {
+        let n = nodo;
+        while (n && n !== document.body) { if (n.inert === true) return n; n = n.parentElement; }
+        return null;
+    };
+
+    const main = doc.querySelector('.sget-main, main');
+    const rama = main ? inertAncestro(main) : null;
+    anotar(!!rama, 'El contenido principal queda dentro de una rama inert', rama ? rama.className.split(' ')[0] : 'sin <main>');
+
+    // Ninguna rama principal de la página puede quedar fuera del bloqueo
+    const sueltas = Array.from(doc.body.children)
+        .filter(n => n !== modal && n.tagName !== 'SCRIPT' && n.tagName !== 'STYLE')
+        .filter(n => n.inert !== true);
+    anotar(sueltas.length === 0, 'TODO el contenido de <body> queda inert salvo el propio bloqueo',
+           sueltas.map(s => s.tagName.toLowerCase() + (s.id ? '#' + s.id : '')).join(', '));
+
+    anotar(doc.documentElement.style.overflow === 'hidden', 'El scroll de la página está bloqueado',
+           'overflow=' + doc.documentElement.style.overflow);
+
+    /* ---------------- Foco atrapado en el modal ---------------- */
+    const input = doc.getElementById('inputPasswordModal');
+    anotar(input && doc.activeElement === input, 'El foco entra en el campo de contraseña del bloqueo',
+           doc.activeElement ? doc.activeElement.tagName + '#' + doc.activeElement.id : 'nada');
+
+    // El foco NO puede saltar a un enlace del sidebar con Shift+Tab
+    if (sidebar) {
+        const tab = new win.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+        input.dispatchEvent(tab);
+        await esperar(150);
+        anotar(modal.contains(doc.activeElement), 'Shift+Tab no saca el foco del modal',
+               doc.activeElement ? doc.activeElement.tagName + '#' + doc.activeElement.id : 'nada');
+    }
+
+    // Escape no debe cerrar el bloqueo
+    doc.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await esperar(150);
+    anotar(getComputedStyle(modal).display !== 'none', 'Escape NO cierra el bloqueo de sesión');
+
+    /* ---------------- Botón de cerrar sesión (única salida) ---------------- */
+    const salir = doc.getElementById('enlaceCerrarSesionInactividad');
+    anotar(!!salir, 'El modal ofrece la salida «Cerrar sesión»');
+}
+
+run().then(pintar).catch(e => { anotar(false, 'La sonda se ejecutó sin errores', e.message); pintar(); });
+</script>
+</body>
+</html>

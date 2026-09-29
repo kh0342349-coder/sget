@@ -113,9 +113,16 @@ final class ViajeService
             ->requerido('id_veh', 'El vehículo')
             ->entero('id_veh', 'El vehículo', 1)
             ->fecha('fec_via', 'La fecha de salida')
-            ->hora('hor_sal_via', 'La hora de salida')
-            ->requerido('val_via', 'La tarifa')
-            ->decimal('val_via', 'La tarifa', 1, 99999999);
+            ->hora('hor_sal_via', 'La hora de salida');
+
+        /* La TARIFA no se pide en el formulario a propósito: la define la RUTA.
+           Antes era obligatoria, así que el conductor tenía que saber el precio
+           (y la herencia de la tarifa que hace guardar() era inalcanzable,
+           porque validar() ya había devuelto el error). Ahora se valida
+           solamente si viene escrita. */
+        if (isset($post['val_via']) && (string)$post['val_via'] !== '') {
+            $v->decimal('val_via', 'La tarifa', 0, 99999999);
+        }
 
         // Coherencia fecha/hora: no se puede agendar en el pasado
         try {
@@ -199,7 +206,7 @@ final class ViajeService
         $idVeh   = (int)$post['id_veh'];
         $fec     = Fecha::fecha($post['fec_via'], 'fecha de salida');
         $hora    = Fecha::hora($post['hor_sal_via'], 'hora de salida', true);
-        $val     = (float)$post['val_via'];
+        $val     = (float)($post['val_via'] ?? 0);
         $llegada = Fecha::hora($post['hor_lleg_via'] ?? null, 'hora de llegada', false);
         $cupos   = (int)($post['cup_tot'] ?? 0);
         if ($cupos <= 0) {
@@ -253,14 +260,51 @@ final class ViajeService
                     'mensaje' => 'No se pudo guardar el viaje: ' . $e->getMessage()];
         }
 
+        // Aviso al conductor. Se hace FUERA de la transacción: si el buzón falla,
+        // el viaje ya quedó guardado y no se debe perder por un simple aviso.
+        // En una edición solo se avisa si el conductor o la salida cambiaron, para
+        // no bombardear al conductor con avisos de cada guardado.
+        $detalle = Database::one(
+            "SELECT r.nom_rut, r.ori_rut, r.des_rut, v.cup_tot, veh.pla_veh
+               FROM viaje v
+               INNER JOIN rutas r     ON r.id_rut = v.id_rut_via
+               LEFT JOIN vehiculo veh ON veh.id_veh = v.id_veh
+              WHERE v.id_via = ?",
+            [$id]
+        ) ?: [];
+
+        $cambioRelevante = true;
+        if ($id > 0 && isset($post['__editado'])) {
+            $previo = self::porId($id) ?: [];
+            $cambioRelevante = (int)($previo['id_usu_via'] ?? 0) !== $idUsu
+                || (string)($previo['fec_via'] ?? '') !== $fec
+                || (string)($previo['hor_sal_via'] ?? '') !== $hora;
+        }
+
+        if ($cambioRelevante) {
+            NotificacionService::notificarAsignacionConductor($idUsu, $id, [
+                'ruta'    => (string)($detalle['nom_rut'] ?? ''),
+                'origen'  => (string)($detalle['ori_rut'] ?? ''),
+                'destino' => (string)($detalle['des_rut'] ?? ''),
+                'salida'  => Fecha::legible($fec . ' ' . $hora),
+                'placa'   => (string)($detalle['pla_veh'] ?? ''),
+                'cupos'   => (int)($detalle['cup_tot'] ?? $cupos),
+            ]);
+        }
+
+        // El mensaje depende de si era alta o edición. Antes usaba `$id > 0`,
+        // pero `$id` ya vale el id nuevo tras el INSERT: TODOS los altas
+        // respondían "Viaje actualizado correctamente".
+        $eraEdicion = $id > 0;
+
         Logger::registrar(
             Database::pdo(),
-            $id > 0 && isset($post['__editado']) ? 'EDITAR_VIAJE' : 'CREAR_VIAJE',
+            $eraEdicion ? 'EDITAR_VIAJE' : 'CREAR_VIAJE',
             sprintf('Viaje #%d programado para el %s %s (conductor %d / vehiculo %d)',
                 $id, $fec, $hora, $idUsu, $idVeh)
         );
 
-        return ['ok' => true, 'id' => $id, 'mensaje' => $id > 0 ? 'Viaje actualizado correctamente.' : 'Viaje programado correctamente.'];
+        return ['ok' => true, 'id' => $id, 'mensaje' => $eraEdicion ? 'Viaje actualizado correctamente.' : 'Viaje programado correctamente.'];
     }
 
     /* ================================================================== */
@@ -348,6 +392,17 @@ final class ViajeService
                 'motivo'    => ViajeService::etiquetaMotivo($motivo),
             ], $anotacion !== '' ? $anotacion : 'Sin anotación adicional.', $pasajeros);
 
+            // Y al CONDUCTOR: era el destinatario que faltaba. Sin este aviso
+            // el conductor se enteraba de la cancelación al llegar a la terminal.
+            NotificacionService::notificarCancelacionConductor(
+                (int)$viaje['id_usu_via'],
+                $idViaje,
+                trim(($viaje['nom_rut'] ?? '') . ' (' . ($viaje['ori_rut'] ?? '?') . ' → ' . ($viaje['des_rut'] ?? '?') . ')'),
+                $instante,
+                ViajeService::etiquetaMotivo($motivo),
+                $anotacion !== '' ? $anotacion : 'Sin anotación adicional.'
+            );
+
             Database::commit();
         } catch (Throwable $e) {
             Database::rollback();
@@ -385,6 +440,14 @@ final class ViajeService
         Database::commit();
 
         Logger::registrar(Database::pdo(), 'FINALIZAR_VIAJE', "Viaje #{$idViaje} finalizado por " . Auth::nombre() . '.');
+
+        // Aviso a los pasajeros: el viaje terminó y ya pueden calificarlo.
+        NotificacionService::notificarSalida(
+            $idViaje,
+            trim(($viaje['nom_rut'] ?? '') . ' (' . ($viaje['ori_rut'] ?? '?') . ' → ' . ($viaje['des_rut'] ?? '?') . ')'),
+            Fecha::legible($viaje['fec_via'] . ' ' . $viaje['hor_sal_via'])
+        );
+
         return ['ok' => true, 'mensaje' => "Viaje #{$idViaje} finalizado. Conductor y vehículo liberados."];
     }
 
@@ -399,6 +462,14 @@ final class ViajeService
         }
 
         Database::query("UPDATE viaje SET est_via = ?, salio = 1 WHERE id_via = ?", [Config::VIA_EN_CURSO, $idViaje]);
+
+        // Los pasajeros reservados se enteran de que la unidad ya salió.
+        NotificacionService::notificarSalida(
+            $idViaje,
+            trim(($viaje['nom_rut'] ?? '') . ' (' . ($viaje['ori_rut'] ?? '?') . ' → ' . ($viaje['des_rut'] ?? '?') . ')'),
+            Fecha::legible($viaje['fec_via'] . ' ' . $viaje['hor_sal_via'])
+        );
+
         return ['ok' => true, 'mensaje' => "Viaje #{$idViaje} marcado «En curso»."];
     }
 

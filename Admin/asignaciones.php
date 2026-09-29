@@ -1,465 +1,743 @@
 <?php
-// Archivo: Admin/asignaciones.php
-date_default_timezone_set('America/Bogota');
-session_start();
-include '../assets/conexion.php';
+/**
+ * Admin/asignaciones.php
+ * -----------------------------------------------------------------------------
+ * MÓDULO: RECAUDO Y ABORDAJE  (Admin)
+ * -----------------------------------------------------------------------------
+ * POR QUÉ SE REESCRIBIÓ ENTERO
+ *   El módulo tenía un fallo que hacía que NUNCA funcionara: insertaba las
+ *   reservas con `estado_pago = 'Completado'`, un valor que no existe en el
+ *   ENUM de la tabla (`Pendiente`, `Confirmada`, `Cancelada`). El INSERT
+ *   fallaba, el código no comprobaba el resultado y aun así pintaba
+ *   "¡Asignación registrada con éxito!" con el ticket de la reserva 0.
+ *
+ *   Como además todo lo demás quedó en 'Pendiente', en la base no había ni una
+ *   sola reserva 'Confirmada'… y por eso el módulo de Ganancias mostraba $0
+ *   siempre, independientemente de la caja real.
+ *
+ * AHORA
+ *   · Toda la lógica de reserva vive en services/ReservaService.php: capacidad,
+ *     cobro, cancelación y avisos al pasajero. Esta página solo dibuja.
+ *   · El cobro deja la reserva en 'Confirmada' con su fecha, o en 'Pendiente'
+ *     si se cobra en el punto de embarque (que es lo habitual en transporte).
+ *   · Se puede COBRAR una reserva pendiente, y CANCELARLA devolviendo el cupo.
+ *   · Cada acción deja el rastro en la auditoría y avisa al pasajero.
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-// 1. Seguridad y Rol[cite: 3]
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
-    header("Location: ../index.php");
-    exit();
-}
+require_once __DIR__ . '/../core/bootstrap.php';
 
-// BLOQUEO DE SEGURIDAD POR RESTRICCIONES[cite: 3]
-$idUsuarioActual = $_SESSION['id_usu'] ?? 0;
+Auth::requerirAdmin();
 Auth::requerirAcceso('asignaciones');
 
-$mensaje = "";
+if (!empty($_GET['ok']))       Flash::exito((string)$_GET['ok']);
+elseif (!empty($_GET['error'])) Flash::error((string)$_GET['error']);
 
-// 2. Lógica para CREAR RESERVA Y ASIGNACIÓN (Soporta pasajeros registrados y sin registro)[cite: 3]
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['asignar'])) {
-    $id_viaje = intval($_POST['id_viaje']);
-    $tipo_pasajero = $_POST['tipo_pasajero'] ?? 'registrado';
-    $metodo_pago = htmlspecialchars($_POST['metodo_pago'] ?? 'Efectivo');
-    $valor_pagado = floatval($_POST['valor_pagado'] ?? 0);
-    $cantidad_puestos = intval($_POST['cantidad_puestos'] ?? 1);
-    $estado_pago = 'Completado';
+// Cierre automático de viajes vencidos (mantenimiento transversal)
+ViajeService::cerrarVencidos();
 
-    if ($cantidad_puestos < 1) $cantidad_puestos = 1;
+/* -------------------------------------------------------------------------- */
+/* Datos                                                                      */
+/* -------------------------------------------------------------------------- */
+$hoy = date('Y-m-d');
 
-    $conexion->begin_transaction();
-    try {
-        // Si es un pasajero sin registro (ocasional), creamos un usuario temporal rápido con rol 3 (Pasajero)
-        if ($tipo_pasajero === 'ocasional') {
-            $nombre_ocasional = trim($_POST['nombre_ocasional'] ?? '');
-            if (empty($nombre_ocasional)) {
-                throw new Exception("El nombre del pasajero sin registro es obligatorio.");
-            }
-            $doc_ocasional = 'OCAS-' . time() . '-' . rand(100, 999);
-            $email_ocasional = strtolower(str_replace(' ', '_', $nombre_ocasional)) . '_' . time() . '@sget.local';
-            
-            // Consulta corregida sin 'contra_usu'
-            $stmtUser = $conexion->prepare("INSERT INTO usuario (num_doc_usu, tip_doc_usu, nom_usu, corre_usu, id_rol_usu, estado) VALUES (?, 'CC', ?, ?, 3, 1)");
-            $stmtUser->bind_param("sss", $doc_ocasional, $nombre_ocasional, $email_ocasional);
-            $stmtUser->execute();
-            $id_pasajero = $conexion->insert_id;
-        } else {
-            $id_pasajero = intval($_POST['id_pasajero']);
-            if ($id_pasajero <= 0) {
-                throw new Exception("Debe seleccionar un pasajero válido.");
-            }
-        }
+$viajes = Database::all(
+    "SELECT v.id_via, v.fec_via, v.hor_sal_via, v.val_via, v.cup_tot, v.cup_dis, v.est_via,
+            r.nom_rut, r.ori_rut, r.des_rut, r.img_rut, r.val_rut,
+            u.nom_usu AS conductor, veh.pla_veh,
+            (SELECT COUNT(*) FROM reserva res
+              WHERE res.id_via_res = v.id_via AND res.estado_pago = ?) AS vendidos,
+            (SELECT COALESCE(SUM(res.valor_pagado), 0) FROM reserva res
+              WHERE res.id_via_res = v.id_via AND res.estado_pago = ?) AS recaudo
+       FROM viaje v
+       LEFT JOIN rutas r     ON r.id_rut   = v.id_rut_via
+       LEFT JOIN usuario u  ON u.id_usu   = v.id_usu_via
+       LEFT JOIN vehiculo veh ON veh.id_veh = v.id_veh
+      WHERE v.est_via IN (?, ?)
+      ORDER BY v.fec_via ASC, v.hor_sal_via ASC",
+    [Config::RES_CONFIRMADA, Config::RES_CONFIRMADA, Config::VIA_PROGRAMADO, Config::VIA_EN_CURSO]
+);
 
-        // Verificar cupos del viaje
-        $stmtCheck = $conexion->prepare("SELECT v.cup_dis, v.cup_tot, veh.cap_veh FROM viaje v LEFT JOIN vehiculo veh ON v.id_veh = veh.id_veh WHERE v.id_via = ? FOR UPDATE");
-        $stmtCheck->bind_param("i", $id_viaje);
-        $stmtCheck->execute();
-        $viaje = $stmtCheck->get_result()->fetch_assoc();
+// Resumen del día (caja): solo reservas confirmadas, que es dinero real
+$resumen = [
+    'cupos_vendidos' => (int) Database::scalar(
+        "SELECT COUNT(*) FROM reserva res INNER JOIN viaje v ON v.id_via = res.id_via_res
+          WHERE res.estado_pago = ? AND v.fec_via = ?",
+        [Config::RES_CONFIRMADA, $hoy]),
+    'recaudo'        => (float) Database::scalar(
+        "SELECT COALESCE(SUM(res.valor_pagado), 0) FROM reserva res INNER JOIN viaje v ON v.id_via = res.id_via_res
+          WHERE res.estado_pago = ? AND v.fec_via = ?",
+        [Config::RES_CONFIRMADA, $hoy]),
+    'pendientes'     => (int) Database::scalar(
+        "SELECT COUNT(*) FROM reserva res INNER JOIN viaje v ON v.id_via = res.id_via_res
+          WHERE res.estado_pago = ? AND v.fec_via = ?",
+        [Config::RES_PENDIENTE, $hoy]),
+    'por_cobrar'     => (float) Database::scalar(
+        "SELECT COALESCE(SUM(res.valor_pagado), 0) FROM reserva res
+          WHERE res.estado_pago = ? AND res.fecha_pago IS NULL",
+        [Config::RES_PENDIENTE]),
+];
 
-        if ($viaje) {
-            $cupos_actuales = is_null($viaje['cup_dis']) ? (is_null($viaje['cup_tot']) ? (is_null($viaje['cap_veh']) ? 10 : intval($viaje['cap_veh'])) : intval($viaje['cup_tot'])) : intval($viaje['cup_dis']);
+$pasajeros = Database::all(
+    "SELECT id_usu, nom_usu, num_doc_usu, corre_usu
+       FROM usuario WHERE id_rol_usu = ? AND estado = ?
+      ORDER BY nom_usu ASC",
+    [Config::ROL_PASAJERO, Config::USU_ACTIVO]
+);
 
-            if ($cupos_actuales >= $cantidad_puestos) {
-                $checkColumnas = $conexion->query("SHOW COLUMNS FROM reserva LIKE 'metodo_pago'");
-                
-                if ($checkColumnas && $checkColumnas->num_rows > 0) {
-                    $stmtIns = $conexion->prepare("INSERT INTO reserva (id_usu_res, id_via_res, metodo_pago, valor_pagado, estado_pago) VALUES (?, ?, ?, ?, ?)");
-                    $stmtIns->bind_param("iisds", $id_pasajero, $id_viaje, $metodo_pago, $valor_pagado, $estado_pago);
-                } else {
-                    $stmtIns = $conexion->prepare("INSERT INTO reserva (id_usu_res, id_via_res) VALUES (?, ?)");
-                    $stmtIns->bind_param("ii", $id_pasajero, $id_viaje);
-                }
-                
-                $stmtIns->execute();
-                $id_nueva_reserva = $conexion->insert_id;
-                
-                $nuevos_cupos = $cupos_actuales - $cantidad_puestos;
-                $stmtUpd = $conexion->prepare("UPDATE viaje SET cup_dis = ? WHERE id_via = ?");
-                $stmtUpd->bind_param("ii", $nuevos_cupos, $id_viaje);
-                $stmtUpd->execute();
-                
-                $conexion->commit();
-                
-                $script_pdf = "<script>window.open('imprimir_ticket.php?id={$id_nueva_reserva}', '_blank');</script>";
-
-                $mensaje = "
-                <div class='bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-2xl shadow-lg flex items-center justify-between mb-6'>
-                    <div class='flex items-center gap-3'>
-                        <i class='fas fa-check-circle text-lg'></i>
-                        <span class='text-sm font-semibold'>¡Asignación de {$cantidad_puestos} puesto(s) registrada con éxito! Abriendo ticket...</span>
-                    </div>
-                    <a href='imprimir_ticket.php?id={$id_nueva_reserva}' target='_blank' class='bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all flex items-center gap-2'>
-                        <i class='fas fa-file-pdf'></i> Ver Ticket
-                    </a>
-                </div>" . $script_pdf;
-            } else {
-                $conexion->rollback();
-                $mensaje = "
-                <div class='bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl shadow-lg flex items-center gap-3 mb-6'>
-                    <i class='fas fa-ban text-lg'></i>
-                    <span class='text-sm font-semibold'>No hay suficientes cupos disponibles. Solo quedan {$cupos_actuales} puestos.</span>
-                </div>";
-            }
-        }
-    } catch (Exception $e) {
-        $conexion->rollback();
-        $mensaje = "
-        <div class='bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl shadow-lg flex items-center gap-3 mb-6'>
-            <i class='fas fa-bug text-lg'></i>
-            <span class='text-sm font-semibold'>Error interno: " . htmlspecialchars($e->getMessage()) . "</span>
-        </div>";
-    }
-}
-
-// 3. CONSULTAS GENERALES[cite: 3]
-$pasajerosArr = [];
-$resPasajeros = $conexion->query("SELECT id_usu, nom_usu FROM usuario WHERE id_rol_usu = 3 AND estado = 1 ORDER BY nom_usu ASC");
-while($p = $resPasajeros->fetch_assoc()) { $pasajerosArr[] = $p; }
-
-// Consulta de Viajes Disponibles incluyendo la imagen de la ruta (img_rut)
-$sqlViajesDisponibles = "SELECT v.id_via, 
-                                COALESCE(r.nom_rut, CONCAT('Ruta #', v.id_rut_via)) as nom_rut, 
-                                r.img_rut,
-                                v.fec_via,
-                                v.hor_sal_via, 
-                                COALESCE(v.cup_dis, v.cup_tot, veh.cap_veh, 10) as cup_dis, 
-                                COALESCE(v.val_via, r.val_rut, 0) as precio_ruta,
-                                u.nom_usu as nom_conductor,
-                                veh.pla_veh
-                         FROM viaje v 
-                         LEFT JOIN rutas r ON v.id_rut_via = r.id_rut 
-                         LEFT JOIN usuario u ON v.id_usu_via = u.id_usu 
-                         LEFT JOIN vehiculo veh ON v.id_veh = veh.id_veh
-                         WHERE v.est_via IN ('Programado', 'En curso')
-                         ORDER BY v.id_via DESC";
-$viajesDisponibles = $conexion->query($sqlViajesDisponibles);
+$tituloPagina = 'Recaudo y abordaje';
+include __DIR__ . '/../views/partials/head.php';
 ?>
-<!DOCTYPE html>
-<html lang="es" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SGET - Asignaciones y Recaudo</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- CSS MODULAR DEL PANEL (antes: style_admin.css, que no existia en esta carpeta) -->
-    <link rel="stylesheet" href="../assets/css/01-base.css">
-    <link rel="stylesheet" href="../assets/css/02-layout.css">
-    <link rel="stylesheet" href="../assets/css/03-componentes.css">
-    <link rel="stylesheet" href="../assets/css/04-modales.css">
-    <link rel="stylesheet" href="../assets/css/05-tablas.css">
-    <link rel="stylesheet" href="../assets/css/06-responsive.css">
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        'neon-azul': '#38bdf8',
-                        'neon-morado': '#a855f7'
-                    }
-                }
-            }
-        }
-    </script>
-</head>
-<body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen antialiased">
-        <?php include '../includes/sidebar.php'; ?>
-    
-    <div id="main-content-wrapper" class="ml-72 flex flex-col min-h-screen flex-1 transition-all duration-300 min-w-0">
-        <?php include '../includes/header.php'; ?>
-        
-        <main class="space-y-8 flex-grow pb-12 relative z-10 p-8 max-w-[1600px] w-auto mx-auto w-full">
-            
-            <!-- ENCABEZADO Y BOTÓN DE AYUDA -->
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/5 dark:bg-white/[0.02] p-6 rounded-3xl border border-slate-200 dark:border-white/5 backdrop-blur-md">
-                <div>
-                    <div class="flex items-center gap-2.5">
-                        <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Gestión de Asignaciones y Pagos</h1>
-                        
-                        <!-- BOTÓN DE AYUDA DEL SISTEMA -->
-                        <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
-                            <i class="fas fa-question text-[10px]"></i>
-                        </button>
+<?php include __DIR__ . '/../includes/sidebar.php'; ?>
+
+<div class="sget-shell">
+    <?php include __DIR__ . '/../includes/header.php'; ?>
+
+    <main class="sget-main">
+        <header class="sget-page-head">
+            <div>
+                <h1 class="sget-page-title">
+                    <i class="fas fa-cash-register text-emerald-500"></i> Recaudo y abordaje
+                </h1>
+                <p class="sget-page-sub">
+                    Registra el cobro de cada puesto, deja el recaudo pendiente cuando se paga al embarkar
+                    y libera cupos cuando un pasajero cancela.
+                </p>
+            </div>
+        </header>
+
+        <?= Flash::render() ?>
+
+        <!-- ============================== CAJA ============================== -->
+        <section class="sget-grid sget-grid--kpi">
+            <?php
+            $kpis = [
+                ['fa-sack-dollar', 'var(--sget-emerald)', 'Recaudo de hoy',    InformacionService::money($resumen['recaudo'])],
+                ['fa-ticket',      'var(--sget-azul)',    'Puestos vendidos',  InformacionService::numero($resumen['cupos_vendidos'])],
+                ['fa-clock',       'var(--sget-ambars)',  'Reservas por cobrar', InformacionService::numero($resumen['pendientes'])],
+                ['fa-money-bill-wave', 'var(--sget-rojo)', 'Importe por cobrar', InformacionService::money($resumen['por_cobrar'])],
+            ];
+            foreach ($kpis as [$icono, $color, $titulo, $valor]): ?>
+                <div class="sget-card sget-kpi">
+                    <span class="sget-kpi__icono"
+                          style="background:color-mix(in srgb,<?= $color ?> 14%,transparent);color:<?= $color ?>">
+                        <i class="fas <?= $icono ?>"></i></span>
+                    <div style="min-width:0">
+                        <p class="sget-label"><?= $titulo ?></p>
+                        <p class="sget-kpi__valor" style="font-size:1.25rem"><?= $valor ?></p>
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Selecciona directamente el viaje en tarjeta para agregar pasajeros registrados o sin registro, comprobar pagos y apartar puestos.</p>
+                </div>
+            <?php endforeach; ?>
+        </section>
+
+        <p class="sget-help">
+            <i class="fas fa-circle-info"></i>
+            Solo cuentan como dinero las reservas <strong>confirmadas</strong>. Las que quedan
+            <strong>pendientes</strong> son puestos apartados que todavía no se han cobrado.
+        </p>
+
+        <!-- ============================= VIAJES ============================= -->
+        <?php if (empty($viajes)): ?>
+            <div class="sget-vacio">
+                <span class="sget-vacio__icono"><i class="fas fa-bus"></i></span>
+                <h2 class="sget-label" style="font-size:.875rem">No hay viajes activos</h2>
+                <p class="sget-page-sub" style="margin:0">Programa un viaje para poder registrar el recaudo.</p>
+                <a class="sget-btn sget-btn--primario" style="margin-top:1rem" href="viajes.php">
+                    <i class="fas fa-plus"></i> Ir a Programación de Viajes
+                </a>
+            </div>
+        <?php else: ?>
+
+            <div class="sget-toolbar">
+                <div class="sget-search">
+                    <i class="fas fa-magnifying-glass"></i>
+                    <input type="search" id="buscarViajeRecaudo" class="sget-input"
+                           placeholder="Buscar por ruta, conductor o placa… (Ctrl+K)">
                 </div>
             </div>
 
-            <?php if (!empty($mensaje)) echo $mensaje; ?>
+            <section class="sget-grid sget-grid--ancho">
+                <?php foreach ($viajes as $v):
+                    $id       = (int)$v['id_via'];
+                    $libres   = (int)($v['cup_dis'] ?? 0);
+                    $totales  = (int)($v['cup_tot'] ?? 0);
+                    $vendidos = (int)$v['vendidos'];
+                    $ocup     = $totales > 0 ? min(100, (int)round(($vendidos / $totales) * 100)) : 0;
+                    $img      = trim((string)($v['img_rut'] ?? ''));
+                ?>
+                    <article class="sget-card sget-fila" data-sget-fila
+                             data-viaje="<?= $id ?>"
+                             style="display:flex;gap:1.25rem;flex-wrap:wrap">
 
-            <!-- SECCIÓN DE VIAJES DISPONIBLES EN TARJETAS CON BOTÓN DE ASIGNACIÓN -->
-            <div class="space-y-6">
-                <div class="flex justify-between items-center bg-white dark:bg-[#121826] p-5 rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl">
-                    <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                        <i class="fas fa-bus text-emerald-400"></i> Viajes Activos y Cupos en Ruta
-                    </h2>
-                    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider bg-black/20 px-3 py-1 rounded-xl border border-white/5">Actualizado en tiempo real</span>
-                </div>
-
-                <?php if($viajesDisponibles && $viajesDisponibles->num_rows > 0): ?>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        <?php 
-                        while($vd = $viajesDisponibles->fetch_assoc()): 
-                            $nombreImagen = trim($vd['img_rut'] ?? '');
-                            $rutaImagen = !empty($nombreImagen) ? "../img/rutas/" . $nombreImagen : "";
-                            
-                            $fechaSalida = !empty($vd['fec_via']) ? date('d/m/Y', strtotime($vd['fec_via'])) : 'Sin fecha';
-                            $horaSalida = !empty($vd['hor_sal_via']) ? date('h:i A', strtotime($vd['hor_sal_via'])) : '';
-                        ?>
-                            <div class="relative overflow-hidden rounded-2xl h-64 border border-slate-200 dark:border-white/10 shadow-lg group transition-all duration-300 hover:shadow-2xl flex flex-col justify-between p-4 bg-slate-950">
-                                
-                                <?php if (!empty($nombreImagen) && file_exists("../img/rutas/" . $nombreImagen)): ?>
-                                    <img src="<?php echo htmlspecialchars($rutaImagen); ?>" 
-                                         alt="<?php echo htmlspecialchars($vd['nom_rut']); ?>" 
-                                         class="absolute inset-0 w-full h-full object-cover object-center z-0 opacity-70 transition-transform duration-500 group-hover:scale-110">
-                                <?php endif; ?>
-                                
-                                <div class="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-black/60 z-0"></div>
-
-                                <div class="relative z-10 flex items-center justify-between mb-2">
-                                    <span class="text-[10px] font-mono font-bold text-white/90 bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-md border border-white/10">
-                                        #<?php echo $vd['id_via']; ?>
-                                    </span>
-                                    <?php if(intval($vd['cup_dis']) > 0): ?>
-                                        <span class="text-[9px] font-extrabold uppercase tracking-wider text-emerald-300 bg-emerald-900/60 px-2.5 py-0.5 rounded-full border border-emerald-500/40 flex items-center gap-1 backdrop-blur-md">
-                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span> <?php echo $vd['cup_dis']; ?> cupos libres
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="text-[9px] font-extrabold uppercase tracking-wider text-red-300 bg-red-900/60 px-2.5 py-0.5 rounded-full border border-red-500/40 backdrop-blur-md">
-                                            Agotado
-                                        </span>
-                                    <?php endif; ?>
-                                </div>
-
-                                <div class="relative z-10 space-y-0.5 my-auto">
-                                    <span class="text-[10px] font-black uppercase tracking-widest text-amber-300 drop-shadow-md">
-                                        $<?php echo number_format($vd['precio_ruta'], 0, ',', '.'); ?> COP
-                                    </span>
-                                    <h3 class="font-black text-white text-base tracking-tight leading-tight truncate drop-shadow-lg" title="<?php echo htmlspecialchars($vd['nom_rut']); ?>">
-                                        <?php echo htmlspecialchars($vd['nom_rut']); ?>
-                                    </h3>
-                                    <div class="flex items-center justify-between text-[10px] text-slate-300 pt-1">
-                                        <span><i class="fas fa-user-tie mr-1 text-slate-400"></i> <?php echo htmlspecialchars($vd['nom_conductor'] ?? 'Sin asignar'); ?></span>
-                                        <span class="font-mono text-sky-300"><i class="fas fa-bus mr-1"></i> <?php echo htmlspecialchars($vd['pla_veh'] ?? 'S/P'); ?></span>
-                                    </div>
-                                    <div class="text-[10px] text-slate-300 pt-0.5 font-medium flex items-center gap-1.5">
-                                        <i class="fas fa-calendar-alt text-sky-400"></i> <span><?php echo $fechaSalida; ?> - <?php echo $horaSalida; ?></span>
-                                    </div>
-                                </div>
-
-                                <div class="relative z-10 pt-3 border-t border-white/20">
-                                    <?php if(intval($vd['cup_dis']) > 0): ?>
-                                        <button type="button" 
-                                                onclick="abrirModalAsignar(<?php echo $vd['id_via']; ?>, '<?php echo htmlspecialchars($vd['nom_rut'], ENT_QUOTES); ?>', <?php echo $vd['cup_dis']; ?>, <?php echo $vd['precio_ruta']; ?>)" 
-                                                class="w-full py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-sky-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer">
-                                            <i class="fas fa-user-plus text-xs"></i> Agregar Pasajero
-                                        </button>
-                                    <?php else: ?>
-                                        <button type="button" disabled class="w-full py-2.5 bg-slate-800 text-slate-500 font-bold text-xs uppercase tracking-wider rounded-xl cursor-not-allowed">
-                                            Cupos Agotados
-                                        </button>
-                                    <?php endif; ?>
-                                </div>
-
-                            </div>
-                        <?php endwhile; ?>
-                    </div>
-                <?php else: ?>
-                    <div class="flex flex-col items-center justify-center p-12 bg-white dark:bg-[#121826] rounded-3xl border border-slate-200 dark:border-white/10 shadow-xl text-center">
-                        <div class="w-16 h-16 rounded-2xl bg-sky-500/10 text-sky-400 flex items-center justify-center text-2xl mb-4">
-                            <i class="fas fa-bus"></i>
+                        <!-- Imagen de la ruta -->
+                        <div style="flex:0 0 12rem;min-height:8rem;border-radius:var(--sget-radio);
+                                    overflow:hidden;position:relative;background:var(--sget-superficie-2)">
+                            <?php if ($img !== '' && file_exists(Config::raiz('img/rutas/' . $img))): ?>
+                                <img src="../img/rutas/<?= htmlspecialchars($img, ENT_QUOTES, 'UTF-8') ?>"
+                                     alt="<?= htmlspecialchars((string)$v['nom_rut'], ENT_QUOTES, 'UTF-8') ?>"
+                                     loading="lazy" style="width:100%;height:100%;object-fit:cover">
+                            <?php else: ?>
+                                <span style="display:grid;place-items:center;height:100%;font-size:1.75rem;color:var(--sget-texto-tenue)">
+                                    <i class="fas fa-route"></i>
+                                </span>
+                            <?php endif; ?>
                         </div>
-                        <h3 class="text-base font-bold text-slate-800 dark:text-white">No hay viajes activos</h3>
-                        <p class="text-slate-500 dark:text-slate-400 text-xs mt-1">Actualmente no existen trayectos disponibles para asignación.</p>
-                    </div>
-                <?php endif; ?>
+
+                        <!-- Datos del viaje -->
+                        <div style="flex:1 1 16rem;min-width:0">
+                            <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+                                <span class="sget-badge sget-badge--neutro">#<?= $id ?></span>
+                                <span class="sget-badge <?= ViajeService::claseEstado((string)$v['est_via']) ?>">
+                                    <?= htmlspecialchars((string)$v['est_via'], ENT_QUOTES, 'UTF-8') ?>
+                                </span>
+                                <?php if ($libres === 0): ?>
+                                    <span class="sget-badge sget-badge--error">Agotado</span>
+                                <?php elseif ($ocup >= 80): ?>
+                                    <span class="sget-badge sget-badge--aviso">Casi lleno</span>
+                                <?php endif; ?>
+                            </div>
+
+                            <h3 style="margin:.5rem 0 .125rem;font-weight:800;font-size:1rem">
+                                <?= htmlspecialchars((string)$v['nom_rut'], ENT_QUOTES, 'UTF-8') ?>
+                            </h3>
+                            <p class="sget-help" style="margin:0">
+                                <?= htmlspecialchars(trim(($v['ori_rut'] ?? '') . ' → ' . ($v['des_rut'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+                            </p>
+
+                            <div class="sget-form-3col" style="margin-top:.875rem;gap:.5rem">
+                                <div>
+                                    <p class="sget-label">Salida</p>
+                                    <p class="sget-mono" style="font-size:.8125rem">
+                                        <?= Fecha::legible($v['fec_via'], false) ?><br>
+                                        <span class="sget-suave"><?= Fecha::soloHora($v['hor_sal_via']) ?></span>
+                                    </p>
+                                </div>
+                                <div>
+                                    <p class="sget-label">Conductor</p>
+                                    <p class="sget-truncar" style="font-size:.8125rem">
+                                        <?= htmlspecialchars((string)($v['conductor'] ?: 'Sin asignar'), ENT_QUOTES, 'UTF-8') ?>
+                                        <br><span class="sget-help sget-mono"><?= htmlspecialchars((string)($v['pla_veh'] ?: '—'), ENT_QUOTES, 'UTF-8') ?></span>
+                                    </p>
+                                </div>
+                                <div>
+                                    <p class="sget-label">Ocupación</p>
+                                    <p class="sget-mono" style="font-size:.8125rem;font-weight:800">
+                                        <?= $vendidos ?>/<?= $totales ?>
+                                        <span class="sget-badge <?= $ocup >= 80 ? 'sget-badge--exito' : ($ocup >= 40 ? 'sget-badge--aviso' : 'sget-badge--neutro') ?>">
+                                            <?= $ocup ?>%
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Caja del viaje + acciones -->
+                        <div style="flex:0 1 15rem;display:flex;flex-direction:column;gap:.625rem;min-width:0">
+                            <div>
+                                <p class="sget-label">Recaudo del viaje</p>
+                                <p class="sget-mono" style="font-size:1.125rem;font-weight:800">
+                                    <?= InformacionService::money((float)$v['recaudo']) ?>
+                                </p>
+                                <p class="sget-help">
+                                    Tarifa <?= InformacionService::money((float)$v['val_via']) ?> por puesto
+                                </p>
+                            </div>
+
+                            <div style="display:flex;gap:.5rem;margin-top:auto">
+                                <button type="button" class="sget-btn sget-btn--primario sget-btn--sm" style="flex:1"
+                                        data-sget-accion="abrirRecaudo" data-sget-viaje="<?= $id ?>"
+                                        <?= $libres === 0 ? 'disabled title="Sin cupos libres"' : '' ?>>
+                                    <i class="fas fa-cash-register"></i> Cobrar
+                                </button>
+                                <button type="button" class="sget-btn sget-btn--neutro sget-btn--sm"
+                                        data-sget-accion="verReservas" data-sget-viaje="<?= $id ?>"
+                                        title="Ver y gestionar las reservas de este viaje">
+                                    <i class="fas fa-list-check"></i>
+                                    <?= InformacionService::numero($vendidos) ?>
+                                </button>
+                            </div>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </section>
+        <?php endif; ?>
+    </main>
+</div>
+
+<!-- ============================ MODAL DE RECAUDO ============================ -->
+<div class="sget-modal-wrap" id="modalRecaudo" data-sget-capa data-titulo="Registrar recaudo">
+    <div class="sget-overlay"></div>
+
+    <form class="sget-modal" data-sget-panel novalidate id="formRecaudo"
+          role="dialog" aria-modal="true" aria-labelledby="tituloModalRecaudo">
+
+        <header class="sget-modal__head">
+            <div>
+                <h2 class="sget-modal__titulo" id="tituloModalRecaudo">
+                    <span class="sget-modal__icono"
+                          style="background:color-mix(in srgb,var(--sget-emerald) 14%,transparent);color:var(--sget-emerald)">
+                        <i class="fas fa-cash-register"></i>
+                    </span>
+                    <span>Registrar cobro</span>
+                </h2>
+                <p class="sget-modal__sub" data-sget-texto="viaje">Viaje</p>
+            </div>
+            <button type="button" class="sget-modal__cerrar" data-sget-cerrar aria-label="Cerrar">
+                <i class="fas fa-times"></i>
+            </button>
+        </header>
+
+        <div class="sget-modal__body sget-scroll">
+            <?= Auth::campoToken() ?>
+            <input type="hidden" name="modulo" value="reserva">
+            <input type="hidden" name="accion" value="crear">
+            <input type="hidden" name="id_via" data-sget-campo="id_via" value="0">
+            <input type="hidden" name="id_usu" data-sget-campo="id_usu" value="0">
+
+            <!-- TIPO DE PASAJERO -->
+            <div class="sget-field">
+                <label class="sget-label">Pasajero</label>
+                <div style="display:grid;gap:.375rem;margin-top:.25rem">
+                    <label class="sget-check" for="tipoRegistrado">
+                        <input type="radio" id="tipoRegistrado" name="tipo_pasajero" value="registrado" checked>
+                        <span>Pasajero registrado</span>
+                    </label>
+                    <label class="sget-check" for="tipoOcasional">
+                        <input type="radio" id="tipoOcasional" name="tipo_pasajero" value="ocasional">
+                        <span>Sin registro (ocasional)</span>
+                    </label>
+                </div>
             </div>
 
-        </main>
-    </div>
-
-    <!-- MODAL FLOTANTE: AGREGAR PASAJERO Y CONFIRMAR PAGO -->
-    <div id="overlayAsignar" onclick="cerrarModalAsignar()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
-    <div id="modalAsignar" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
-        <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
-            
-            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
-                <div>
-                    <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                        <i class="fas fa-ticket-alt text-sky-400"></i> Asignación de Pasajero
-                    </h3>
-                    <p id="modalRutaTitulo" class="text-[11px] text-sky-400 font-semibold mt-0.5 truncate max-w-[320px]"></p>
+            <!-- PASAJERO REGISTRADO -->
+            <div data-sget-bloque="registrado" style="margin-top:1rem">
+                <div class="sget-field" data-campo="pasajero">
+                    <label class="sget-label" for="selPasajero">
+                        Buscar pasajero <span class="sget-label__req">*</span>
+                    </label>
+                    <select id="selPasajero" name="pasajero_registrado" class="sget-select">
+                        <option value="">Selecciona un pasajero…</option>
+                        <?php foreach ($pasajeros as $p): ?>
+                            <option value="<?= (int)$p['id_usu'] ?>"
+                                    data-nombre="<?= htmlspecialchars((string)$p['nom_usu'], ENT_QUOTES, 'UTF-8') ?>"
+                                    data-tarifa="<?= (float)0 ?>">
+                                <?= htmlspecialchars(trim($p['nom_usu'] . ' · ' . $p['num_doc_usu']), ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
                 </div>
-                <button onclick="cerrarModalAsignar()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer">
-                    <i class="fas fa-times text-xs"></i>
-                </button>
             </div>
 
-            <form action="asignaciones.php" method="POST" class="space-y-4">
-                <input type="hidden" name="id_viaje" id="input_id_viaje" value="">
-
-                <!-- Selector de Tipo de Pasajero -->
-                <div class="space-y-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tipo de Pasajero</label>
-                    <div class="grid grid-cols-2 gap-2">
-                        <button type="button" id="btnTipoRegistrado" onclick="cambiarTipoPasajero('registrado')" class="py-2 px-3 rounded-xl text-xs font-bold uppercase transition-all bg-sky-500 text-slate-950 shadow-sm cursor-pointer">Registrado</button>
-                        <button type="button" id="btnTipoOcasional" onclick="cambiarTipoPasajero('ocasional')" class="py-2 px-3 rounded-xl text-xs font-bold uppercase transition-all bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white cursor-pointer">Sin Registro (Ocasional)</button>
-                    </div>
-                    <input type="hidden" name="tipo_pasajero" id="input_tipo_pasajero" value="registrado">
+            <!-- PASAJERO OCASIONAL -->
+            <div data-sget-bloque="ocasional" style="margin-top:1rem;display:none">
+                <div class="sget-field" data-campo="nombre_ocasional">
+                    <label class="sget-label" for="nombreOcasional">
+                        Nombre completo <span class="sget-label__req">*</span>
+                    </label>
+                    <input type="text" id="nombreOcasional" name="nombre_ocasional" class="sget-input" maxlength="100"
+                           placeholder="Nombre de quien viaja">
+                    <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
                 </div>
 
-                <!-- Campo para Pasajero Registrado -->
-                <div id="seccionRegistrado" class="space-y-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Seleccionar de la Lista</label>
-                    <select name="id_pasajero" id="select_id_pasajero" class="w-full px-4 py-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs text-slate-800 dark:text-white">
-                        <option value="">Seleccione pasajero registrado...</option>
-                        <?php foreach($pasajerosArr as $p): ?>
-                            <option value="<?php echo $p['id_usu']; ?>"><?php echo htmlspecialchars($p['nom_usu']); ?></option>
+                <div class="sget-form-2col" style="margin-top:1rem">
+                    <div class="sget-field" data-campo="doc_ocasional">
+                        <label class="sget-label" for="docOcasional">Documento (opcional)</label>
+                        <input type="text" id="docOcasional" name="doc_ocasional" class="sget-input" maxlength="20"
+                               inputmode="numeric" placeholder="Si lo tiene, se registra la cuenta">
+                    </div>
+                    <div class="sget-field" data-campo="tel_ocasional">
+                        <label class="sget-label" for="telOcasional">Teléfono (opcional)</label>
+                        <input type="text" id="telOcasional" name="tel_ocasional" class="sget-input" maxlength="20"
+                               placeholder="Para avisarle por WhatsApp">
+                    </div>
+                </div>
+            </div>
+
+            <!-- PUESTOS Y VALOR -->
+            <div class="sget-form-2col" style="margin-top:1rem">
+                <div class="sget-field" data-campo="puestos">
+                    <label class="sget-label" for="inputPuestos">
+                        Puestos <span class="sget-label__req">*</span>
+                    </label>
+                    <input type="number" id="inputPuestos" name="puestos" class="sget-input" min="1" max="60" value="1"
+                           data-sget-autofocus>
+                    <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
+                    <span class="sget-help" data-sget-texto="cupos">Cupos libres: —</span>
+                </div>
+
+                <div class="sget-field" data-campo="metodo_pago">
+                    <label class="sget-label" for="selectMetodo">Método de pago</label>
+                    <select id="selectMetodo" name="metodo_pago" class="sget-select">
+                        <?php foreach (ReservaService::metodosPago() as $m): ?>
+                            <option value="<?= htmlspecialchars($m, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($m, ENT_QUOTES, 'UTF-8') ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
-
-                <!-- Campo para Pasajero Sin Registro -->
-                <div id="seccionOcasional" class="space-y-1.5 hidden">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nombre del Pasajero Ocasional</label>
-                    <input type="text" name="nombre_ocasional" id="input_nombre_ocasional" placeholder="Ej.: Juan Pérez (usuario ocasional)" data-i18n-placeholder-es="Ej.: Juan Pérez (usuario ocasional)" data-i18n-placeholder-en="e.g. John Smith (walk-in)" class="w-full px-4 py-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs text-slate-800 dark:text-white">
-                </div>
-
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="space-y-1.5">
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cantidad de Puestos</label>
-                        <input type="number" name="cantidad_puestos" id="input_cantidad_puestos" value="1" min="1" required class="w-full px-4 py-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs font-mono text-slate-800 dark:text-white" oninput="calcularTotal()">
-                    </div>
-                    <div class="space-y-1.5">
-                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Valor Total ($)</label>
-                        <input type="number" name="valor_pagado" id="input_valor_pagado" step="0.01" required class="w-full px-4 py-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs font-mono text-slate-800 dark:text-white">
-                    </div>
-                </div>
-
-                <div class="space-y-1.5">
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Confirmación / Método de Pago</label>
-                    <select name="metodo_pago" required class="w-full px-4 py-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl outline-none focus:border-sky-400 text-xs text-slate-800 dark:text-white">
-                        <option value="Efectivo">Efectivo (Confirmado en ventanilla)</option>
-                        <option value="Transferencia">Transferencia Bancaria (Comprobado)</option>
-                        <option value="Tarjeta">Tarjeta / POS (Aprobado)</option>
-                    </select>
-                </div>
-
-                <div class="pt-2 flex gap-3">
-                    <button type="button" onclick="cerrarModalAsignar()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider cursor-pointer">Cancelar</button>
-                    <button type="submit" name="asignar" class="flex-1 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 hover:opacity-90 transition-all cursor-pointer">
-                        Confirmar y Generar
-                    </button>
-                </div>
-            </form>
-
-        </div>
-    </div>
-
-    <!-- MODAL DE AYUDA DEL MÓDULO -->
-    <div id="overlayAyuda" onclick="cerrarModalAyuda()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300"></div>
-    <div id="modalAyuda" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
-        <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
-            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
-                <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                    <i class="fas fa-info-circle text-sky-400"></i> Guía de Asignaciones y Pagos
-                </h3>
-                <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"><i class="fas fa-times text-xs"></i></button>
             </div>
-            <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-user-plus text-sky-400 mt-0.5"></i>
-                    <span><b>Pasajeros Registrados u Ocasionales:</b> Puedes elegir entre seleccionar un usuario de la lista o ingresar el nombre de un pasajero sin registro.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-chair text-emerald-400 mt-0.5"></i>
-                    <span><b>Puestos y Pago:</b> Indica la cantidad de asientos requeridos y el sistema calculará automáticamente el valor total.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-file-pdf text-purple-400 mt-0.5"></i>
-                    <span><b>Ticket Automático:</b> Tras confirmar la transacción, se descontarán los cupos y se abrirá el PDF con el comprobante[cite: 3].</span>
-                </li>
-            </ul>
-            <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
-                Entendido
-            </button>
+
+            <div class="sget-field" style="margin-top:1rem" data-campo="valor_pagado">
+                <label class="sget-label" for="inputValor">
+                    Valor a cobrar <span class="sget-label__req">*</span>
+                </label>
+                <input type="number" id="inputValor" name="valor_pagado" class="sget-input sget-input--mono"
+                       min="0" step="50" value="0">
+                <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
+                <p class="sget-help">
+                    Se calcula con la tarifa del viaje × puestos. Puedes ajustarlo si hubo descuento.
+                </p>
+            </div>
+
+            <label class="sget-check" for="inputConfirmar" style="margin-top:1rem">
+                <input type="checkbox" id="inputConfirmar" name="confirmar" value="1" checked>
+                <span>
+                    <strong>El pago se recibe ahora</strong><br>
+                    <span class="sget-help">Desmárcalo si se cobra al embarkar: la reserva queda pendiente
+                    y el cupo queda apartado igual.</span>
+                </span>
+            </label>
         </div>
+
+        <footer class="sget-modal__foot">
+            <button type="button" class="sget-btn sget-btn--neutro" data-sget-cerrar>Cancelar</button>
+            <button type="submit" class="sget-btn sget-btn--primario">
+                <i class="fas fa-receipt"></i> Registrar cobro
+            </button>
+        </footer>
+    </form>
+</div>
+
+<!-- ========================= MODAL DE RESERVAS ========================= -->
+<div class="sget-modal-wrap" id="modalReservasViaje" data-sget-capa data-titulo="Reservas del viaje">
+    <div class="sget-overlay"></div>
+    <div class="sget-modal sget-modal--lg" data-sget-panel role="dialog" aria-modal="true" aria-labelledby="tituloModalReservas">
+        <header class="sget-modal__head">
+            <div>
+                <h2 class="sget-modal__titulo" id="tituloModalReservas">
+                    <span class="sget-modal__icono"><i class="fas fa-ticket"></i></span>
+                    <span>Reservas del viaje</span>
+                </h2>
+                <p class="sget-modal__sub" data-sget-texto="viaje">Viaje</p>
+            </div>
+            <button type="button" class="sget-modal__cerrar" data-sget-cerrar aria-label="Cerrar">
+                <i class="fas fa-times"></i>
+            </button>
+        </header>
+
+        <div class="sget-modal__body sget-scroll" data-sget-lista-reservas>
+            <p class="sget-help">Cargando…</p>
+        </div>
+
+        <footer class="sget-modal__foot">
+            <button type="button" class="sget-btn sget-btn--neutro" data-sget-cerrar>Cerrar</button>
+        </footer>
     </div>
+</div>
 
-    <!-- SCRIPTS DE CONTROL -->
-    <script>
-    let precioUnitarioRuta = 0;
+<script>
+/* ==========================================================================
+   RECAUDO EN TERMINAL
+   --------------------------------------------------------------------------
+   El cálculo del valor (tarifa × puestos) se hace en el navegador para que el
+   cajero vea el total mientras teclea, pero el importe que se guarda es el que
+   llega al servidor: nunca se confía en un total calculado en el cliente.
+   ========================================================================== */
+(function () {
+    'use strict';
 
-    function abrirModalAsignar(idViaje, nombreRuta, cuposDisponibles, precioRuta) {
-        document.getElementById('input_id_viaje').value = idViaje;
-        document.getElementById('modalRutaTitulo').innerText = 'Ruta: ' + nombreRuta + ' (Disponibles: ' + cuposDisponibles + ')';
-        document.getElementById('input_cantidad_puestos').value = 1;
-        document.getElementById('input_cantidad_puestos').max = cuposDisponibles;
-        
-        precioUnitarioRuta = precioRuta;
-        document.getElementById('input_valor_pagado').value = precioRuta;
+    var VIAJES = <?= json_encode(array_map(static function (array $v): array {
+        return [
+            'id'       => (int)$v['id_via'],
+            'etiqueta' => (string)$v['nom_rut'] . ' · ' . Fecha::legible($v['fec_via'], false) . ' ' . Fecha::soloHora($v['hor_sal_via']),
+            'tarifa'   => (float)$v['val_via'],
+            'cupos'    => (int)$v['cup_dis'],
+        ];
+    }, $viajes), JSON_UNESCAPED_UNICODE) ?>;
 
-        cambiarTipoPasajero('registrado');
+    var form = document.getElementById('formRecaudo');
+    if (!form) return;
 
-        document.getElementById('overlayAsignar').classList.remove('opacity-0', 'pointer-events-none');
-        document.getElementById('overlayAsignar').classList.add('opacity-100', 'pointer-events-auto');
-        document.getElementById('modalAsignar').classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
-        document.getElementById('modalAsignar').classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
+    // Viaje cuyas reservas se están listando. Se guarda aparte del formulario de
+    // cobro porque ese se reinicia al abrirse: usar su id recargaba la lista del
+    // viaje 0 y el cajero veía «este viaje no tiene reservas».
+    var viajeEnPantalla = 0;
+
+    var selPasajero = form.querySelector('#selPasajero');
+    var inputPuestos = form.querySelector('#inputPuestos');
+    var inputValor   = form.querySelector('#inputValor');
+    var bloqueReg    = form.querySelector('[data-sget-bloque="registrado"]');
+    var bloqueOcas   = form.querySelector('[data-sget-bloque="ocasional"]');
+    var valorTocado  = false;
+
+    function viajeActual() {
+        return VIAJES.find(function (v) { return v.id === parseInt(form.id_via.value, 10); }) || null;
     }
 
-    function cerrarModalAsignar() {
-        document.getElementById('modalAsignar').classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
-        document.getElementById('modalAsignar').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
-        document.getElementById('overlayAsignar').classList.remove('opacity-100', 'pointer-events-auto');
-        document.getElementById('overlayAsignar').classList.add('opacity-0', 'pointer-events-none');
-    }
+    function recalcular() {
+        var v = viajeActual();
+        if (!v) return;
 
-    function cambiarTipoPasajero(tipo) {
-        document.getElementById('input_tipo_pasajero').value = tipo;
-        const btnReg = document.getElementById('btnTipoRegistrado');
-        const btnOca = document.getElementById('btnTipoOcasional');
-        const secReg = document.getElementById('seccionRegistrado');
-        const secOca = document.getElementById('seccionOcasional');
-        const selReg = document.getElementById('select_id_pasajero');
-        const inpOca = document.getElementById('input_nombre_ocasional');
+        var max = Math.max(1, v.cupos);
+        if (parseInt(inputPuestos.value, 10) > max) inputPuestos.value = max;
+        if (parseInt(inputPuestos.value, 10) < 1) inputPuestos.value = 1;
 
-        if (tipo === 'registrado') {
-            btnReg.className = 'py-2 px-3 rounded-xl text-xs font-bold uppercase transition-all bg-sky-500 text-slate-950 shadow-sm cursor-pointer';
-            btnOca.className = 'py-2 px-3 rounded-xl text-xs font-bold uppercase transition-all bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white cursor-pointer';
-            secReg.classList.remove('hidden');
-            secOca.classList.add('hidden');
-            selReg.required = true;
-            inpOca.required = false;
-        } else {
-            btnOca.className = 'py-2 px-3 rounded-xl text-xs font-bold uppercase transition-all bg-sky-500 text-slate-950 shadow-sm cursor-pointer';
-            btnReg.className = 'py-2 px-3 rounded-xl text-xs font-bold uppercase transition-all bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white cursor-pointer';
-            secOca.classList.remove('hidden');
-            secReg.classList.add('hidden');
-            inpOca.required = true;
-            selReg.required = false;
+        form.querySelector('[data-sget-texto="cupos"]').textContent =
+            v.cupos > 0 ? ('Cupos libres: ' + v.cupos) : 'Este viaje no tiene cupos libres';
+
+        if (!valorTocado) {
+            inputValor.value = Math.round(v.tarifa * parseInt(inputPuestos.value, 10));
         }
     }
 
-    function calcularTotal() {
-        const cant = parseInt(document.getElementById('input_cantidad_puestos').value) || 1;
-        document.getElementById('input_valor_pagado').value = cant * precioUnitarioRuta;
+    /* --- Tipo de pasajero --- */
+    form.querySelectorAll('input[name="tipo_pasajero"]').forEach(function (r) {
+        r.addEventListener('change', function () {
+            var ocasional = r.value === 'ocasional' && r.checked;
+            bloqueReg.style.display = ocasional ? 'none' : '';
+            bloqueOcas.style.display = ocasional ? '' : 'none';
+            form.id_usu.value = ocasional ? 0 : (selPasajero.value || 0);
+        });
+    });
+
+    selPasajero.addEventListener('change', function () { form.id_usu.value = selPasajero.value || 0; });
+    inputPuestos.addEventListener('input', recalcular);
+    inputValor.addEventListener('input', function () { valorTocado = true; });
+
+    /* --- Apertura --- */
+    window.SGETRecaudo = {
+        abrir: function (idViaje) {
+            var v = viajeActual.call(null) || VIAJES.find(function (x) { return x.id === idViaje; });
+            if (!v) return;
+
+            form.reset();
+            SGETModal.limpiarErrores(form);
+            valorTocado = false;
+
+            form.id_via.value = v.id;
+            form.id_usu.value = 0;
+            bloqueReg.style.display = '';
+            bloqueOcas.style.display = 'none';
+
+            modal.querySelector('[data-sget-texto="viaje"]').textContent = 'Viaje #' + v.id + ' · ' + v.etiqueta;
+
+            SGETModal.abrir('modalRecaudo');
+            recalcular();
+        },
+
+        verReservas: function (idViaje) {
+            viajeEnPantalla = idViaje;
+            var v = VIAJES.find(function (x) { return x.id === idViaje; });
+            var cont = document.querySelector('[data-sget-lista-reservas]');
+            document.querySelector('#modalReservasViaje [data-sget-texto="viaje"]').textContent =
+                v ? ('Viaje #' + v.id + ' · ' + v.etiqueta) : ('Viaje #' + idViaje);
+
+            SGETModal.abrir('modalReservasViaje');
+            cont.innerHTML = '<p class="sget-help">Cargando…</p>';
+            cargarReservas(idViaje, cont);
+        }
+    };
+
+    /* --- Listado de reservas del viaje (cobrar / cancelar) --- */
+    function cargarReservas(idViaje, cont) {
+        var cuerpo = new FormData();
+        cuerpo.append('_token', SGETModal.__token);
+        cuerpo.append('modulo', 'reserva');
+        cuerpo.append('accion', 'porViaje');
+        cuerpo.append('id', idViaje);
+
+        fetch('../api/index.php', {
+            method: 'POST', body: cuerpo,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                var lista = (j.datos && j.datos.reservas) || [];
+                if (!lista.length) {
+                    cont.innerHTML = '<div class="sget-vacio" style="border:none;background:transparent">' +
+                        '<span class="sget-vacio__icono"><i class="fas fa-ticket"></i></span>' +
+                        '<p class="sget-help">Este viaje todavía no tiene reservas.</p></div>';
+                    return;
+                }
+
+                var confirmada = '<?= Config::RES_CONFIRMADA ?>';
+                var cancelada  = '<?= Config::RES_CANCELADA ?>';
+
+                cont.innerHTML = '<div class="sget-table-wrap"><table class="sget-table sget-table--compacta">' +
+                    '<thead><tr><th>Pasajero</th><th>Documento</th><th>Hora</th>' +
+                    '<th>Método</th><th class="acciones">Valor</th><th class="sget-centro">Estado</th><th></th></tr></thead><tbody>' +
+                    lista.map(function (r) {
+                        var pagada = r.estado_pago === confirmada;
+                        var anulada = r.estado_pago === cancelada;
+                        var acciones =
+                            (anulada ? '' :
+                                (pagada
+                                    ? '<button type="button" class="sget-icon-btn sget-icon-btn--peligro" title="Cancelar la reserva" ' +
+                                      'data-sget-cancelar-reserva="' + r.id_res + '"><i class="fas fa-ban"></i></button>'
+                                    : '<button type="button" class="sget-icon-btn sget-icon-btn--exito" title="Registrar el cobro" ' +
+                                      'data-sget-cobrar-reserva="' + r.id_res + '" data-valor="' + (r.valor_pagado || 0) + '">' +
+                                      '<i class="fas fa-cash-register"></i></button>'));
+
+                        return '<tr' + (anulada ? ' style="opacity:.55"' : '') + '>' +
+                            '<td data-label="Pasajero" class="sget-truncar">' + esc(r.pasajero) + '</td>' +
+                            '<td data-label="Documento" class="sget-mono sget-suave">' + esc(r.num_doc_usu) + '</td>' +
+                            '<td data-label="Hora" class="sget-mono sget-suave sget-nowrap">' + esc(r.fech_res) + '</td>' +
+                            '<td data-label="Método">' + esc(r.metodo_pago) + '</td>' +
+                            '<td class="acciones" data-label="Valor"><span class="sget-mono" style="font-weight:800">' +
+                                (r.valor_pagado ? '$' + Number(r.valor_pagado).toLocaleString('es-CO') : '—') + '</span></td>' +
+                            '<td data-label="Estado" class="sget-centro">' +
+                                '<span class="sget-badge ' + (pagada ? 'sget-badge--exito' : (anulada ? 'sget-badge--error' : 'sget-badge--aviso')) + '">' +
+                                esc(r.estado_pago) + '</span></td>' +
+                            '<td class="acciones">' + acciones + '</td>' +
+                        '</tr>';
+                    }).join('') +
+                    '</tbody></table></div>';
+            })
+            .catch(function () { cont.innerHTML = '<p class="sget-help">No se pudo cargar el listado.</p>'; });
     }
 
-    function abrirModalAyuda() {
-        document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
-        document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');
-        document.getElementById('modalAyuda').classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
-        document.getElementById('modalAyuda').classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
+    function esc(texto) {
+        var d = document.createElement('div');
+        d.textContent = texto == null ? '' : String(texto);
+        return d.innerHTML;
     }
 
-    function cerrarModalAyuda() {
-        document.getElementById('modalAyuda').classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
-        document.getElementById('modalAyuda').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
-        document.getElementById('overlayAyuda').classList.remove('opacity-100', 'pointer-events-auto');
-        document.getElementById('overlayAyuda').classList.add('opacity-0', 'pointer-events-none');
-    }
-    </script>
-</body>
-</html>
+    /* --- Cobrar / cancelar una reserva puntual --- */
+    document.addEventListener('click', function (e) {
+        var cobrar = e.target.closest('[data-sget-cobrar-reserva]');
+        if (cobrar) {
+            e.preventDefault();
+            var cuerpo = new FormData();
+            cuerpo.append('_token', SGETModal.__token);
+            cuerpo.append('modulo', 'reserva');
+            cuerpo.append('accion', 'cobrar');
+            cuerpo.append('id', cobrar.dataset.sgetCobrarReserva);
+            cuerpo.append('valor', cobrar.dataset.valor || 0);
+            cuerpo.append('metodo', document.getElementById('selectMetodo')?.value || 'Efectivo');
+
+            fetch('../api/index.php', {
+                method: 'POST', body: cuerpo,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    SGETModal.toast(j.mensaje, j.status === 'ok' ? 'exito' : 'error');
+                    if (j.status === 'ok') {
+                        cargarReservas(viajeEnPantalla, document.querySelector('[data-sget-lista-reservas]'));
+                    }
+                });
+            return;
+        }
+
+        var cancelar = e.target.closest('[data-sget-cancelar-reserva]');
+        if (cancelar) {
+            e.preventDefault();
+            SGETModal.confirmar({
+                tipo: 'peligro',
+                icono: 'fa-ban',
+                titulo: 'Cancelar la reserva',
+                cuerpo: 'Se cancelará el puesto, volverá al viaje y el pasajero recibirá un aviso. ' +
+                        'Si el pago ya estaba confirmado, el reembolso se gestiona fuera del sistema.',
+                textoOk: 'Sí, cancelar'
+            }).then(function () {
+                var cuerpo = new FormData();
+                cuerpo.append('_token', SGETModal.__token);
+                cuerpo.append('modulo', 'reserva');
+                cuerpo.append('accion', 'cancelar');
+                cuerpo.append('id', cancelar.dataset.sgetCancelarReserva);
+                cuerpo.append('motivo', 'Cancelación en terminal');
+
+                fetch('../api/index.php', {
+                    method: 'POST', body: cuerpo,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    credentials: 'same-origin'
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (j) {
+                        SGETModal.toast(j.mensaje, j.status === 'ok' ? 'exito' : 'error');
+                        if (j.status === 'ok') {
+                            cargarReservas(viajeEnPantalla, document.querySelector('[data-sget-lista-reservas]'));
+                        }
+                    });
+            });
+        }
+    });
+
+    /* --- Abrir el modal de cobro desde las tarjetas de viaje --- */
+    document.addEventListener('click', function (e) {
+        var boton = e.target.closest('[data-sget-accion="abrirRecaudo"], [data-sget-accion="verReservas"]');
+        if (!boton) return;
+        e.preventDefault();
+
+        var id = parseInt(boton.dataset.sgetViaje, 10);
+        if (boton.dataset.sgetAccion === 'abrirRecaudo') window.SGETRecaudo.abrir(id);
+        else window.SGETRecaudo.verReservas(id);
+    });
+
+    var modal = document.getElementById('modalRecaudo');
+
+    /* --- Envío --- */
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        var datos = new FormData(form);
+        var v = viajeActual();
+        var ocasional = form.querySelector('input[name="tipo_pasajero"]:checked').value === 'ocasional';
+
+        var errores = {};
+        if (!ocasional && !datos.get('id_usu')) {
+            errores.pasajero = 'Selecciona el pasajero que va a viajar.';
+        }
+        if (ocasional && !String(datos.get('nombre_ocasional') || '').trim()) {
+            errores.nombre_ocasional = 'Escribe el nombre del pasajero.';
+        }
+        if (parseInt(datos.get('puestos'), 10) < 1) errores.puestos = 'Debe ser al menos un puesto.';
+        if (v && parseInt(datos.get('puestos'), 10) > v.cupos) {
+            errores.puestos = 'Solo quedan ' + v.cupos + ' cupos libres en este viaje.';
+        }
+        if (parseFloat(datos.get('valor_pagado')) < 0) errores.valor_pagado = 'El valor no puede ser negativo.';
+
+        if (Object.keys(errores).length) {
+            SGETModal.errores(errores, form);
+            return;
+        }
+
+        if (ocasional) {
+            // El usuario occasional se crea en el servidor con su propio servicio.
+            datos.append('accion', 'ocasional');
+        }
+
+        var btn = form.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Registrando…';
+
+        fetch('../api/index.php', {
+            method: 'POST', body: datos,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+                if (j.status === 'ok') {
+                    SGETModal.toast(j.mensaje, 'exito');
+                    SGETModal.cerrar('modalRecaudo');
+                    setTimeout(function () { location.reload(); }, 900);
+                } else {
+                    SGETModal.toast(j.mensaje || 'No se pudo registrar el cobro.', 'error');
+                    if (j.errores) SGETModal.errores(j.errores, form);
+                }
+            })
+            .catch(function () { SGETModal.toast('Error de comunicación con el servidor.', 'error'); })
+            .finally(function () {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-receipt"></i> Registrar cobro';
+            });
+    });
+})();
+</script>
+
+<?php
+$jsExtra = ['sget-page.js'];
+include __DIR__ . '/../views/partials/foot.php';

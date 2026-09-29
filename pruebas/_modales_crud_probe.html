@@ -10,7 +10,11 @@ function arrancar(n){
   return new Promise(function(res){
     (function intentar(){
       var d=f.contentDocument;
-      if(d&&d.body&&(d.getElementById('panelLogin')||d.getElementById('modalRuta'))) return res();
+      /* readyState != loading: DOMContentLoaded ya ocurrió y, con él, los
+         escuchadores del motor de modales. Con solo comprobar que exista el
+         elemento, el clic se dispara antes de que estén atados y el modal
+         «no se abre» sin que haya un fallo real. */
+      if(d&&d.body&&d.readyState!=='loading'&&(d.getElementById('panelLogin')||d.getElementById('modalRuta'))) return res();
       if(n<=0) return res();
       n--; setTimeout(intentar,200);
     })();

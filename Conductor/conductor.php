@@ -117,13 +117,13 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
     <title>SGET - <?= ($idiomaActual === 'en') ? 'Driver Dashboard' : 'Panel Conductor' ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
-    <link rel="stylesheet" href="assets/css/01-base.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/02-layout.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/03-componentes.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/04-modales.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/05-tablas.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/06-responsive.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/07-transiciones.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/06-responsive.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/07-transiciones.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
     <script>
         tailwind.config = {
@@ -279,5 +279,9 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
 
         </main>
     </div>
+
+    <!-- Motor común de modales + puente de compatibilidad con el JS heredado -->
+    <script src="../assets/js/sget-modal.js?v=<?= @filemtime('../assets/js/sget-modal.js') ?: '1' ?>"></script>
+    <script src="../assets/js/sget-puente.js?v=<?= @filemtime('../assets/js/sget-puente.js') ?: '1' ?>"></script>
 </body>
 </html>

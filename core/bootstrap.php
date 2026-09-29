@@ -25,6 +25,11 @@ require_once dirname(__DIR__) . '/services/VehiculoService.php';
 require_once dirname(__DIR__) . '/services/UsuarioService.php';
 require_once dirname(__DIR__) . '/services/NotificacionService.php';
 require_once dirname(__DIR__) . '/services/LogService.php';
+require_once dirname(__DIR__) . '/services/InformacionService.php';
+require_once dirname(__DIR__) . '/services/ReservaService.php';
+require_once dirname(__DIR__) . '/services/CalificacionService.php';
+require_once dirname(__DIR__) . '/services/ReporteService.php';
+require_once dirname(__DIR__) . '/services/AnuncioService.php';
 require_once dirname(__DIR__) . '/services/ViajeService.php';
 
 // --- Legado (se mantienen hasta migrar pagina por pagina) ---------------

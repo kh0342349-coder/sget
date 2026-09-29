@@ -10,7 +10,20 @@
  * -----------------------------------------------------------------------------
  */
 $jsExtra = $jsExtra ?? [];
-$mv = filemtime(Config::raiz('assets/js/sget-modal.js')) ?: '1';
+
+/**
+ * Versión de caché POR ARCHIVO.
+ *
+ * POR QUÉ NO SE USA UNA SOLA VARIABLE
+ *   Antes todos los scripts se etiquetaban con el filemtime de
+ *   `sget-modal.js`. Eso solo invalida la caché si cambió ESE archivo: si se
+ *   tocaba sget-cru.js o sget-page.js, el navegador seguía sirviendo la
+ *   versión anterior y el arreglo "no se veía reflejado" hasta que se vaciaba
+ *   la caché a mano. Cada script lleva ahora su propia huella.
+ */
+$version = static function (string $archivo): int|string {
+    return (int) (@filemtime(Config::raiz('assets/js/' . $archivo)) ?: 1);
+};
 ?>
     <div class="sget-toast-zona" role="status" aria-live="polite"></div>
 
@@ -23,11 +36,11 @@ $mv = filemtime(Config::raiz('assets/js/sget-modal.js')) ?: '1';
           2. modal       motor único de overlays (modal / drawer / confirmar)
           3. cru         búsqueda, filtros y envío de formularios
     -->
-    <script src="../assets/js/sget-transicion.js?v=<?= $mv ?>"></script>
-    <script src="../assets/js/sget-modal.js?v=<?= $mv ?>"></script>
-    <script src="../assets/js/sget-cru.js?v=<?= $mv ?>"></script>
+    <script src="../assets/js/sget-transicion.js?v=<?= $version('sget-transicion.js') ?>"></script>
+    <script src="../assets/js/sget-modal.js?v=<?= $version('sget-modal.js') ?>"></script>
+    <script src="../assets/js/sget-cru.js?v=<?= $version('sget-cru.js') ?>"></script>
     <?php foreach ($jsExtra as $js): ?>
-        <script src="../assets/js/<?= htmlspecialchars($js, ENT_QUOTES, 'UTF-8') ?>?v=<?= $mv ?>"></script>
+        <script src="../assets/js/<?= htmlspecialchars($js, ENT_QUOTES, 'UTF-8') ?>?v=<?= $version($js) ?>"></script>
     <?php endforeach; ?>
 </body>
 </html>

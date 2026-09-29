@@ -1,0 +1,53 @@
+<!DOCTYPE html><html><body><pre id="r">x</pre>
+<iframe id="f" src="/pruebas/_sesion_test.php?rol=1&ir=Admin%2Frutas.php" style="width:1300px;height:900px"></iframe>
+<script>
+var o=[],fallos=0,hecho=false;
+function ok(c,t,d){if(!c)fallos++;o.push((c?'OK   | ':'FALLA | ')+t+(d?' | '+d:''));}
+function info(t){o.push('INFO  | '+t);}
+function fin(){if(hecho)return;hecho=true;document.getElementById('r').textContent='CLK_START\n'+o.join('\n')+'\nFALLOS='+fallos+'\nCLK_END';}
+window.onerror=function(m){o.push('FALLA | error JS: '+m);fallos++;fin();return false;};
+function arrancar(n,cb){(function t(){var d=document.getElementById('f').contentDocument;
+  if(d&&d.body&&d.getElementById('modalRuta'))return cb(d);
+  if(n<=0){o.push('FALLA | la página no cargó');fallos++;return fin();}
+  setTimeout(t,200);})();}
+
+arrancar(30,function(d){
+ try{
+  var w=d.defaultView;
+  var st=d.createElement('style');
+  st.textContent='*,*::before,*::after{transition:none !important;animation:none !important}';
+  d.head.appendChild(st);
+
+  var modal=d.getElementById('modalRuta');
+  d.querySelector('[data-sget-modal="modalRuta"]').click();
+  ok(modal.dataset.abierto==='1','el modal se abre');
+
+  // ¿Qué está ENCIMA en el punto del botón X?
+  var x=modal.querySelector('[data-sget-cerrar]');
+  var r=x.getBoundingClientRect();
+  var cx=r.left+r.width/2, cy=r.top+r.height/2;
+  var arriba=d.elementFromPoint(cx,cy);
+  info('elementFromPoint sobre el botón X = '+(arriba?arriba.tagName+'.'+(arriba.className||'').toString().slice(0,40):'null'));
+
+  var envoltura=w.getComputedStyle(modal);
+  var zOver=modal.querySelector('.sget-overlay');
+  var zov=w.getComputedStyle(zOver);
+  var zcard=w.getComputedStyle(x);
+  info('wrap z-index='+envoltura.zIndex+' position='+envoltura.position);
+  info('overlay z-index='+zov.zIndex+' position='+zov.position);
+  info('botón X z-index='+zcard.zIndex);
+
+  // ¿El overlay tapa el modal?
+  ok(zOver.contains(x)===false,'el overlay no contiene el botón X');
+  ok(envoltura.zIndex>zov.zIndex,'el modal está por encima del overlay (wrap '+envoltura.zIndex+' > overlay '+zov.zIndex+')');
+
+  // Pulsar la X de verdad
+  x.click();
+  setTimeout(function(){
+    ok(modal.dataset.abierto!=='1','pulsar la X cierra el modal','abierto='+modal.dataset.abierto);
+    fin();
+  },300);
+ }catch(e){o.push('FALLA | excepci��n: '+e.message);fallos++;fin();}
+});
+setTimeout(fin,9000);
+</script></body></html>

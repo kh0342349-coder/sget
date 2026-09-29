@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<!--
+    pruebas/_info_probe.html
+    -----------------------------------------------------------------------------
+    Sonda del MÓDULO DE INFORMACIÓN (Admin/reportes.php).
+    Crea la sesión de administrador en la misma pestaña y carga el módulo en un
+    iframe del mismo origen para poder medirlo con Chrome headless.
+
+    Uso:  http://127.0.0.1:8899/pruebas/_info_probe.html?tab=general&rango=30
+    -----------------------------------------------------------------------------
+-->
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Sonda del panel de información</title>
+    <style>body{margin:0;font:12px monospace}#estado{padding:6px;background:#111;color:#0f0}iframe{width:1400px;height:1000px;border:0}</style>
+</head>
+<body>
+<div id="estado">preparando…</div>
+<iframe id="marco" src="_sesion_admin.php"></iframe>
+
+<script>
+const salida = [];
+let fallos = 0;
+const anotar = (ok, t, d = '') => { if (!ok) fallos++; salida.push((ok ? 'OK   ' : 'FALLA') + ' | ' + t + (d ? ' | ' + d : '')); };
+const info = t => salida.push('INFO  | ' + t);
+const pintar = () => document.getElementById('estado').textContent =
+    'INFO_PROBE_START\n' + salida.join('\n') + '\nFALLOS=' + fallos + '\nINFO_PROBE_END';
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+function cargar(win, url) {
+    return new Promise(res => { win.location.href = url; setTimeout(res, 2200); });
+}
+
+async function run() {
+    const marco = document.getElementById('marco');
+    await esperar(1200);
+
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab') || 'general';
+
+    for (const t of ['general', 'viajes', 'usuarios', 'rutas', 'ganancias']) {
+        await cargar(marco.contentWindow, '../Admin/reportes.php?tab=' + t + '&rango=30');
+        const doc = marco.contentDocument;
+        const win = marco.contentWindow;
+
+        const pestanas = doc.querySelectorAll('.sget-tabs .sget-tab').length;
+        anotar(pestanas === 5, 'tab=' + t + ': hay 5 pestañas de sección', 'pestañas=' + pestanas);
+
+        const activa = doc.querySelector('.sget-tabs .sget-tab[aria-selected="true"]');
+        anotar(activa && activa.textContent.trim().length > 0, 'tab=' + t + ': hay pestaña activa');
+
+        const cuerpo = doc.querySelector('.sget-main');
+        anotar(cuerpo && cuerpo.textContent.length > 200, 'tab=' + t + ': la página tiene contenido',
+               cuerpo ? cuerpo.textContent.trim().length + ' car.' : 'sin .sget-main');
+
+        // Errores PHP inyectados por el bootstrap en modo depuración
+        const err = doc.documentElement.innerHTML.match(/ERROR PHP: ([^<\n]*)/);
+        anotar(!err, 'tab=' + t + ': sin errores PHP', err ? err[1] : '');
+
+        // Iconos de Font Awesome que NO existen en la versión gratuita: el
+        // glifo no se dibuja y el <i> queda con ancho 0 (cuadro vacío en pantalla).
+        // Solo se miden los que están visibles: los drawers y modales cerrados
+        // (sidebar, cabecera) tienen ancho 0 por estar ocultos, no por falta de glifo.
+        const rotos = Array.from(doc.querySelectorAll('i.fas, i.fab'))
+            .filter(i => i.getClientRects().length > 0)
+            .filter(i => i.getBoundingClientRect().width < 1)
+            .map(i => i.className.replace(/^\s+/, ''));
+        anotar(rotos.length === 0, 'tab=' + t + ': todos los iconos existen en Font Awesome FREE',
+               rotos.join(' | '));
+
+        // Enlaces de exportación: el módulo ya NO debe exportar nada
+        const exportar = Array.from(doc.querySelectorAll('a')).filter(a => /exportar|\.csv|Exportar/i.test(a.textContent + a.href));
+        anotar(exportar.length === 0, 'tab=' + t + ': no hay botones de exportación',
+               exportar.map(a => a.textContent.trim()).join(' | '));
+
+        info('tab=' + t + ' → ' + (activa ? activa.textContent.trim() : '?') + ' · ' +
+             (cuerpo ? doc.querySelectorAll('.sget-main table tr').length : 0) + ' filas de tabla');
+    }
+
+    // Página pedida explícitamente (para capturas)
+    if (tab) await cargar(marco.contentWindow, '../Admin/reportes.php?tab=' + tab + '&rango=30');
+}
+
+run().then(pintar).catch(e => { anotar(false, 'La sonda se ejecutó sin errores', e.message); pintar(); });
+</script>
+</body>
+</html>

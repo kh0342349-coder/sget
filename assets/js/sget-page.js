@@ -46,6 +46,16 @@
 
     function token() { return window.SGETModal.__token; }
 
+    /** FormData común para las acciones puntuales del API. */
+    function cuerpoDeAccion(extra, accion) {
+        var cuerpo = new FormData();
+        cuerpo.append('_token', token());
+        cuerpo.append('modulo', extra.modulo || '');
+        cuerpo.append('accion', accion);
+        cuerpo.append('id', extra.id);
+        return cuerpo;
+    }
+
     function aviso(j) {
         window.SGETModal.toast(j.mensaje || 'Operación completada.', j.status === 'ok' ? 'exito' : 'error');
     }
@@ -117,6 +127,26 @@
                 if (form) {
                     form.reset();
                     window.SGETModal.limpiarErrores(form);
+
+                    // La vista previa de una imagen sobrevive a form.reset() (es un
+                    // <div> con estilo y un <img>, no un campo): al abrir «Nuevo
+                    // anuncio» después de editar uno, se veía la foto del anuncio
+                    // anterior aunque no hubiera ningún archivo elegido. Se limpia
+                    // aquí para que no se pueda guardar creyendo que está puesta.
+                    //   · data-sget-preview-caja  -> la caja de la previsualización
+                    //   · data-sget-src           -> el <img> que la muestra
+                    //   · data-sget-preview-nombre-> el nombre del archivo
+                    form.querySelectorAll('[data-sget-preview-caja]').forEach(function (caja) {
+                        caja.style.display = 'none';
+                        caja.hidden = false;
+                    });
+                    form.querySelectorAll('[data-sget-preview-nombre]').forEach(function (n) {
+                        n.textContent = '';
+                    });
+                    form.querySelectorAll('[data-sget-src]').forEach(function (img) {
+                        img.removeAttribute('src');
+                    });
+
                     form.querySelectorAll('[data-sget-campo]').forEach(function (c) {
                         if (c.type === 'hidden' && c.name.match(/^id_/)) c.value = '0';
                     });
@@ -358,15 +388,84 @@
             if (form) form.dataset.sgetAnotacionObligatoria = yaSalio ? '0' : '1';
         },
 
-        /* ---------- Marcar notificación como leída ---------- */
-        leerNotificacion: function (el, extra) {
+        /* ---------- Publicar / destacar un anuncio de la landing ---------- */
+        anuncioEstado: function (el, extra) {
+            enviar(cuerpoDeAccion(extra, 'alternarEstado')).then(function (j) {
+                aviso(j);
+                if (j.status === 'ok') recargarEn(700);
+            });
+        },
+
+        anuncioDestacado: function (el, extra) {
+            enviar(cuerpoDeAccion(extra, 'alternarDestacado')).then(function (j) {
+                aviso(j);
+                if (j.status === 'ok') recargarEn(700);
+            });
+        },
+
+        anuncioEliminar: function (el, extra) {
+            window.SGETModal.confirmar({
+                tipo: 'peligro',
+                icono: 'fa-trash',
+                titulo: el.dataset.sgetTitulo || 'Eliminar anuncio',
+                cuerpo: el.dataset.sgetTexto || 'Se eliminará el anuncio y su imagen de la landing.',
+                textoOk: 'Sí, eliminar'
+            }).then(function () {
+                enviar(cuerpoDeAccion(extra, 'eliminar')).then(function (j) {
+                    aviso(j);
+                    if (j.status === 'ok') recargarEn(700);
+                });
+            });
+        },
+
+        /* ---------- Actualizar / eliminar un reporte de pasajero ---------- */
+        guardarReporte: function (el, extra) {
+            // El estado y el viaje se eligen en la MISMA fila del reporte, así
+            // que se leen desde su <tr> y no desde un formulario aparte.
+            var fila = el.closest('[data-sget-fila]') || document;
+            var estado = fila.querySelector('[data-sget-estado-reporte="' + extra.id + '"]');
+            var viaje  = fila.querySelector('[data-sget-viaje-reporte="' + extra.id + '"]');
+
             var cuerpo = new FormData();
             cuerpo.append('_token', token());
-            cuerpo.append('modulo', 'notificacion');
-            cuerpo.append('accion', 'leer');
+            cuerpo.append('modulo', extra.modulo || 'reporte');
+            cuerpo.append('accion', 'actualizar');
             cuerpo.append('id', extra.id);
-            enviar(cuerpo);
-        }
+            cuerpo.append('estado', estado ? estado.value : 'pendiente');
+            cuerpo.append('id_via', viaje ? viaje.value : 0);
+
+            el.classList.add('sget-cargando');
+            enviar(cuerpo, function (j) {
+                el.classList.remove('sget-cargando');
+                aviso(j);
+                if (j.status === 'ok') recargarEn(800);
+            });
+        },
+
+        eliminarReporte: function (el, extra) {
+            window.SGETModal.confirmar({
+                tipo: 'peligro',
+                icono: 'fa-trash',
+                titulo: el.dataset.sgetTitulo || 'Eliminar reporte',
+                cuerpo: el.dataset.sgetTexto || 'Se eliminará el reporte de forma permanente.',
+                textoOk: 'Sí, eliminar'
+            }).then(function () {
+                var cuerpo = new FormData();
+                cuerpo.append('_token', token());
+                cuerpo.append('modulo', 'reporte');
+                cuerpo.append('accion', 'eliminar');
+                cuerpo.append('id', extra.id);
+                enviar(cuerpo, function (j) { aviso(j); if (j.status === 'ok') recargarEn(800); });
+            });
+        },
+
+        /* ---------- Notificaciones ----------
+           El manejador real vive en assets/js/sget-notificaciones.js, que carga
+           el propio buzón (campanita) en TODAS las páginas. Aquí no se hace
+           nada a propósito: si se manejara también aquí, cada clic dispararía
+           dos peticiones y, en las páginas de Pasajero y Conductor, donde este
+           archivo ni siquiera se carga, el botón quedaría muerto. */
+        leerNotificacion: function () { /* lo resuelve sget-notificaciones.js */ }
     };
 
     function prepararAcciones() {
@@ -380,6 +479,7 @@
                 var extra  = {};
                 try { extra = JSON.parse(el.getAttribute('data-sget-dato') || '{}'); } catch (e) {}
                 extra.nombre = el.dataset.nombre || extra.nombre;
+                extra.modulo = el.dataset.sgetModulo || extra.modulo;
 
                 if (ACCIONES[accion]) ACCIONES[accion](el, extra);
                 else console.warn('[SGET] Acción desconocida:', accion);
@@ -429,6 +529,83 @@
     }
 
     /* ================================================================== */
+    /* BÚSQUEDA Y FILTROS DE LA BARRA DE HERRAMIENTAS                       */
+    /* ================================================================== */
+    /**
+     * Busca por texto y filtra por estado sin que cada página escriba su
+     * propio <script> al final.
+     *
+     * POR QUÉ ESTÁ AQUÍ Y NO EN CADA PÁGINA
+     *   Admin/anuncios.php traía la barra con buscador y con los botones
+     *   Todos / Visibles / Ocultos… y NO TENÍA NINGÚN MANEJADOR: los botones
+     *   no hacían nada y el buscador tampoco filtraba. La misma barra se había
+     *   cableado a mano en otros listados, así que el comportamiento se
+     *  tipico se hacia aquí una vez y todas las páginas lo heredan.
+     *
+     * CÓMO SE DECLARA EN EL HTML
+     *   <input id="buscarX" data-sget-buscar>
+     *   <button data-sget-filtro="1" data-sget-filtro-de="data-estado">Visibles</button>
+     *   <article data-sget-fila data-estado="1"> …
+     *   <p data-sget-sin-resultados hidden>Ningún anuncio coincide.</p>
+     */
+    function prepararBusquedaYFiltros() {
+        var filas = document.querySelectorAll('[data-sget-fila]');
+        if (!filas.length) return;
+
+        var vacio = document.querySelector('[data-sget-sin-resultados]');
+
+        /* --- Texto ---------------------------------------------------- */
+        var buscador = document.querySelector('[data-sget-buscar]');
+        if (buscador) {
+            var aplicar = function () {
+                var q = buscador.value.trim().toLowerCase();
+                var visibles = 0;
+
+                filas.forEach(function (fila) {
+                    var coincide = q === '' || fila.textContent.toLowerCase().indexOf(q) > -1;
+                    if (coincide && fila.dataset.sgetFiltroActivo !== '1') coincide = false;
+                    fila.hidden = !coincide;
+                    if (coincide) visibles++;
+                });
+
+                if (vacio) vacio.hidden = visibles > 0;
+            };
+
+            buscador.addEventListener('input', aplicar);
+
+            // Ctrl+K / Cmd+K lleva al buscador: es lo que dice el placeholder.
+            document.addEventListener('keydown', function (e) {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                    e.preventDefault();
+                    buscador.focus();
+                    buscador.select();
+                }
+            });
+        }
+
+        /* --- Estado ---------------------------------------------------- */
+        var chips = document.querySelectorAll('[data-sget-filtro]');
+        chips.forEach(function (chip) {
+            var attr = chip.dataset.sgetFiltroDe || 'data-estado';
+            var valor = chip.dataset.sgetFiltro;
+
+            if (valor === '*') chip.setAttribute('aria-pressed', 'true');
+
+            chip.addEventListener('click', function () {
+                chips.forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
+                chip.setAttribute('aria-pressed', 'true');
+
+                filas.forEach(function (fila) {
+                    var pasa = valor === '*' || fila.getAttribute(attr) === valor;
+                    fila.dataset.sgetFiltroActivo = pasa ? '1' : '0';
+                });
+
+                if (buscador) buscador.dispatchEvent(new Event('input'));
+            });
+        });
+    }
+
+    /* ================================================================== */
     /* ARRANQUE                                                            */
     /* ================================================================== */
     document.addEventListener('DOMContentLoaded', function () {
@@ -436,6 +613,7 @@
         prepararFormularios();
         prepararAcciones();
         prepararPestanas();
+        prepararBusquedaYFiltros();
         if (typeof SGET.initDuracionRuta === 'function') SGET.initDuracionRuta();
     });
 

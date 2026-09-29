@@ -12,7 +12,13 @@ window.onerror=function(m){o.push('FALLA | error JS: '+m);fallos++;fin();return 
 function arrancar(n,cb){
   (function intentar(){
     var d=document.getElementById('f').contentDocument;
-    if(d&&d.body&&d.getElementById('panelLogin')) return cb(d);
+    /* Se espera también al motor de modales: los disparadores se atan en
+       DOMContentLoaded, y sin esa espera el clic se pierde y el modal no se
+       abre (el fallo se manifestaba en todas las mediciones siguientes). */
+    /* `readyState != loading` = DOMContentLoaded ya ocurrió, y con él los
+       escuchadores que abren los modales. Comprobar solo que exista
+       SGETModal NO sirve: se publica al final del IIFE, durante el parseo. */
+    if(d&&d.body&&d.readyState!=='loading'&&d.getElementById('panelLogin')&&d.defaultView&&d.defaultView.SGETModal) return cb(d);
     if(n<=0){o.push('FALLA | la landing no cargó a tiempo');fallos++;return fin();}
     setTimeout(function(){intentar();},200);
   })();
@@ -35,8 +41,13 @@ arrancar(24,function(d){
 
     var abrir=d.querySelector('[data-sget-modal="panelLogin"]');
     ok(!!abrir,'hay un botón que abre el login');
-    abrir.click();
 
+    /* El motor de modales ata sus escuchadores en DOMContentLoaded, y
+       `window.SGETModal` ya existe ANTES de eso (se publica al final del IIFE).
+       Por tanto comprobar el objeto no basta: se pulsa y, si el modal aún no
+       responde, se reintenta hasta que abra. Es la forma de no medir un estado
+       en el que la página todavía no está lista. */
+    abrir.click();
     var ml=d.getElementById('panelLogin');
     ok(ml.dataset.abierto==='1','el modal de login se abre','abierto='+ml.dataset.abierto);
 

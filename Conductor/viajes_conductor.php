@@ -59,26 +59,39 @@ if ($result_user && $result_user->num_rows > 0) {
 }
 
 // Consultas secundarias para el Drawer (+)
-$rutas_select = $conexion->query("SELECT id_rut, nom_rut, val_rut FROM rutas ORDER BY nom_rut ASC");
+// hora_salida y val_rut se usan para proponer la hora y mostrar el precio:
+   // el conductor no decide la tarifa, la define la ruta.
+$rutas_select = $conexion->query("SELECT id_rut, nom_rut, val_rut, hora_salida FROM rutas WHERE estado = 1 ORDER BY nom_rut ASC");
+
+$__horasRuta = [];
+if ($rutas_select) {
+    $rutas_select->data_seek(0);
+    while ($__r = $rutas_select->fetch_assoc()) {
+        if (!empty($__r['hora_salida'])) {
+            $__horasRuta[(string)$__r['id_rut']] = substr((string)$__r['hora_salida'], 0, 5);
+        }
+    }
+    $rutas_select->data_seek(0);
+}
 $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = 1 ORDER BY pla_veh ASC");
 
 $stmt_user->close();
 ?>
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Historial de Viajes - SGET</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
-    <link rel="stylesheet" href="assets/css/01-base.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/02-layout.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/03-componentes.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/04-modales.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/05-tablas.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/06-responsive.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
-    <link rel="stylesheet" href="assets/css/07-transiciones.css?v={= @filemtime('../assets/css/01-base.css') ?: '1' }">
+    <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/06-responsive.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/07-transiciones.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <script src="../assets/js/theme-init.js?v=<?= @filemtime('../assets/js/theme-init.js') ?: '1' ?>"></script>
     <script>
         tailwind.config = {
@@ -278,9 +291,7 @@ $stmt_user->close();
     </main>
 
     <!-- OVERLAY GENERAL PARA MODALES Y PANEL LATERAL -->
-    <div id="overlayConductor" onclick="cerrarTodosModales()" class="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-40 opacity-0 pointer-events-none transition-opacity duration-300"></div>
-
-    <!-- MODAL POP-UP DE FICHA DE INFORMACIÓN -->
+<!-- MODAL POP-UP DE FICHA DE INFORMACIÓN -->
     <div id="modalFichaViaje" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
         <div class="bg-white dark:bg-[#1e293b] w-full max-w-sm rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-5 transform scale-95 transition-all duration-300" id="modalFichaBox">
             <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
@@ -328,7 +339,10 @@ $stmt_user->close();
     </div>
 
     <!-- PANEL LATERAL DESLIZANTE (DRAWER (+)) DE PROGRAMACIÓN -->
-    <aside id="drawerProgramar" class="fixed top-0 right-0 z-50 w-full max-w-md h-full bg-white dark:bg-[#1e293b] border-l border-slate-200 dark:border-white/10 shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
+    <!-- MODAL (antes panel lateral): drawerProgramar -->
+<div class="sget-modal-wrap" data-sget-capa data-titulo="drawerProgramar">
+    <div class="sget-overlay"></div>
+    <aside id="drawerProgramar" class="sget-modal sget-modal--sm sget-scroll">
         <div class="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between relative">
             <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-neon-morado"></div>
             <div class="flex items-center gap-3">
@@ -346,13 +360,22 @@ $stmt_user->close();
         </div>
 
         <div class="p-6 flex-1 overflow-y-auto space-y-5">
-            <form id="formProgramarConductor" action="guardar_viaje.php" method="POST" class="space-y-4">
+            <form id="formProgramarConductor" method="POST" class="space-y-4" data-sget-despacho>
+                <!--
+                    ANTES: action="guardar_viaje.php" → ese archivo NO existe, así que
+                    pulsar «Iniciar Despacho» mandaba al conductor a un 404 y no se
+                    programaba nada. Ahora el envío pasa por el API con su token CSRF.
+                -->
+                <input type="hidden" name="_token" value="<?= Auth::token() ?>">
+                <input type="hidden" name="modulo" value="viaje">
+                <input type="hidden" name="accion" value="guardar">
                 <input type="hidden" name="id_usu_via" value="<?php echo $id_conductor ?? ''; ?>">
 
                 <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Seleccionar Ruta</label>
                     <select name="id_rut_via" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
                         <option value="">Selecciona tu ruta...</option>
+                        <?php /* El precio NO se pide: lo define la ruta. */ ?>
                         <?php 
                         if($rutas_select) {
                             $rutas_select->data_seek(0);
@@ -366,7 +389,7 @@ $stmt_user->close();
 
                 <div class="space-y-1.5">
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Vehículo Asignado</label>
-                    <select name="id_veh_via" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
+                    <select name="id_veh" id="id_veh_despacho" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
                         <option value="">Selecciona tu vehículo...</option>
                         <?php 
                         if($vehiculos_select) {
@@ -401,6 +424,7 @@ $stmt_user->close();
             </button>
         </div>
     </aside>
+</div>
 
     <!-- MODAL POP-UP CONFIRMACIÓN FINALIZAR VIAJE -->
     <div id="modalConfirmarFin" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
@@ -444,22 +468,18 @@ $stmt_user->close();
             document.getElementById('input_fec_conductor').min = fechaHoy;
             document.getElementById('input_hor_conductor').value = horaHoy;
 
-            overlay.classList.remove('opacity-0', 'pointer-events-none');
-            overlay.classList.add('opacity-100', 'pointer-events-auto');
 
-            drawer.classList.remove('translate-x-full');
-            drawer.classList.add('translate-x-0');
+
+
         }
 
         function cerrarModalDrawer() {
             const drawer = document.getElementById('drawerProgramar');
             const overlay = document.getElementById('overlayConductor');
 
-            drawer.classList.remove('translate-x-0');
-            drawer.classList.add('translate-x-full');
 
-            overlay.classList.remove('opacity-100', 'pointer-events-auto');
-            overlay.classList.add('opacity-0', 'pointer-events-none');
+
+
         }
 
         function verFichaViaje(btn) {
@@ -473,8 +493,7 @@ $stmt_user->close();
             const modal = document.getElementById('modalFichaViaje');
             const box = document.getElementById('modalFichaBox');
 
-            overlay.classList.remove('opacity-0', 'pointer-events-none');
-            overlay.classList.add('opacity-100', 'pointer-events-auto');
+
 
             modal.classList.remove('opacity-0', 'pointer-events-none');
             modal.classList.add('opacity-100', 'pointer-events-auto');
@@ -494,8 +513,7 @@ $stmt_user->close();
             modal.classList.remove('opacity-100', 'pointer-events-auto');
             modal.classList.add('opacity-0', 'pointer-events-none');
 
-            overlay.classList.remove('opacity-100', 'pointer-events-auto');
-            overlay.classList.add('opacity-0', 'pointer-events-none');
+
         }
 
         function confirmarFinalizarViaje(idViaje, nombreRuta) {
@@ -506,8 +524,7 @@ $stmt_user->close();
             const modal = document.getElementById('modalConfirmarFin');
             const box = document.getElementById('modalConfirmBox');
 
-            overlay.classList.remove('opacity-0', 'pointer-events-none');
-            overlay.classList.add('opacity-100', 'pointer-events-auto');
+
 
             modal.classList.remove('opacity-0', 'pointer-events-none');
             modal.classList.add('opacity-100', 'pointer-events-auto');
@@ -527,8 +544,7 @@ $stmt_user->close();
             modal.classList.remove('opacity-100', 'pointer-events-auto');
             modal.classList.add('opacity-0', 'pointer-events-none');
 
-            overlay.classList.remove('opacity-100', 'pointer-events-auto');
-            overlay.classList.add('opacity-0', 'pointer-events-none');
+
         }
 
         function cerrarTodosModales() {
@@ -584,6 +600,77 @@ $stmt_user->close();
                 }
             });
         });
+    </script>
+
+    <!-- Motor común de modales + puente de compatibilidad con el JS heredado -->
+    <script src="../assets/js/sget-modal.js?v=<?= @filemtime('../assets/js/sget-modal.js') ?: '1' ?>"></script>
+    <script src="../assets/js/sget-puente.js?v=<?= @filemtime('../assets/js/sget-puente.js') ?: '1' ?>"></script>
+
+    <script>
+    /* ======================================================================
+       DESPACHO DEL CONDUCTOR
+       El formulario heredado vivía sin backend (guardar_viaje.php no existe).
+       Ahora se envía al API, que valida disponibilidad del conductor y del
+       vehículo, avisa al resto y responde con errores por campo.
+       ====================================================================== */
+    (function () {
+        const form = document.getElementById('formProgramarConductor');
+        if (!form) return;
+
+        // Al elegir la ruta se propone la hora de salida por defecto de la ruta.
+        const selRuta = form.querySelector('[name="id_rut_via"]');
+        const selVeh  = form.querySelector('[name="id_veh"]');
+        const fFecha  = document.getElementById('input_fec_conductor');
+        const fHora   = document.getElementById('input_hor_conductor');
+        const HORAS   = <?= json_encode($__horasRuta) ?>;
+
+        if (selRuta && HORAS[selRuta.value] && fHora && !fHora.value) {
+            fHora.value = HORAS[selRuta.value];
+        }
+
+        if (fFecha && !fFecha.value) fFecha.value = new Date().toISOString().slice(0, 10);
+        if (fHora && !fHora.value) fHora.value = '06:00';
+
+        if (selRuta) {
+            selRuta.addEventListener('change', () => {
+                if (HORAS[selRuta.value]) fHora.value = HORAS[selRuta.value];
+            });
+        }
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            if (!selRuta.value || !selVeh.value) {
+                SGETModal.toast('Elige la ruta y el vehículo antes de despachar.', 'error');
+                return;
+            }
+
+            const btn = form.parentElement.querySelector('button[form="formProgramarConductor"]');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Despachando…'; }
+
+            const cuerpo = new FormData(form);
+            fetch('../api/index.php', {
+                method: 'POST',
+                body: cuerpo,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(r => r.json())
+                .then(j => {
+                    if (j.status === 'ok') {
+                        SGETModal.toast(j.mensaje, 'exito');
+                        setTimeout(() => { location.href = j.redirect || 'viaje_asignado.php'; }, 900);
+                    } else {
+                        SGETModal.toast(j.mensaje || 'No se pudo programar el viaje.', 'error');
+                        if (btn) { btn.disabled = false; btn.innerHTML = 'Iniciar Despacho'; }
+                    }
+                })
+                .catch(() => {
+                    SGETModal.toast('Error de comunicación con el servidor.', 'error');
+                    if (btn) { btn.disabled = false; btn.innerHTML = 'Iniciar Despacho'; }
+                });
+        });
+    })();
     </script>
 </body>
 </html>
