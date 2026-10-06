@@ -256,40 +256,39 @@ final class RutaService
     /* Imagenes                                                            */
     /* ------------------------------------------------------------------ */
 
+    /**
+     * Valida y guarda la imagen de una ruta.
+     *
+     * Antes solo se miraba la EXTENSIÓN del nombre del archivo. Con eso pasaba
+     * cualquier cosa: un `.jpg` que en realidad es un `.php`, una imagen de
+     * 30 MB o de 30 000 px que tumba el navegador de quien la ve. Ahora la
+     * validación es la misma para TODO el sistema (`core/Upload.php`):
+     * tipo MIME detectado por contenido, `getimagesize()`, tamaño, dimensiones
+     * y detección de imágenes políglotas con código incrustado.
+     *
+     * @return array{nombre?:string, error?:string}
+     */
     public static function guardarImagen(array $archivo): array
     {
-        if (($archivo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-            return ['error' => 'No se pudo subir la fotografía de la ruta.'];
-        }
-        if ($archivo['size'] > 3 * 1024 * 1024) {
-            return ['error' => 'La fotografía supera el máximo de 3 MB.'];
-        }
-        $permitidos = ['jpg', 'jpeg', 'png', 'webp'];
-        $ext = strtolower(pathinfo($archivo['name'], PATHINFO_EXTENSION));
-        if (!in_array($ext, $permitidos, true)) {
-            return ['error' => 'Formato no permitido. Usa JPG, PNG o WEBP.'];
+        $subida = Upload::imagenes()->guardar(
+            $archivo,
+            Config::raiz(self::RUTAS_IMG),
+            'ruta'
+        );
+
+        if (!$subida['ok']) {
+            return ['error' => (string)$subida['error']];
         }
 
-        $dir = Config::raiz(self::RUTAS_IMG);
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0775, true);
-        }
-        $nombre = 'ruta_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-        if (!@move_uploaded_file($archivo['tmp_name'], $dir . '/' . $nombre)) {
-            return ['error' => 'No se pudo guardar la imagen en el servidor.'];
-        }
-        return ['nombre' => $nombre];
+        return ['nombre' => (string)$subida['nombre']];
     }
 
     public static function eliminarImagen(string $nombre): void
     {
-        // Defensa contra path traversal
-        $nombre = basename($nombre);
-        if ($nombre === '') return;
-        $ruta = Config::raiz(self::RUTAS_IMG) . '/' . $nombre;
-        if (is_file($ruta)) {
-            @unlink($ruta);
-        }
+        // `Upload::barrer()` normaliza el nombre con `basename()`: sin eso, un
+        // `../../index.php` en la base de datos podría borrar un archivo de
+        // cualquier otra carpeta.
+        Upload::borrar(Config::raiz(self::RUTAS_IMG), $nombre);
     }
 
     public static function urlImagen(?string $nombre): string

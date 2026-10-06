@@ -1,123 +1,192 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+/**
+ * includes/header.php
+ * -----------------------------------------------------------------------------
+ * CABECERA FLOTANTE DEL PANEL INTERNO
+ * -----------------------------------------------------------------------------
+ * · Arranca por `core/bootstrap.php`: una sola sesión, una sola conexión y una
+ *   sola política de autorización para todo el sistema (antes cada partial
+ *   abría la suya con `session_start()` + mysqli).
+ * · El guardado del perfil se hace AQUÍ, en el servidor, con token anti-CSRF y
+ *   validación: antes era SQL suelto dentro del propio header, un archivo que se
+ *   incluye en todas las pantallas.
+ * · Los datos del usuario salen de la sesión y de una consulta preparada, nunca
+ *   de `$_POST` ni de una interpolación dentro del SQL.
+ * -----------------------------------------------------------------------------
+ */
+if (!class_exists('Auth')) {
+    require_once dirname(__DIR__) . '/core/bootstrap.php';
 }
 
-if (!isset($conexion)) {
-    include_once __DIR__ . '/../assets/conexion.php';
-}
+/* --------------------------------------------------------------------------
+ * ACTUALIZACIÓN DEL PERFIL DE CUENTA (POST → PRG)
+ * ------------------------------------------------------------------------ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && ($_POST['accion_perfil'] ?? '') === 'actualizar_configuracion') {
 
-// PROCESAR ACTUALIZACIÓN DEL PERFIL DE USUARIO
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['accion_perfil']) && $_POST['accion_perfil'] === 'actualizar_configuracion') {$id_usuario_config = intval($_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 0);
-    $nuevo_nombre = trim($_POST['nom_usu'] ?? '');
-    $nuevo_correo = trim($_POST['corre_usu'] ?? '');
-    $nuevo_pass   = trim($_POST['pass_usu'] ?? '');
-
-    if ($id_usuario_config > 0 && !empty($nuevo_nombre) && !empty($nuevo_correo)) {
-        if (!empty($nuevo_pass)) {
-            // Se encripta la nueva contraseña
-            $pass_hash = password_hash($nuevo_pass, PASSWORD_DEFAULT);
-            $stmtUpdUser =$conexion->prepare("UPDATE usuario SET nom_usu = ?, corre_usu = ?, pass_usu = ? WHERE id_usu = ?");
-            if ($stmtUpdUser) {$stmtUpdUser->bind_param("sssi", $nuevo_nombre,$nuevo_correo, $pass_hash,$id_usuario_config);
-                $stmtUpdUser->execute();$stmtUpdUser->close();
-            }
-        } else {
-            // Se actualiza únicamente el nombre y el correo
-            $stmtUpdUser =$conexion->prepare("UPDATE usuario SET nom_usu = ?, corre_usu = ? WHERE id_usu = ?");
-            if ($stmtUpdUser) {
-                $stmtUpdUser->bind_param("ssi", $nuevo_nombre, $nuevo_correo,$id_usuario_config);
-                $stmtUpdUser->execute();$stmtUpdUser->close();
-            }
-        }
-
-        // Actualizar datos de la sesión actual
-        $_SESSION['nombre_usuario'] =$nuevo_nombre;
-        $_SESSION['corre_usu'] =$nuevo_correo;
-
-        // Recargar la página actual conservando los parámetros GET
-        $redirectUrl =$_SERVER['PHP_SELF'];
-        if (!empty($_SERVER['QUERY_STRING'])) {
-            parse_str($_SERVER['QUERY_STRING'],$queryParams);
-            unset($queryParams['config_status']);$queryParams['config_status'] = 'success';
-            $redirectUrl .= '?' . http_build_query($queryParams);
-        } else {
-            $redirectUrl .= '?config_status=success';
-        }
-
-        echo "<script>window.location.href = '" . $redirectUrl . "';</script>";
-        exit();
+    // Token anti-CSRF: sin esto, cualquier página externa podía cambiar el
+    // nombre, el correo o la contraseña de la sesión con un POST automático.
+    if (!Auth::validarToken((string)($_POST['_token'] ?? ''))) {
+        Flash::error('La sesión del formulario caducó. Vuelve a intentarlo.');
+        sget_redirigir($_SERVER['PHP_SELF'] ?? Config::basePath() . '/index.php');
     }
+
+    $idUsuario   = Auth::id();
+    $nuevoNombre = trim((string)($_POST['nom_usu'] ?? ''));
+    $nuevoCorreo = trim((string)($_POST['corre_usu'] ?? ''));
+    $nuevaClave  = (string)($_POST['pass_usu'] ?? '');
+
+    $v = Validator::de($_POST)
+        ->requerido('nom_usu', 'el nombre')
+        ->requerido('corre_usu', 'el correo');
+
+    $v->texto('nom_usu', 'El nombre completo', 3, 100);
+    $v->email('corre_usu', 'El correo electrónico');
+
+    // El correo es ÚNICO en la base de datos: se avisa antes de que reviente
+    // la restricción, con un mensaje que el usuario entiende.
+    $correoDeOtro = Database::scalar(
+        'SELECT id_usu FROM usuario WHERE LOWER(corre_usu) = ? AND id_usu <> ? LIMIT 1',
+        [mb_strtolower($nuevoCorreo), $idUsuario]
+    );
+    $v->agregaSi($correoDeOtro !== null, 'corre_usu', 'Ese correo ya está registrado por otra cuenta.');
+
+    if ($nuevaClave !== '') {
+        $errorClave = Password::validar($nuevaClave, 'La contraseña');
+        if ($errorClave) {
+            $v->agrega('pass_usu', $errorClave);
+        }
+    }
+
+    if ($v->falla()) {
+        Flash::error($v->primerError() ?? 'Revisa los datos del formulario.');
+        sget_redirigir($_SERVER['PHP_SELF'] ?? Config::basePath() . '/index.php');
+    }
+
+    if ($nuevaClave !== '') {
+        Database::query(
+            'UPDATE usuario SET nom_usu = ?, corre_usu = ?, pass_usu = ? WHERE id_usu = ?',
+            [$nuevoNombre, $nuevoCorreo, Password::hash($nuevaClave), $idUsuario]
+        );
+        Logger::registrar(Database::pdo(), 'CAMBIAR_CONTRASENA',
+            'El usuario #' . $idUsuario . ' cambió su contraseña desde la configuración de cuenta.');
+    } else {
+        Database::query(
+            'UPDATE usuario SET nom_usu = ?, corre_usu = ? WHERE id_usu = ?',
+            [$nuevoNombre, $nuevoCorreo, $idUsuario]
+        );
+    }
+
+    Logger::registrar(Database::pdo(), 'EDITAR_PERFIL',
+        'El usuario #' . $idUsuario . ' actualizó sus datos de cuenta.');
+
+    // La sesión se sincroniza con los datos nuevos (si no, la cabecera seguía
+    // mostrando el nombre anterior hasta el siguiente ingreso).
+    $_SESSION['nombre_usuario'] = $nuevoNombre;
+    $_SESSION['corre_usu']       = $nuevoCorreo;
+
+    Flash::exito('Información de la cuenta actualizada correctamente.');
+    sget_redirigir($_SERVER['PHP_SELF'] ?? Config::basePath() . '/index.php');
 }
 
 if (isset($_POST['idioma']) && in_array($_POST['idioma'], ['es', 'en'], true)) {
-    $_SESSION['sget_idioma'] =$_POST['idioma'];
+    $_SESSION['sget_idioma'] = $_POST['idioma'];
 }
-// Idioma + diccionario: partial único e idempotente (antes se repetía a mano
-// en header, sidebar y header_index, y en este archivo el <script> quedó sin
-// abrir, imprimiendo código JavaScript como texto encima de la cabecera).
+
+// Idioma + diccionario: partial único e idempotente (antes se repetía a mano en
+// header, sidebar y header_index, y aquí el <script> quedó sin abrir, así que se
+// imprimía código JavaScript como texto encima de la cabecera).
 require_once __DIR__ . '/i18n.php';
 
-$rolUsuario = $_SESSION['rol'] ?? $_SESSION['id_rol_usu'] ?? 0;
-$idUsuarioSesión = intval($_SESSION['id_usu'] ?? $_SESSION['user_id'] ?? 0);
+$rolUsuario      = Auth::rol();
+$idUsuarioSesión = Auth::id();
 
-// Obtener datos actualizados del usuario desde MySQL
-$user_nombre_header =$_SESSION['nombre_usuario'] ?? 'Usuario SGET';
-$user_correo_header =$_SESSION['corre_usu'] ?? '';
+// Datos del usuario para la cabecera. Se leen de la sesión (que ya se sincronizó
+// al guardar el perfil) y se refrescan con una consulta preparada.
+$user_nombre_header = Auth::nombre();
+$user_correo_header = (string)($_SESSION['corre_usu'] ?? '');
 
-if ($idUsuarioSesión > 0 && isset($conexion) &&$conexion) {
-    $resUserHeader =$conexion->query("SELECT nom_usu, corre_usu FROM usuario WHERE id_usu = $idUsuarioSesión");
-    if ($resUserHeader &&$resUserHeader->num_rows > 0) {
-        $rowHeader =$resUserHeader->fetch_assoc();
-        $user_nombre_header =$rowHeader['nom_usu'];
-        $user_correo_header =$rowHeader['corre_usu'];
+if ($idUsuarioSesión > 0) {
+    $filaUsuario = Database::one(
+        'SELECT nom_usu, corre_usu FROM usuario WHERE id_usu = ?',
+        [$idUsuarioSesión]
+    );
+    if ($filaUsuario) {
+        $user_nombre_header = (string)$filaUsuario['nom_usu'];
+        $user_correo_header = (string)$filaUsuario['corre_usu'];
     }
 }
 
-$nombreRealHeader = htmlspecialchars($user_nombre_header, ENT_QUOTES, 'UTF-8');$inicialUsuario = !empty($nombreRealHeader) ? strtoupper(substr($nombreRealHeader, 0, 1)) : 'U';
+$nombreRealHeader = htmlspecialchars($user_nombre_header, ENT_QUOTES, 'UTF-8');
+$inicialUsuario   = mb_strtoupper(mb_substr($user_nombre_header, 0, 1)) ?: 'U';
 
-// OBTENER LA FOTO DE PERFIL DESDE LA SESIÓN
-$fotoPerfilUsuario =$_SESSION['foto_usuario'] ?? '';
+// FOTO DE PERFIL DESDE LA SESIÓN
+$fotoPerfilUsuario = (string)($_SESSION['foto_usuario'] ?? '');
 
-$pagina_titulo = basename($_SERVER['PHP_SELF'], '.php');$submoduloTexto = "Inicio";
+$pagina_titulo  = basename($_SERVER['PHP_SELF'], '.php');
+$submoduloTexto = 'Inicio';
 
-$catalogoOpciones = [];
-$etiquetaRolHeader = 'Usuario';$colorRolHeader = 'text-slate-500';
+$catalogoOpciones  = [];
+$etiquetaRolHeader = 'Usuario';
+$colorRolHeader    = 'text-slate-500';
 
-if ($rolUsuario == 1) { // ADMIN$etiquetaRolHeader = 'Administrador';
-    $colorRolHeader = 'text-sky-500';$submoduloTexto = str_replace('_', ' ', ucfirst($pagina_titulo));$catalogoOpciones = [
-        ["titulo" => "Inicio / Dashboard", "categoria" => "Principal", "descripcion" => "Vista general del sistema", "url" => "admin.php", "icono" => "fa-chart-pie"],
-        ["titulo" => "Gestión de Usuarios", "categoria" => "Admin", "descripcion" => "Usuarios y roles", "url" => "usuarios.php", "icono" => "fa-users"],
-        ["titulo" => "Gestión de Permisos", "categoria" => "Admin", "descripcion" => "Asignar funciones al personal", "url" => "gestion_permisos.php", "icono" => "fa-key"],
-        ["titulo" => "Rutas de Transporte", "categoria" => "Operaciones", "descripcion" => "Gestión de trayectos", "url" => "rutas.php", "icono" => "fa-route"],
-        ["titulo" => "Control de Viajes", "categoria" => "Operaciones", "descripcion" => "Monitoreo de viajes", "url" => "viajes_3.php", "icono" => "fa-calendar-alt"]
-    ];
-} elseif ($rolUsuario == 2) { // CONDUCTOR
-    $etiquetaRolHeader = 'Conductor';$colorRolHeader = 'text-emerald-500';
-    if ($pagina_titulo === 'conductor' || $pagina_titulo === 'dashboard_conductor')$submoduloTexto = "Inicio";
-    else if ($pagina_titulo === 'viajes_conductor')$submoduloTexto = "Mis Viajes";
-    else if ($pagina_titulo === 'viaje_asignado')$submoduloTexto = "Viaje Asignado";
+if ($rolUsuario == Config::ROL_ADMIN) {
+    $etiquetaRolHeader = 'Administrador';
+    $colorRolHeader    = 'text-sky-500';
+    $submoduloTexto    = str_replace('_', ' ', ucfirst($pagina_titulo));
+
+    /* Cada entrada declara el PERMISO que exige: el buscador global solo ofrece
+       lo que el usuario tiene concedido de verdad, y todas las `url` apuntan a
+       módulos que existen (antes una de ellas iba a `viajes_3.php`, inexistente). */
     $catalogoOpciones = [
-        ["titulo" => "Dashboard", "categoria" => "Principal", "descripcion" => "Métricas de tu jornada", "url" => "conductor.php", "icono" => "fa-chart-pie"],
-        ["titulo" => "Mis Viajes", "categoria" => "Rutas", "descripcion" => "Consulta de viajes", "url" => "viajes_conductor.php", "icono" => "fa-route"],
-        ["titulo" => "Viaje Asignado", "categoria" => "Operaciones", "descripcion" => "Detalles del viaje actual", "url" => "viaje_asignado.php", "icono" => "fa-bus"]
+        ["titulo" => "Inicio / Dashboard",          "categoria" => "Principal",    "descripcion" => "Vista general del sistema",          "url" => "admin.php",              "icono" => "fa-chart-pie",     "permiso" => "admin"],
+        ["titulo" => "Gestión de Usuarios",         "categoria" => "Admin",        "descripcion" => "Usuarios y roles",                    "url" => "usuarios.php",           "icono" => "fa-users",         "permiso" => "usuarios"],
+        ["titulo" => "Gestión de Permisos",         "categoria" => "Admin",        "descripcion" => "Asignar funciones al personal",       "url" => "gestion_permisos.php",   "icono" => "fa-key",            "permiso" => "gestion_permisos"],
+        ["titulo" => "Rutas de Transporte",         "categoria" => "Operaciones",  "descripcion" => "Gestión de trayectos",                "url" => "rutas.php",              "icono" => "fa-route",         "permiso" => "rutas"],
+        ["titulo" => "Control de Viajes",           "categoria" => "Operaciones",  "descripcion" => "Programación y monitoreo",            "url" => "viajes.php",             "icono" => "fa-calendar-alt",   "permiso" => "viajes"],
+        ["titulo" => "Flota de Vehículos",          "categoria" => "Operaciones",  "descripcion" => "Unidades y disponibilidad",           "url" => "vehiculos.php",          "icono" => "fa-bus",            "permiso" => "vehiculos"],
+        ["titulo" => "Recaudo y Abordaje",          "categoria" => "Operaciones",  "descripcion" => "Cobro y manifiesto de pasajeros",      "url" => "asignaciones.php",       "icono" => "fa-cash-register",  "permiso" => "asignaciones"],
+        ["titulo" => "Anuncios de la Landing",      "categoria" => "Comunicación", "descripcion" => "Promociones y avisos de la portada",  "url" => "anuncios.php",           "icono" => "fa-images",        "permiso" => "anuncios"],
+        ["titulo" => "Comunicados",                 "categoria" => "Comunicación", "descripcion" => "Avisos para pasajeros y conductores", "url" => "comunicados.php",       "icono" => "fa-bullhorn",      "permiso" => "comunicados"],
+        ["titulo" => "Panel de Información",        "categoria" => "Informes",     "descripcion" => "Métricas e informes del negocio",     "url" => "reportes.php",           "icono" => "fa-chart-column",   "permiso" => "reportes"],
+        ["titulo" => "Calificaciones",              "categoria" => "Informes",     "descripcion" => "Rendimiento de los conductores",       "url" => "ranking_conductores.php","icono" => "fa-star",           "permiso" => "ranking_conductores"],
+        ["titulo" => "Logs de Auditoría",           "categoria" => "Informes",     "descripcion" => "Trazabilidad de cada acción",         "url" => "logs.php",               "icono" => "fa-file-alt",       "permiso" => "logs"],
     ];
-} elseif ($rolUsuario == 3) { // PASAJERO
-    $etiquetaRolHeader = 'Pasajero';$colorRolHeader = 'text-purple-500';
-    if ($pagina_titulo === 'pasajero')$submoduloTexto = "Inicio";
-    else if ($pagina_titulo === 'viajes_pasajero')$submoduloTexto = "Ver Viajes";
-    else if ($pagina_titulo === 'historial_pasajero')$submoduloTexto = "Historial";
+} elseif ($rolUsuario == Config::ROL_CONDUCTOR) {
+    $etiquetaRolHeader = 'Conductor';
+    $colorRolHeader    = 'text-emerald-500';
+    if ($pagina_titulo === 'conductor' || $pagina_titulo === 'dashboard_conductor') $submoduloTexto = "Inicio";
+    else if ($pagina_titulo === 'viajes_conductor')  $submoduloTexto = "Mis Viajes";
+    else if ($pagina_titulo === 'viaje_asignado')    $submoduloTexto = "Viaje Asignado";
+    else if ($pagina_titulo === 'resenas_conductor') $submoduloTexto = "Mis Reseñas";
     $catalogoOpciones = [
-        ["titulo" => "Panel Pasajero", "categoria" => "Principal", "descripcion" => "Resumen de tus viajes", "url" => "pasajero.php", "icono" => "fa-th-large", "permiso" => null],
-        ["titulo" => "Ver Viajes Disponibles", "categoria" => "Rutas", "descripcion" => "Rutas, precios y horarios", "url" => "viajes_pasajero.php", "icono" => "fa-bus", "permiso" => null],
-        ["titulo" => "Historial de Reservas", "categoria" => "Viajes", "descripcion" => "Histórico de pasajes", "url" => "historial_pasajero.php", "icono" => "fa-history", "permiso" => null],
-        ["titulo" => "Calificar Servicio", "categoria" => "Calificaciones", "descripcion" => "Evaluar al conductor", "url" => "calificar.php", "icono" => "fa-star", "permiso" => null]
+        ["titulo" => "Dashboard",      "categoria" => "Principal",   "descripcion" => "Métricas de tu jornada",      "url" => "conductor.php",         "icono" => "fa-chart-pie", "permiso" => null],
+        ["titulo" => "Mis Viajes",     "categoria" => "Rutas",       "descripcion" => "Consulta de viajes",           "url" => "viajes_conductor.php",  "icono" => "fa-route",     "permiso" => null],
+        ["titulo" => "Viaje Asignado", "categoria" => "Operaciones", "descripcion" => "Detalles del viaje actual",   "url" => "viaje_asignado.php",    "icono" => "fa-bus",       "permiso" => null],
+        ["titulo" => "Mis Reseñas",    "categoria" => "Operaciones", "descripcion" => "Lo que dicen los pasajeros",  "url" => "resenas_conductor.php", "icono" => "fa-star",      "permiso" => null],
+    ];
+} elseif ($rolUsuario == Config::ROL_PASAJERO) {
+    $etiquetaRolHeader = 'Pasajero';
+    $colorRolHeader    = 'text-purple-500';
+    if ($pagina_titulo === 'pasajero')          $submoduloTexto = "Inicio";
+    else if ($pagina_titulo === 'viajes_pasajero')    $submoduloTexto = "Ver Viajes";
+    else if ($pagina_titulo === 'historial_pasajero') $submoduloTexto = "Historial";
+    else if ($pagina_titulo === 'calificar')          $submoduloTexto = "Calificaciones";
+    $catalogoOpciones = [
+        ["titulo" => "Panel Pasajero",          "categoria" => "Principal",      "descripcion" => "Resumen de tus viajes",       "url" => "pasajero.php",          "icono" => "fa-th-large", "permiso" => null],
+        ["titulo" => "Ver Viajes Disponibles",  "categoria" => "Rutas",          "descripcion" => "Rutas, precios y horarios",   "url" => "viajes_pasajero.php",   "icono" => "fa-bus",       "permiso" => null],
+        ["titulo" => "Historial de Reservas",  "categoria" => "Viajes",         "descripcion" => "Histórico de pasajes",         "url" => "historial_pasajero.php","icono" => "fa-history",  "permiso" => null],
+        ["titulo" => "Calificar Servicio",      "categoria" => "Calificaciones","descripcion" => "Evaluar al conductor",        "url" => "calificar.php",         "icono" => "fa-star",      "permiso" => null],
     ];
 }
 
+/* Catálogo efectivo: se descartan las opciones cuyo permiso no esté concedido.
+   Con `permiso => null` la opción es siempre visible: son las pantallas propias
+   del rol, ya protegidas por `Auth::requerirRol` en cada archivo. */
 $opcionesSGET = [];
-foreach ($catalogoOpciones as$opcion) {
-    if (!isset($opcion['permiso']) OR $opcion['permiso'] === null OR Auth::tieneAcceso($opcion['permiso'])) {
-        $opcionesSGET[] =$opcion;
+foreach ($catalogoOpciones as $opcion) {
+    if (empty($opcion['permiso']) || Auth::tieneAcceso((string) $opcion['permiso'])) {
+        $opcionesSGET[] = $opcion;
     }
 }
 ?>
@@ -180,17 +249,12 @@ foreach ($catalogoOpciones as$opcion) {
             </button>
         </div>
 
-        <div class="relative group shrink-0">
-            <button type="button" data-sget-modal="modalAyuda" class="w-10 h-10 rounded-2xl bg-sky-500/10 text-sky-500 dark:text-sky-400 hover:bg-sky-500/20 border border-sky-500/20 transition-all flex items-center justify-center text-sm shadow-sm cursor-pointer" title="Guía del módulo (F1)">
-                <i class="fas fa-question text-xs"></i>
-            </button>
-        </div>
-
         <div class="relative shrink-0">
             <?php // El selector envía a set_language.php con un POST real: si i18n.js
                    // falla o el navegador tiene el JS desactivado, cambiar el idioma
                    // sigue funcionando. Con JS, i18n.js lo intercepta y no recarga. ?>
             <form method="POST" action="<?= Config::basePath() ?>/set_language.php" class="contents" data-sget-idioma-form>
+                <?= Auth::campoToken() ?>
                 <input type="hidden" name="idioma" value="<?= htmlspecialchars($idiomaActual, ENT_QUOTES, 'UTF-8') ?>">
                 <select id="headerLanguageSelector" data-sget-language name="idioma" aria-label="Idioma / Language"
                         title="Cambiar idioma"
@@ -210,7 +274,7 @@ foreach ($catalogoOpciones as$opcion) {
         </button>
 
         <!-- TUERCA DE CONFIGURACIÓN DE CUENTA -->
-        <button type="button" onclick="abrirModalConfigCuenta()" class="w-10 h-10 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-sky-500 hover:rotate-45 bg-slate-200/50 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 rounded-2xl transition-all border border-slate-300/50 dark:border-white/10 text-sm cursor-pointer" title="Configurar Cuenta">
+        <button type="button" data-sget-modal="modalConfigCuenta" class="w-10 h-10 flex items-center justify-center text-slate-600 dark:text-slate-300 hover:text-sky-500 hover:rotate-45 bg-slate-200/50 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 rounded-2xl transition-all border border-slate-300/50 dark:border-white/10 text-sm cursor-pointer" title="Configurar Cuenta">
             <i class="fas fa-cog text-base"></i>
         </button>
 
@@ -233,72 +297,99 @@ foreach ($catalogoOpciones as$opcion) {
             </div>
         <?php endif; ?>
 
-        <a href="../assets/cerrar.php" class="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-red-500 bg-slate-200/50 dark:bg-white/5 hover:bg-red-500/10 rounded-2xl transition-all border border-slate-300/50 dark:border-white/10 text-sm" title="Cerrar Sesión">
-            <i class="fas fa-sign-out-alt text-base"></i> 
-        </a>
+        <!--
+            Cierre de sesión por POST y con token.
+
+            Antes era un enlace GET: bastaba con que alguien cargara una imagen
+            con esa URL desde otro sitio para cerrarle la sesión al usuario.
+            `assets/cerrar.php` ahora solo admite GET para el cierre por
+            inactividad, que dispara la propia aplicación.
+        -->
+        <form method="POST" action="<?= Config::basePath() ?>/assets/cerrar.php" class="contents">
+            <?= Auth::campoToken() ?>
+            <button type="submit"
+                    class="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-red-500 bg-slate-200/50 dark:bg-white/5 hover:bg-red-500/10 rounded-2xl transition-all border border-slate-300/50 dark:border-white/10 text-sm cursor-pointer"
+                    title="Cerrar Sesión" aria-label="Cerrar Sesión">
+                <i class="fas fa-sign-out-alt text-base"></i>
+            </button>
+        </form>
     </div>
 </header>
 
-<!-- NOTIFICACIÓN DE ÉXITO -->
-<?php if (isset($_GET['config_status']) &&$_GET['config_status'] === 'success'): ?>
-<div id="toastConfigSuccess" class="fixed bottom-6 right-6 z-[120] bg-emerald-500 text-slate-950 font-black text-xs px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 transition-all">
-    <i class="fas fa-check-circle text-base"></i>
-    <span>¡Información de la cuenta actualizada correctamente!</span>
-</div>
-<script>
-    setTimeout(() => {
-        const toast = document.getElementById('toastConfigSuccess');
-        if (toast) toast.remove();
-    }, 4000);
-</script>
-<?php endif; ?>
+<!--
+    MODAL · CONFIGURACIÓN DE CUENTA
+    -----------------------------------------------------------------------------
+    Antes este diálogo era el ÚNICO del sistema que no usaba el motor común:
+    un `div` con `onclick="cerrarModalConfigCuenta()"`, sin overlay gestionado,
+    sin Escape, sin foco atrapado y con su propio JavaScript. Eso rompía la
+    regla de la casa (todos los diálogos pasan por SGETModal) y hacía que el
+    sidebar quedara utilizable por detrás.
 
-<!-- MODAL DE CONFIGURACIÓN DE CUENTA FUNCIONAL -->
-<div id="overlayConfigCuenta" onclick="cerrarModalConfigCuenta()" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4">
-    <div onclick="event.stopPropagation()" class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 rounded-[32px] max-w-md w-full p-6 shadow-2xl space-y-5 relative">
-        
-        <div class="flex justify-between items-center border-b border-slate-200 dark:border-white/10 pb-4">
-            <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                <i class="fas fa-user-cog text-sky-500"></i> Configuración de Cuenta
-            </h3>
-            <button type="button" onclick="cerrarModalConfigCuenta()" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer">
-                <i class="fas fa-times text-xs"></i>
+    Ahora usa `data-sget-capa` / `data-sget-panel` / `data-sget-cerrar`, lleva
+    token anti-CSRF y se abre con `data-sget-modal="modalConfigCuenta"`.
+    El guardado lo procesa este mismo archivo, en el servidor (ver arriba), y
+    responde con `Flash`: el mismo aviso que ve el resto del sistema.
+-->
+<div id="modalConfigCuenta" class="sget-modal-wrap" data-sget-capa data-titulo="Configuración de cuenta">
+    <div class="sget-overlay"></div>
+
+    <form class="sget-modal sget-modal--sm" data-sget-panel method="POST"
+          action="<?= htmlspecialchars($_SERVER['PHP_SELF'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+          novalidate role="dialog" aria-modal="true" aria-labelledby="tituloConfigCuenta">
+
+        <header class="sget-modal__head">
+            <div>
+                <h2 class="sget-modal__titulo" id="tituloConfigCuenta">
+                    <span class="sget-modal__icono"><i class="fas fa-user-cog"></i></span>
+                    <span>Configuración de cuenta</span>
+                </h2>
+                <p class="sget-modal__sub">Actualiza tus datos de acceso a SGET.</p>
+            </div>
+            <button type="button" class="sget-modal__cerrar" data-sget-cerrar aria-label="Cerrar">
+                <i class="fas fa-times"></i>
             </button>
-        </div>
+        </header>
 
-        <form action="<?php echo htmlspecialchars($_SERVER['PHP_SELF'], ENT_QUOTES, 'UTF-8'); ?>" method="POST" class="space-y-4">
+        <div class="sget-modal__body sget-scroll">
+            <?= Auth::campoToken() ?>
             <input type="hidden" name="accion_perfil" value="actualizar_configuracion">
 
-            <div>
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Nombre Completo</label>
-                <div class="relative">
-                    <i class="fas fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                    <input type="text" name="nom_usu" value="<?php echo htmlspecialchars($user_nombre_header, ENT_QUOTES, 'UTF-8'); ?>" required class="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-white">
-                </div>
+            <div class="sget-field" data-campo="nom_usu">
+                <label class="sget-label" for="cfgNombre">Nombre completo <span class="sget-label__req">*</span></label>
+                <input type="text" id="cfgNombre" name="nom_usu" required maxlength="100"
+                       autocomplete="name"
+                       class="sget-input" value="<?= htmlspecialchars($user_nombre_header, ENT_QUOTES, 'UTF-8') ?>">
+                <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
             </div>
 
-            <div>
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Correo Electrónico</label>
-                <div class="relative">
-                    <i class="fas fa-envelope absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                    <input type="email" name="corre_usu" value="<?php echo htmlspecialchars($user_correo_header, ENT_QUOTES, 'UTF-8'); ?>" required class="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-white">
-                </div>
+            <div class="sget-field" data-campo="corre_usu">
+                <label class="sget-label" for="cfgCorreo">Correo electrónico <span class="sget-label__req">*</span></label>
+                <input type="email" id="cfgCorreo" name="corre_usu" required maxlength="100"
+                       autocomplete="email"
+                       class="sget-input" value="<?= htmlspecialchars($user_correo_header, ENT_QUOTES, 'UTF-8') ?>">
+                <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
             </div>
 
-            <div>
-                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Nueva Contraseña <span class="text-slate-400 font-normal">(Opcional)</span></label>
-                <div class="relative">
-                    <i class="fas fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                    <input type="password" name="pass_usu" placeholder="Déjala en blanco para mantener la actual" class="w-full pl-9 pr-4 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-xs focus:outline-none focus:border-sky-500 text-slate-900 dark:text-white">
-                </div>
+            <div class="sget-field" data-campo="pass_usu">
+                <label class="sget-label" for="cfgClave">
+                    Nueva contraseña
+                    <span class="sget-label__opt">(opcional)</span>
+                </label>
+                <input type="password" id="cfgClave" name="pass_usu" autocomplete="new-password"
+                       placeholder="Déjala vacía para mantener la actual"
+                       class="sget-input">
+                <p class="sget-help">Mínimo <?= Password::MIN ?> caracteres. Al cambiarla tendrás que usarla en el próximo ingreso.</p>
+                <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
             </div>
+        </div>
 
-            <div class="pt-3 border-t border-slate-200 dark:border-white/10 flex gap-3">
-                <button type="button" onclick="cerrarModalConfigCuenta()" class="flex-1 py-3 bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-slate-200 rounded-2xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer">Cancelar</button>
-                <button type="submit" class="flex-1 py-3 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black rounded-2xl text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 transition-all cursor-pointer">Guardar Cambios</button>
-            </div>
-        </form>
-    </div>
+        <footer class="sget-modal__foot">
+            <button type="button" class="sget-btn sget-btn--neutro" data-sget-cerrar>Cancelar</button>
+            <button type="submit" class="sget-btn sget-btn--primario">
+                <i class="fas fa-floppy-disk"></i> Guardar cambios
+            </button>
+        </footer>
+    </form>
 </div>
 
 <!-- INCLUSIÓN DEL COMPONENTE DE INACTIVIDAD CENTRALIZADO Y SEGURO -->
@@ -318,22 +409,6 @@ if (file_exists(dirname(__DIR__) . '/views/modals/notificaciones.php')) {
 
 <!-- SCRIPT GENERAL DE CONFIGURACIÓN, CAMBIO DE TEMA Y BUSCADOR -->
 <script>
-    function abrirModalConfigCuenta() {
-        const modal = document.getElementById('overlayConfigCuenta');
-        if (modal) {
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        }
-    }
-
-    function cerrarModalConfigCuenta() {
-        const modal = document.getElementById('overlayConfigCuenta');
-        if (modal) {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
         
         // 1. MANEJADOR DEL BOTÓN DE TEMA (MODO OSCURO / CLARO)

@@ -47,7 +47,7 @@ $rango = (string)($_GET['rango'] ?? '30');
 );
 
 $tab = (string)($_GET['tab'] ?? 'general');
-$secciones = ['general', 'viajes', 'usuarios', 'rutas', 'ganancias'];
+$secciones = ['general', 'viajes', 'pasajeros', 'usuarios', 'rutas', 'ganancias'];
 if (!in_array($tab, $secciones, true)) $tab = 'general';
 
 $e = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
@@ -144,6 +144,7 @@ include __DIR__ . '/../views/partials/head.php';
             <?php foreach ([
                 'general'   => ['fa-chart-pie', 'Información general'],
                 'viajes'    => ['fa-bus',      'Historial de viajes'],
+                'pasajeros' => ['fa-users-slash', 'Pasajeros y no-presentaciones'],
                 'usuarios'  => ['fa-users',    'Historial de usuarios'],
                 'rutas'     => ['fa-route',    'Historial de rutas'],
                 'ganancias' => ['fa-money-bill-wave', 'Ganancias'],
@@ -285,8 +286,9 @@ include __DIR__ . '/../views/partials/head.php';
                                 <?php foreach ($flota as $f): ?>
                                     <tr>
                                         <td data-label="Estado">
-                                            <span class="sget-badge <?= (int)$f['est_veh'] === Config::VEH_DISPONIBLE ? 'sget-badge--exito' : 'sget-badge--neutro' ?>">
-                                                <?= (int)$f['est_veh'] === Config::VEH_DISPONIBLE ? 'Disponible' : 'Fuera de servicio' ?>
+                                            <span class="<?= VehiculoService::claseEstado((string)$f['est_veh']) ?>">
+                                                <i class="fas <?= VehiculoService::iconoEstado((string)$f['est_veh']) ?>"></i>
+                                                <?= VehiculoService::etiquetaEstado((string)$f['est_veh']) ?>
                                             </span>
                                         </td>
                                         <td data-label="Unidades" class="sget-centro sget-mono"><?= InformacionService::numero($f['total']) ?></td>
@@ -433,7 +435,8 @@ include __DIR__ . '/../views/partials/head.php';
 
                 <div class="sget-field" style="flex:1 1 14rem">
                     <label class="sget-label" for="f_q">Buscar</label>
-                    <input type="search" id="f_q" name="q" class="sget-input" value="<?= $e($filtros['q']) ?>"
+                    <input type="search" id="f_q" name="q" class="sget-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= $e($filtros['q']) ?>"
+                           <?= $filtros['q'] !== '' ? 'data-sget-valor-inicial' : '' ?>
                            placeholder="Ruta, conductor, placa o # de viaje">
                 </div>
 
@@ -472,6 +475,21 @@ include __DIR__ . '/../views/partials/head.php';
             <p class="sget-help" style="margin-top:-.5rem">
                 <i class="fas fa-circle-info"></i>
                 <strong><?= InformacionService::numero($hist['total']) ?></strong> viaje(s) en el historial.
+                <?php
+                /* Aviso explícito cuando hay un filtro aplicado: sin él no se
+                   distingue «no hay viajes» de «el filtro no deja ver ninguno»,
+                   que es la queja más habitual de estos módulos. */
+                $__activos = array_filter([
+                    $filtros['q']      !== '' ? 'búsqueda: «' . $filtros['q'] . '»' : '',
+                    $filtros['estado'] !== '' ? 'estado: ' . $filtros['estado']   : '',
+                    $rango              !== '' ? 'rango: ' . $rango                : '',
+                ]);
+                ?>
+                <?php if ($__activos): ?>
+                    <span class="sget-badge sget-badge--info" style="margin-left:.375rem">
+                        <i class="fas fa-filter"></i> Filtrado por <?= $e(implode(' · ', $__actos)) ?>
+                    </span>
+                <?php endif; ?>
             </p>
 
             <div class="sget-table-box">
@@ -521,6 +539,11 @@ include __DIR__ . '/../views/partials/head.php';
                                             <?= $e(ViajeService::etiquetaMotivo((string)$v['motivo_cancelacion'])) ?>
                                         </span>
                                     <?php endif; ?>
+                                    <a class="sget-btn sget-btn--sm sget-btn--neutro" style="margin-top:.375rem"
+                                       href="<?= $e($url(['tab' => 'pasajeros', 'viaje' => (int)$v['id_via']])) ?>"
+                                       title="Ver qué pasajeros reserved, pagaron y viajaron en este viaje">
+                                        <i class="fas fa-users"></i> Pasajeros
+                                    </a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -553,6 +576,218 @@ include __DIR__ . '/../views/partials/head.php';
             <?php endif; ?>
 
         <!-- ================================================================== -->
+        <!-- 3 · PASAJEROS Y NO-PRESENTACIONES                                  -->
+        <!-- ================================================================== -->
+        <!--
+            RESPONDE A LAS PREGUNTAS QUE NO CONTESTABA NINGÚN INFORME
+            · ¿Quiénes viajaron en este viaje?
+            · ¿Quién tenía puesto y no se presentó, y por qué?
+            · ¿Cuánto se cobró de quien no subió al bus?
+
+            Antes solo existían `reservas` (conteo) y `recaudo` (suma): de un
+            viaje se sabía que hubo 6 reservas y $21.000, pero no QUIÉN, ni si
+            esos 6 viajaron. El campo `embarco` es lo que separa
+            «pagó» de «viajó», y sin él cualquier informe de ocupación miente.
+        -->
+        <?php elseif ($tab === 'pasajeros'):
+            $viajeSel = (int)($_GET['viaje'] ?? 0);
+
+            $filtros = [
+                'desde' => (string)($_GET['desde'] ?? ''),
+                'hasta' => (string)($_GET['hasta'] ?? ''),
+                'q'     => mb_substr(trim((string)($_GET['q'] ?? '')), 0, 60),
+            ];
+
+            $detalle     = $viajeSel > 0 ? InformacionService::pasajerosDeViaje($viajeSel) : null;
+            $viajeDet    = $viajeSel > 0 ? ViajeService::porId($viajeSel) : null;
+            $noPresentes = InformacionService::noPresentaciones($filtros, 100);
+
+            // Un resumen global del período, para tener el contexto arriba.
+            $global = Database::one(
+                "SELECT COUNT(*) AS puestos,
+                        SUM(embarco = 1) AS embarcaron,
+                        SUM(embarco = 0) AS no_vinieron,
+                        SUM(embarco IS NULL) AS sin_definir
+                   FROM reserva
+                  WHERE estado_pago <> ?
+                    AND DATE(fech_res) BETWEEN ? AND ?",
+                [Config::RES_CANCELADA,
+                 $desde !== '' ? $desde : '1970-01-01',
+                 $hasta !== '' ? $hasta : '2999-12-31']
+            ) ?: ['puestos' => 0, 'embarcaron' => 0, 'no_vinieron' => 0, 'sin_definir' => 0];
+        ?>
+
+            <form method="GET" class="sget-toolbar" data-sget-form-solo>
+                <input type="hidden" name="tab" value="pasajeros">
+                <input type="hidden" name="rango" value="<?= $e($rango) ?>">
+                <input type="hidden" name="desde" value="<?= $e($filtros['desde']) ?>">
+                <input type="hidden" name="hasta" value="<?= $e($filtros['hasta']) ?>">
+
+                <div class="sget-field" style="flex:1 1 16rem">
+                    <label class="sget-label" for="f_qp">Buscar pasajero</label>
+                    <input type="search" id="f_qp" name="q" class="sget-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= $e($filtros['q']) ?>"
+                           <?= $filtros['q'] !== '' ? 'data-sget-valor-inicial' : '' ?>
+                           placeholder="Nombre, documento o motivo de la ausencia…">
+                </div>
+
+                <div class="sget-field" style="flex:0 1 13rem">
+                    <label class="sget-label" for="f_viaje">Ver un viaje concreto</label>
+                    <select id="f_viaje" name="viaje" class="sget-select">
+                        <option value="">Todos los viajes</option>
+                        <?php foreach (InformacionService::historialViajes([
+                            'desde' => $filtros['desde'], 'hasta' => $filtros['hasta'],
+                        ], 1, 60)['filas'] as $op): ?>
+                            <option value="<?= (int)$op['id_via'] ?>" <?= $viajeSel === (int)$op['id_via'] ? 'selected' : '' ?>>
+                                #<?= (int)$op['id_via'] ?> · <?= $e(Fecha::legible($op['fec_via'], false)) ?>
+                                <?= $e(Fecha::soloHora($op['hor_sal_via'])) ?> · <?= $e((string)$op['nom_rut']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <button type="submit" class="sget-btn sget-btn--primario">
+                    <i class="fas fa-filter"></i> Filtrar
+                </button>
+                <a class="sget-btn sget-btn--neutro" href="<?= $e($url(['q' => null, 'viaje' => null])) ?>">
+                    <i class="fas fa-rotate-left"></i> Limpiar
+                </a>
+            </form>
+
+            <!-- RESUMEN DEL PERÍODO -->
+            <section class="sget-grid sget-grid--kpi">
+                <div class="sget-card sget-kpi">
+                    <span class="sget-kpi__icono" style="background:color-mix(in srgb,var(--sget-azul) 12%,transparent);color:var(--sget-azul)"><i class="fas fa-ticket"></i></span>
+                    <div><p class="sget-label">Puestos</p><p class="sget-kpi__valor"><?= InformacionService::numero($global['puestos']) ?></p></div>
+                </div>
+                <div class="sget-card sget-kpi">
+                    <span class="sget-kpi__icono" style="background:color-mix(in srgb,var(--sget-emerald) 12%,transparent);color:var(--sget-emerald)"><i class="fas fa-user-check"></i></span>
+                    <div><p class="sget-label">Embarcaron</p><p class="sget-kpi__valor"><?= InformacionService::numero($global['embarcaron']) ?></p></div>
+                </div>
+                <div class="sget-card sget-kpi">
+                    <span class="sget-kpi__icono" style="background:color-mix(in srgb,var(--sget-rojo) 12%,transparent);color:var(--sget-rojo)"><i class="fas fa-user-slash"></i></span>
+                    <div><p class="sget-label">No se presentaron</p><p class="sget-kpi__valor"><?= InformacionService::numero($global['no_vinieron']) ?></p></div>
+                </div>
+                <div class="sget-card sget-kpi">
+                    <span class="sget-kpi__icono" style="background:color-mix(in srgb,var(--sget-ambars) 14%,transparent);color:var(--sget-ambars)"><i class="fas fa-question"></i></span>
+                    <div><p class="sget-label">Sin definir</p><p class="sget-kpi__valor"><?= InformacionService::numero($global['sin_definir']) ?></p></div>
+                </div>
+            </section>
+
+            <?php if ((int)$global['sin_definir'] > 0): ?>
+                <div class="sget-nota sget-nota--aviso" style="margin-bottom:1rem">
+                    <i class="fas fa-circle-info"></i>
+                    <div>
+                        <strong><?= InformacionService::numero($global['sin_definir']) ?> puesto(s) sin definir el embarque.</strong>
+                        Son reservas cuyo viaje ya pasó y que nadie marcó como «embarcó» ni como «no se presentó».
+                        Muéstraselos al conductor en su pantalla de viaje: es el dato que falta para cerrar el informe.
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <!-- MANIFIESTO DEL VIAJE ELEGIDO -->
+            <?php if ($detalle !== null): ?>
+                <div class="sget-table-box" style="margin-top:1rem">
+                    <div class="sget-table-wrap">
+                        <table class="sget-table sget-table--compacta">
+                            <thead><tr>
+                                <th>Pasajero</th><th>Documento</th><th class="sget-centro">Puestos</th>
+                                <th class="sget-centro">Pagados</th><th class="sget-centro">Pendientes</th>
+                                <th class="sget-centro">Embarcó</th><th class="sget-centro">No vino</th>
+                                <th class="acciones">Debe</th>
+                            </tr></thead>
+                            <tbody>
+                            <?php if (empty($detalle['pasajeros'])): ?>
+                                <tr><td colspan="8" class="sget-sin-resultados">Este viaje no tiene pasajeros reservados.</td></tr>
+                            <?php endif; ?>
+                            <?php foreach ($detalle['pasajeros'] as $p): ?>
+                                <tr>
+                                    <td data-label="Pasajero" class="sget-truncar">
+                                        <?= $e($p['pasajero']) ?>
+                                        <?php if ($p['motivo'] !== ''): ?>
+                                            <span class="sget-help" style="display:block"><?= $e($p['motivo']) ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td data-label="Documento" class="sget-mono sget-suave"><?= $e($p['num_doc_usu']) ?></td>
+                                    <td data-label="Puestos" class="sget-centro sget-mono"><?= (int)$p['puestos'] ?></td>
+                                    <td data-label="Pagados" class="sget-centro sget-mono"><?= (int)$p['pagados'] ?></td>
+                                    <td data-label="Pendientes" class="sget-centro sget-mono"><?= (int)$p['pendientes'] ?></td>
+                                    <td data-label="Embarcó" class="sget-centro sget-mono"><?= (int)$p['embarcaron'] ?></td>
+                                    <td data-label="No vino" class="sget-centro sget-mono"><?= (int)$p['no_embarcaron'] ?></td>
+                                    <td class="acciones" data-label="Debe">
+                                        <span class="sget-mono" style="font-weight:800"><?= InformacionService::money((float)$p['debe']) ?></span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                            <?php if (!empty($detalle['pasajeros'])): ?>
+                                <tfoot>
+                                    <tr>
+                                        <th colspan="2">Totales del viaje</th>
+                                        <th class="sget-centro"><?= (int)$detalle['totales']['puestos'] ?></th>
+                                        <th colspan="2"></th>
+                                        <th class="sget-centro"><?= (int)$detalle['totales']['viajeros'] ?></th>
+                                        <th class="sget-centro"><?= (int)$detalle['totales']['no_presentados'] ?></th>
+                                        <th class="acciones"><?= InformacionService::money((float)$detalle['totales']['debe']) ?></th>
+                                    </tr>
+                                </tfoot>
+                            <?php endif; ?>
+                        </table>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <!-- HISTORIAL DE NO-PRESENTACIONES -->
+            <h2 class="sget-page-title" style="font-size:1.05rem;margin-top:1.5rem">
+                <i class="fas fa-user-slash text-rose-500"></i>
+                Quién no se presentó y por qué
+            </h2>
+            <p class="sget-page-sub" style="margin-bottom:.75rem">
+                Son los pasajeros con puesto que no subieron al bus. El motivo lo registra el conductor en su
+                pantalla de viaje; sin él, el informe no distinguiría un no-show de una reserva cancelada.
+            </p>
+
+            <div class="sget-table-box">
+                <div class="sget-table-wrap">
+                    <table class="sget-table sget-table--compacta">
+                        <thead><tr>
+                            <th>Pasajero</th><th>Documento</th><th>Viaje</th><th>Salida</th>
+                            <th class="sget-centro">Pago</th><th class="acciones">Cobrado</th><th>Motivo</th>
+                        </tr></thead>
+                        <tbody>
+                        <?php if (empty($noPresentes)): ?>
+                            <tr><td colspan="7" class="sget-sin-resultados">No hay no-presentaciones registradas.</td></tr>
+                        <?php endif; ?>
+                        <?php foreach ($noPresentes as $n): ?>
+                            <tr>
+                                <td data-label="Pasajero" class="sget-truncar"><?= $e((string)$n['pasajero']) ?></td>
+                                <td data-label="Documento" class="sget-mono sget-suave"><?= $e((string)$n['num_doc_usu']) ?></td>
+                                <td data-label="Viaje">
+                                    <a class="sget-mono" href="<?= $e($url(['tab' => 'pasajeros', 'viaje' => (int)$n['id_via']])) ?>">#<?= (int)$n['id_via'] ?></a>
+                                    <span class="sget-help" style="display:block"><?= $e((string)$n['nom_rut']) ?></span>
+                                </td>
+                                <td data-label="Salida" class="sget-mono sget-nowrap">
+                                    <?= Fecha::legible($n['fec_via'], false) ?><br>
+                                    <span class="sget-suave"><?= Fecha::soloHora($n['hor_sal_via']) ?></span>
+                                </td>
+                                <td data-label="Pago" class="sget-centro">
+                                    <span class="sget-badge <?= (string)$n['estado_pago'] === Config::RES_CONFIRMADA ? 'sget-badge--exito' : 'sget-badge--aviso' ?>">
+                                        <?= $e((string)$n['estado_pago']) ?>
+                                    </span>
+                                </td>
+                                <td class="acciones" data-label="Cobrado">
+                                    <span class="sget-mono" style="font-weight:800"><?= InformacionService::money((float)$n['valor_pagado']) ?></span>
+                                </td>
+                                <td data-label="Motivo" class="sget-truncar">
+                                    <span class="sget-help"><?= $e((string)($n['motivo_cancelacion'] ?: 'Sin motivo')) ?></span>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        <!-- ================================================================== -->
         <!-- 3 · HISTORIAL DE USUARIOS                                            -->
         <!-- ================================================================== -->
         <?php elseif ($tab === 'usuarios'):
@@ -571,7 +806,8 @@ include __DIR__ . '/../views/partials/head.php';
 
                 <div class="sget-field" style="flex:1 1 14rem">
                     <label class="sget-label" for="fu_q">Buscar</label>
-                    <input type="search" id="fu_q" name="q" class="sget-input" value="<?= $e($filtros['q']) ?>"
+                    <input type="search" id="fu_q" name="q" class="sget-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= $e($filtros['q']) ?>"
+                           <?= $filtros['q'] !== '' ? 'data-sget-valor-inicial' : '' ?>
                            placeholder="Nombre, documento, correo o teléfono">
                 </div>
 
@@ -663,7 +899,7 @@ include __DIR__ . '/../views/partials/head.php';
                                         <span class="sget-help">—</span>
                                     <?php else: ?>
                                         <span class="sget-badge <?= $cal >= 4 ? 'sget-badge--exito' : ($cal >= 3 ? 'sget-badge--aviso' : 'sget-badge--error') ?>">
-                                            <i class="fas fa-star"></i> <?= number_format($cal, 1, ',', '.') ?>
+                                            <i class="fas fa-star"></i> <?= number_format((float)$cal, 1, ',', '.') ?>
                                         </span>
                                     <?php endif; ?>
                                 </td>
@@ -975,7 +1211,7 @@ include __DIR__ . '/../views/partials/head.php';
                                                 <span class="sget-badge sget-badge--neutro">Sin evaluar</span>
                                             <?php else: ?>
                                                 <span class="sget-badge <?= $cal >= 4 ? 'sget-badge--exito' : ($cal >= 3 ? 'sget-badge--aviso' : 'sget-badge--error') ?>">
-                                                    <i class="fas fa-star"></i> <?= number_format($cal, 1, ',', '.') ?>
+                                                    <i class="fas fa-star"></i> <?= number_format((float)$cal, 1, ',', '.') ?>
                                                 </span>
                                             <?php endif; ?>
                                         </td>

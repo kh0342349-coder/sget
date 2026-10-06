@@ -1,139 +1,234 @@
 <?php
-// 1. Evitar caché del navegador para que no muestre la vista renderizada anterior
-header("Cache-Control: no-cache, no-store, must-revalidate");
-header("Pragma: no-cache");
-header("Expires: 0");
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+/**
+ * includes/header_index.php
+ * -----------------------------------------------------------------------------
+ * CABECERA DE LA PORTADA PÚBLICA
+ * -----------------------------------------------------------------------------
+ * COMPONENTE REUTILIZABLE, no un bloque copiado en cada página.
+ *   · El marcado y el comportamiento de la navegación viven AQUÍ.
+ *   · `includes/landing_nav.php` aporta los enlaces, de modo que añadir una
+ *     sección nueva de la landing es cambiar una lista, no reescribir el
+ *     HTML ni el JavaScript en dos sitios.
+ *   · Los botones «Iniciar sesión» / «Registrarse» se montan con el MISMO
+ *     motor de modales del panel (`data-sget-modal`), así que el velo, el foco
+ *     atrapado y la tecla Escape se comportan igual en toda la aplicación.
+ * -----------------------------------------------------------------------------
+ */
+if (!class_exists('Auth')) {
+    require_once dirname(__DIR__) . '/core/bootstrap.php';
 }
 require_once __DIR__ . '/i18n.php';
 
-// 2. Comprobar si realmente hay una sesión activa válida
-$estaAutenticado = !empty($_SESSION['nombre_usuario']) || !empty($_SESSION['documento']);
-$nombreRealHeader = $estaAutenticado ? htmlspecialchars($_SESSION['nombre_usuario']) : "";
+$estaAutenticado  = Auth::estaLogueado();
+$nombreRealHeader = $estaAutenticado ? htmlspecialchars(Auth::nombre(), ENT_QUOTES, 'UTF-8') : '';
+$rolActualHeader  = $estaAutenticado ? (int) Auth::rol() : 0;
 
-$pagina_actual = basename($_SERVER['PHP_SELF']);
+/* Etiqueta del rol, para el panel de la portada. */
+$etiquetaRol = match ($rolActualHeader) {
+    Config::ROL_ADMIN     => 'Administrador',
+    Config::ROL_CONDUCTOR => 'Conductor',
+    Config::ROL_PASAJERO  => 'Pasajero',
+    default               => 'Sesión activa',
+};
+
+/* Enlaces de la portada: sección => [rótulo, icono, ANCLA].
+ *
+ * EL ANCLA ES UNA ANCLA, NO UNA RUTA
+ *   Antes cada enlace era `index.php#seccion`. Estando ya en la portada eso
+ *   provocaba una RECARGA COMPLETA del documento para mover el scroll unos
+ *   píxeles: se perdía el estado, se pedían otra vez los mismos recursos y el
+ *   salto era seco y sin animación.
+ *
+ *   Este header solo se incluye en `index.php`, así que un `#seccion` a secas
+ *   siempre funciona, degrada bien sin JavaScript y permite el desplazamiento
+ *   suave y el resaltado de la sección activa (`data-sget-seccion`).
+ */
+$seccionesLanding = [
+    ['inicio',              'Inicio',             'fa-house',       '#inicio'],
+    ['viajes-disponibles', 'Viaja con nosotros', 'fa-bus',         '#viajes-disponibles'],
+    ['servicios',          'Servicios',          'fa-layer-group', '#servicios'],
+    ['nosotros',            'Nosotros',           'fa-circle-info', '#nosotros'],
+    ['contacto',            'Contacto',           'fa-envelope',    '#contacto'],
+];
+
+$paginaActualLanding = $pagina_actual ?? 'index';
+$BASE = Config::basePath();
 ?>
 
-<!-- HEADER A LO LARGO DE LA PANTALLA CON EFECTO DIFUMINADO -->
-<header class="w-full fixed top-0 left-0 right-0 z-50 py-3 px-6 md:px-12 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md border-b border-slate-200/50 dark:border-white/10 transition-colors duration-300">
-    <div class="max-w-7xl mx-auto flex items-center justify-between">
-        
-        <!-- LOGO (IZQUIERDA) -->
-        <div class="flex items-center">
-            <a href="index.php" class="flex items-center group">
-                <!-- Logo Tema Claro -->
-                <img id="logo-header-light" 
-                     src="img/largo-blanco.png" 
-                     alt="SGET Logo" 
-                     class="h-9 md:h-11 w-auto object-contain block dark:hidden filter drop-shadow-sm group-hover:scale-105 transition-all duration-300">
-                
-                <!-- Logo Tema Oscuro -->
-                <img id="logo-header-dark" 
-                     src="img/largo-negro.png" 
-                     alt="SGET Logo" 
-                     class="h-9 md:h-11 w-auto object-contain hidden dark:block filter drop-shadow-md group-hover:scale-105 transition-all duration-300">
-            </a>
-        </div>
+<!-- CABECERA FLOTANTE DE LA PORTADA -->
+<header class="landing-header" id="landingHeader">
+    <div class="landing-header__inner">
 
-        <!-- BOTÓN HAMBURGUESA (solo móvil) -->
-        <button type="button" data-sget-burger aria-label="Abrir menú" aria-expanded="false"
-                class="landing-burger ml-auto lg:hidden text-slate-700 dark:text-slate-200">
-            <i class="fas fa-bars text-sm"></i>
-        </button>
+        <!-- LOGO -->
+        <a href="<?= $BASE ?>/index.php" class="landing-header__marca" aria-label="SGET, ir al inicio">
+            <img src="<?= $BASE ?>/img/largo-blanco.png" alt="SGET"
+                 class="landing-header__logo landing-header__logo--claro">
+            <img src="<?= $BASE ?>/img/largo-negro.png" alt="SGET"
+                 class="landing-header__logo landing-header__logo--oscuro">
+        </a>
 
-        <!-- ISLA FLOTANTE DE NAVEGACIÓN (CENTRO) -->
-        <nav class="landing-nav hidden lg:flex items-center gap-1 bg-slate-100/60 dark:bg-white/5 border border-slate-200/60 dark:border-white/10 p-1.5 rounded-full shadow-inner text-xs font-medium">
-            <a href="index.php#inicio" class="px-5 py-2 rounded-full transition-all duration-200 bg-sky-500 text-white font-bold shadow-sm hover:bg-sky-400">
-                Inicio
-            </a>
-            <a href="index.php#viajes-disponibles" class="px-4 py-2 rounded-full text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-all duration-200">
-                Viaja con nosotros
-            </a>
-            <a href="index.php#servicios" class="px-4 py-2 rounded-full text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-all duration-200">
-                Servicios
-            </a>
-            <a href="#" class="px-4 py-2 rounded-full text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-all duration-200">
-                Nosotros
-            </a>
-            <a href="#" class="px-4 py-2 rounded-full text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/10 transition-all duration-200">
-                Contacto
-            </a>
+        <!-- NAVEGACIÓN CENTRAL (escritorio) -->
+        <nav class="landing-nav" aria-label="Secciones de SGET">
+            <?php foreach ($seccionesLanding as $i => [$clave, $rotulo, $icono, $ancla]): ?>
+                <a href="<?= $ancla ?>"
+                   class="landing-nav__link<?= $i === 0 ? ' es-activo' : '' ?>"
+                   data-sget-seccion="<?= $clave ?>"
+                   <?= $i === 0 ? 'aria-current="true"' : '' ?>>
+                    <i class="fas <?= $icono ?>" aria-hidden="true"></i>
+                    <span><?= htmlspecialchars($rotulo, ENT_QUOTES, 'UTF-8') ?></span>
+                </a>
+            <?php endforeach; ?>
         </nav>
 
-        <!-- ACCIONES (DERECHA) -->
-        <div class="flex items-center gap-2.5">
-            
-            <!-- SELECTOR DE IDIOMA -->
-            <select data-sget-language aria-label="Language" title="Seleccionar idioma / Select language" style="min-width: 108px;" class="sget-language-selector h-10 px-2.5 rounded-full bg-slate-100/70 dark:bg-slate-800/70 text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer">
+        <!-- ACCIONES -->
+        <div class="landing-header__acciones">
+
+            <!-- Selector de idioma -->
+            <select data-sget-language aria-label="Idioma / Language" title="Cambiar idioma"
+                    class="sget-language-selector landing-header__idioma">
                 <option value="es" <?= $idiomaActual === 'es' ? 'selected' : '' ?>>🇪🇸 ESP</option>
                 <option value="en" <?= $idiomaActual === 'en' ? 'selected' : '' ?>>🇺🇸 ENG</option>
             </select>
 
-            <!-- TOGGLE TEMA -->
-            <button id="theme-toggle" type="button" class="w-10 h-10 rounded-full bg-slate-100/70 dark:bg-slate-800/70 text-slate-700 dark:text-amber-300 flex items-center justify-center transition-all cursor-pointer border border-slate-200 dark:border-slate-700 shadow-sm hover:scale-105" title="Cambiar Tema">
-                <i id="themeIcon" class="fas fa-moon text-sm"></i>
+            <!-- Tema claro / oscuro -->
+            <button id="theme-toggle" type="button" class="landing-header__icono"
+                    aria-label="Cambiar entre tema claro y oscuro" title="Cambiar tema">
+                <i id="themeIcon" class="fas fa-moon" aria-hidden="true"></i>
             </button>
 
-            <!-- BOTONES DE INICIO Y REGISTRO -->
             <?php if (!$estaAutenticado): ?>
-                <div class="flex items-center gap-2">
-                    <button type="button" data-sget-modal="panelLogin" class="px-4 py-2 rounded-full text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100/70 dark:bg-slate-800/70 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer">
-                        Iniciar Sesión
+                <div class="landing-header__acceso">
+                    <button type="button" data-sget-modal="panelLogin" class="landing-header__boton landing-header__boton--neutro">
+                        <i class="fas fa-right-to-bracket" aria-hidden="true"></i> Iniciar sesión
                     </button>
-                    <button type="button" data-sget-modal="panelRegistro" class="px-4 py-2 rounded-full text-xs font-extrabold bg-amber-400 text-slate-950 hover:bg-amber-300 transition-all cursor-pointer shadow-md hover:shadow-lg">
-                        Registrarse
+                    <button type="button" data-sget-modal="panelRegistro" class="landing-header__boton landing-header__boton--primario">
+                        <i class="fas fa-user-plus" aria-hidden="true"></i> Registrarse
                     </button>
                 </div>
-            <?php endif; ?>
-
-            <!-- TARJETA DE PERFIL (SI HAY SESIÓN) -->
-            <?php if ($estaAutenticado && !empty($nombreRealHeader)): ?>
-                <div class="flex items-center gap-2.5 pl-2.5 py-1 pr-1 bg-slate-100/60 dark:bg-slate-800/60 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
-                    <div class="text-right hidden sm:block pl-2">
-                        <p class="text-xs font-bold text-slate-800 dark:text-white leading-tight"><?php echo $nombreRealHeader; ?></p>
-                        <p class="text-[9px] text-emerald-500 font-extrabold uppercase tracking-widest flex items-center justify-end gap-1">
-                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span> Online
-                        </p>
-                    </div>
-                    <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-500 to-blue-600 text-white font-bold text-xs flex items-center justify-center shadow-md">
-                        <?php echo strtoupper(substr($nombreRealHeader, 0, 1)); ?>
-                    </div>
-                    <a href="assets/cerrar.php" onclick="sessionStorage.clear();" class="p-1.5 text-slate-400 hover:text-red-500 transition-colors" title="Cerrar Sesión">
-                        <i class="fas fa-sign-out-alt text-xs"></i>
+            <?php else: ?>
+                <!-- Tarjeta de sesión: nombre, rol y salida -->
+                <div class="landing-header__sesion">
+                    <a class="landing-header__perfil" href="<?= $BASE ?>/<?= Auth::inicioPorRol() ?>"
+                       title="Ir a mi panel">
+                        <span class="landing-header__avatar" aria-hidden="true">
+                            <?= mb_strtoupper(mb_substr(Auth::nombre(), 0, 1)) ?: 'U' ?>
+                        </span>
+                        <span class="landing-header__perfil-datos">
+                            <strong><?= $nombreRealHeader ?></strong>
+                            <small><?= htmlspecialchars($etiquetaRol, ENT_QUOTES, 'UTF-8') ?></small>
+                        </span>
                     </a>
+                    <!-- Ver includes/header.php: el cierre es POST + token. -->
+                    <form method="POST" action="<?= $BASE ?>/assets/cerrar.php" class="contents">
+                        <?= Auth::campoToken() ?>
+                        <button type="submit" class="landing-header__salir cursor-pointer"
+                                title="Cerrar sesión" aria-label="Cerrar sesión">
+                            <i class="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
+                        </button>
+                    </form>
                 </div>
             <?php endif; ?>
 
+            <!-- Menú móvil -->
+            <button type="button" data-sget-burger aria-label="Abrir menú" aria-expanded="false"
+                    class="landing-header__burger">
+                <i class="fas fa-bars" aria-hidden="true"></i>
+            </button>
         </div>
     </div>
+
+    <!-- Menú desplegable (móvil / tablet) -->
+    <nav class="landing-menu" data-abierto="0" aria-label="Secciones de SGET (menú móvil)">
+        <?php foreach ($seccionesLanding as $i => [$clave, $rotulo, $icono, $ancla]): ?>
+            <a href="<?= $ancla ?>" class="landing-menu__link<?= $i === 0 ? ' es-activo' : '' ?>"
+               data-sget-seccion="<?= $clave ?>">
+                <i class="fas <?= $icono ?>" aria-hidden="true"></i>
+                <span><?= htmlspecialchars($rotulo, ENT_QUOTES, 'UTF-8') ?></span>
+            </a>
+        <?php endforeach; ?>
+
+        <?php if (!$estaAutenticado): ?>
+            <div class="landing-menu__acceso">
+                <button type="button" data-sget-modal="panelLogin" class="sget-btn sget-btn--bloque sget-btn--neutro">
+                    <i class="fas fa-right-to-bracket"></i> Iniciar sesión
+                </button>
+                <button type="button" data-sget-modal="panelRegistro" class="sget-btn sget-btn--bloque sget-btn--primario">
+                    <i class="fas fa-user-plus"></i> Registrarse
+                </button>
+            </div>
+        <?php else: ?>
+            <form method="POST" action="<?= $BASE ?>/assets/cerrar.php" class="contents">
+                <?= Auth::campoToken() ?>
+                <button type="submit" class="landing-menu__salir cursor-pointer w-full">
+                    <i class="fas fa-arrow-right-from-bracket"></i> Cerrar sesión
+                </button>
+            </form>
+        <?php endif; ?>
+    </nav>
 </header>
 
-<?php /* El idioma, data-language y i18n.js los emite includes/i18n.php (una sola vez). */ ?>
+<?php /* El idioma, `data-language` e i18n.js los emite includes/i18n.php (una sola vez). */ ?>
 
 <!-- Motor común de modales: el MISMO que usa el panel interno -->
-<script src="assets/js/sget-modal.js?v=<?= @filemtime('assets/js/sget-modal.js') ?: '1' ?>"></script>
-
-<!-- BOTÓN DE TEMA: delega en la API compartida (assets/js/theme-init.js) -->
+<script src="<?= $BASE ?>/assets/js/sget-modal.js?v=<?= @filemtime(Config::raiz('assets/js/sget-modal.js')) ?: '1' ?>"></script>
 
 <script>
+/* -------------------------------------------------------------------------
+   COMPORTAMIENTO DE LA CABECERA
+   -------------------------------------------------------------------------
+   Se delega en `SGETTheme`, la API compartida con el panel, para que el botón
+   de la luna haga EXACTAMENTE lo mismo en la portada que dentro de la
+   aplicación (incluido el evento `sget:tema`, que obliga a repintar el botón de
+   Google y el reCAPTCHA al cambiar el tema).
+   ------------------------------------------------------------------------- */
+(function () {
+    'use strict';
 
-    (function () {
+    var btn = document.getElementById('theme-toggle');
+    if (btn && window.SGETTheme) {
+        btn.addEventListener('click', function () { window.SGETTheme.toggle(); });
+    }
 
-        var btn = document.getElementById('theme-toggle');
+    /* Menú móvil.
+       `data-abierto` es el único estado: el CSS decide la visibilidad, así que
+       el botón no tiene que pelearse con las clases de Tailwind. Además se
+       cierra con Escape y al pulsar fuera, y devuelve el foco al botón. */
+    var burger = document.querySelector('[data-sget-burger]');
+    var menu   = document.querySelector('.landing-menu');
 
-        if (!btn) return;
+    if (burger && menu) {
+        var cerrarMenu = function () {
+            menu.dataset.abierto = '0';
+            burger.setAttribute('aria-expanded', 'false');
+        };
 
-        btn.addEventListener('click', function () {
-
-            if (window.SGETTheme) window.SGETTheme.toggle();
-
+        burger.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var abierto = menu.dataset.abierto === '1';
+            menu.dataset.abierto = abierto ? '0' : '1';
+            burger.setAttribute('aria-expanded', abierto ? 'false' : 'true');
         });
 
-    })();
+        document.addEventListener('click', function (e) {
+            if (menu.dataset.abierto !== '1') return;
+            if (e.target.closest('.landing-menu') || e.target.closest('[data-sget-burger]')) return;
+            cerrarMenu();
+        });
 
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && menu.dataset.abierto === '1') {
+                cerrarMenu();
+                burger.focus();
+            }
+        });
+    }
+
+    /* Al marcar un enlace del menú en móvil se cierra: si no, el menú sigue
+       tapando la sección a la que se acaba de ir. */
+    if (menu) {
+        menu.addEventListener('click', function (e) {
+            if (e.target.closest('a[href]')) cerrarMenu();
+        });
+    }
+})();
 </script>
-
-
-

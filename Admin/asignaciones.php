@@ -153,7 +153,7 @@ include __DIR__ . '/../views/partials/head.php';
                 <div class="sget-search">
                     <i class="fas fa-magnifying-glass"></i>
                     <input type="search" id="buscarViajeRecaudo" class="sget-input"
-                           placeholder="Buscar por ruta, conductor o placa… (Ctrl+K)">
+                           placeholder="Buscar por ruta, conductor o placa… (Ctrl+K)" autocomplete="off" spellcheck="false">
                 </div>
             </div>
 
@@ -553,8 +553,8 @@ include __DIR__ . '/../views/partials/head.php';
         })
             .then(function (r) { return r.json(); })
             .then(function (j) {
-                var lista = (j.datos && j.datos.reservas) || [];
-                if (!lista.length) {
+                var manifiesto = (j.datos && j.datos.manifiesto) || [];
+                if (!manifiesto.length) {
                     cont.innerHTML = '<div class="sget-vacio" style="border:none;background:transparent">' +
                         '<span class="sget-vacio__icono"><i class="fas fa-ticket"></i></span>' +
                         '<p class="sget-help">Este viaje todavía no tiene reservas.</p></div>';
@@ -564,35 +564,63 @@ include __DIR__ . '/../views/partials/head.php';
                 var confirmada = '<?= Config::RES_CONFIRMADA ?>';
                 var cancelada  = '<?= Config::RES_CANCELADA ?>';
 
+                /* Se lista POR PASAJERO y no por fila de reserva.
+                   Un puesto es una fila en la base, así que un pasajero con 3
+                   puestos aparecía 3 veces y el cajero cobraba 3 veces: el
+                   botón de cobrar mandaba el `valor_pagado` de UNA fila y eso
+                   acababa guardando $0, porque en las reservas online ese
+                   campo venía NULL. Ahora se ve la persona, sus puestos y lo
+                   que debe de verdad. */
                 cont.innerHTML = '<div class="sget-table-wrap"><table class="sget-table sget-table--compacta">' +
-                    '<thead><tr><th>Pasajero</th><th>Documento</th><th>Hora</th>' +
-                    '<th>Método</th><th class="acciones">Valor</th><th class="sget-centro">Estado</th><th></th></tr></thead><tbody>' +
-                    lista.map(function (r) {
-                        var pagada = r.estado_pago === confirmada;
-                        var anulada = r.estado_pago === cancelada;
-                        var acciones =
-                            (anulada ? '' :
-                                (pagada
-                                    ? '<button type="button" class="sget-icon-btn sget-icon-btn--peligro" title="Cancelar la reserva" ' +
-                                      'data-sget-cancelar-reserva="' + r.id_res + '"><i class="fas fa-ban"></i></button>'
-                                    : '<button type="button" class="sget-icon-btn sget-icon-btn--exito" title="Registrar el cobro" ' +
-                                      'data-sget-cobrar-reserva="' + r.id_res + '" data-valor="' + (r.valor_pagado || 0) + '">' +
-                                      '<i class="fas fa-cash-register"></i></button>'));
+                    '<thead><tr><th>Pasajero</th><th>Documento</th><th class="sget-centro">Puestos</th>' +
+                    '<th>Estado</th><th class="sget-centro">Embarque</th><th class="acciones">Debe</th><th></th></tr></thead><tbody>' +
+                    manifiesto.map(function (m) {
+                        var cancelado = m.cancelados > 0 && m.pagados === 0 && m.pendientes === 0;
+                        var todoPagado = m.pendientes === 0 && !cancelado;
+                        var total = Number(m.debe || 0);
 
-                        return '<tr' + (anulada ? ' style="opacity:.55"' : '') + '>' +
-                            '<td data-label="Pasajero" class="sget-truncar">' + esc(r.pasajero) + '</td>' +
-                            '<td data-label="Documento" class="sget-mono sget-suave">' + esc(r.num_doc_usu) + '</td>' +
-                            '<td data-label="Hora" class="sget-mono sget-suave sget-nowrap">' + esc(r.fech_res) + '</td>' +
-                            '<td data-label="Método">' + esc(r.metodo_pago) + '</td>' +
-                            '<td class="acciones" data-label="Valor"><span class="sget-mono" style="font-weight:800">' +
-                                (r.valor_pagado ? '$' + Number(r.valor_pagado).toLocaleString('es-CO') : '—') + '</span></td>' +
-                            '<td data-label="Estado" class="sget-centro">' +
-                                '<span class="sget-badge ' + (pagada ? 'sget-badge--exito' : (anulada ? 'sget-badge--error' : 'sget-badge--aviso')) + '">' +
-                                esc(r.estado_pago) + '</span></td>' +
-                            '<td class="acciones">' + acciones + '</td>' +
+                        var estadoPago = cancelado
+                            ? '<span class="sget-badge sget-badge--error">Cancelada</span>'
+                            : (todoPagado
+                                ? '<span class="sget-badge sget-badge--exito">Pagada</span>'
+                                : '<span class="sget-badge sget-badge--aviso">' + m.pendientes + ' pendiente(s)</span>');
+
+                        // Embarque: tres estados de verdad, no dos.
+                        var embarque = m.no_embarcaron > 0 && m.embarcaron === 0
+                            ? '<span class="sget-badge sget-badge--error" title="' + esc(m.motivo || 'No se presentó') + '">No se presentó</span>'
+                            : (m.embarcaron > 0
+                                ? '<span class="sget-badge sget-badge--exito">Embarcó</span>'
+                                : '<span class="sget-badge sget-badge--neutro">Sin definir</span>');
+
+                        var botones = cancelado ? '' :
+                            (todoPagado
+                                ? '<button type="button" class="sget-icon-btn sget-icon-btn--peligro" ' +
+                                  'title="Cancelar la reserva" data-sget-cancelar-pasajero="' + m.id_pasajero + '" ' +
+                                  'data-sget-viaje="' + idViaje + '"><i class="fas fa-ban"></i></button>'
+                                : '<button type="button" class="sget-icon-btn sget-icon-btn--exito" ' +
+                                  'title="Registrar el cobro de sus puestos pendientes" ' +
+                                  'data-sget-cobrar-pasajero="' + m.id_pasajero + '" ' +
+                                  'data-sget-viaje="' + idViaje + '" ' +
+                                  'data-valor="' + total + '" ' +
+                                  'data-puestos="' + m.pendientes + '"><i class="fas fa-cash-register"></i></button>');
+
+                        return '<tr' + (cancelado ? ' style="opacity:.55"' : '') + '>' +
+                            '<td data-label="Pasajero" class="sget-truncar">' + esc(m.pasajero) +
+                                (m.tel_usu ? '<br><span class="sget-help sget-mono">' + esc(m.tel_usu) + '</span>' : '') + '</td>' +
+                            '<td data-label="Documento" class="sget-mono sget-suave">' + esc(m.num_doc_usu) + '</td>' +
+                            '<td data-label="Puestos" class="sget-centro sget-mono" style="font-weight:800">' + m.puestos + '</td>' +
+                            '<td data-label="Estado">' + estadoPago + '</td>' +
+                            '<td data-label="Embarque" class="sget-centro">' + embarque + '</td>' +
+                            '<td class="acciones" data-label="Debe"><span class="sget-mono" style="font-weight:800">' +
+                                (total > 0 ? '$' + total.toLocaleString('es-CO') : '—') + '</span></td>' +
+                            '<td class="acciones">' + botones + '</td>' +
                         '</tr>';
                     }).join('') +
-                    '</tbody></table></div>';
+                    '</tbody></table>' +
+                    '<p class="sget-help" style="margin-top:.75rem">' +
+                    '<i class="fas fa-circle-info"></i> «Debe» es el valor pactado de sus puestos pendientes. ' +
+                    'El importe real se escribe al cobrar: nunca se cobra lo que el sistema adivinó.</p>' +
+                    '</div>';
             })
             .catch(function () { cont.innerHTML = '<p class="sget-help">No se pudo cargar el listado.</p>'; });
     }
@@ -603,16 +631,22 @@ include __DIR__ . '/../views/partials/head.php';
         return d.innerHTML;
     }
 
-    /* --- Cobrar / cancelar una reserva puntual --- */
+    /* --- Cobrar / cancelar los puestos de un pasajero --- */
     document.addEventListener('click', function (e) {
-        var cobrar = e.target.closest('[data-sget-cobrar-reserva]');
+        var cobrar = e.target.closest('[data-sget-cobrar-pasajero]');
         if (cobrar) {
             e.preventDefault();
             var cuerpo = new FormData();
             cuerpo.append('_token', SGETModal.__token);
             cuerpo.append('modulo', 'reserva');
             cuerpo.append('accion', 'cobrar');
-            cuerpo.append('id', cobrar.dataset.sgetCobrarReserva);
+            // Se cobra el GRUPO de puestos pendientes de este pasajero en el
+            // viaje, no una fila suelta. Antes se mandaba el id de una fila y su
+            // valor, y como en las reservas online ese valor venía NULL se
+            // guardaba $0: el pago quedaba registrado y el informe de ingresos
+            // no sumaba nada.
+            cuerpo.append('id_grupo', cobrar.dataset.sgetCobrarPasajero + ':' + cobrar.dataset.sgetViaje);
+            cuerpo.append('todos_puestos', '1');
             cuerpo.append('valor', cobrar.dataset.valor || 0);
             cuerpo.append('metodo', document.getElementById('selectMetodo')?.value || 'Efectivo');
 
@@ -631,22 +665,24 @@ include __DIR__ . '/../views/partials/head.php';
             return;
         }
 
-        var cancelar = e.target.closest('[data-sget-cancelar-reserva]');
+        var cancelar = e.target.closest('[data-sget-cancelar-pasajero]');
         if (cancelar) {
             e.preventDefault();
             SGETModal.confirmar({
                 tipo: 'peligro',
                 icono: 'fa-ban',
                 titulo: 'Cancelar la reserva',
-                cuerpo: 'Se cancelará el puesto, volverá al viaje y el pasajero recibirá un aviso. ' +
-                        'Si el pago ya estaba confirmado, el reembolso se gestiona fuera del sistema.',
+                cuerpo: 'Se cancelarán TODOS los puestos de este pasajero en el viaje, volverán al bus ' +
+                        'y el pasajero recibirá un aviso. Si el pago ya estaba confirmado, el reembolso ' +
+                        'se gestiona fuera del sistema.',
                 textoOk: 'Sí, cancelar'
             }).then(function () {
                 var cuerpo = new FormData();
                 cuerpo.append('_token', SGETModal.__token);
                 cuerpo.append('modulo', 'reserva');
                 cuerpo.append('accion', 'cancelar');
-                cuerpo.append('id', cancelar.dataset.sgetCancelarReserva);
+                cuerpo.append('id_pasajero', cancelar.dataset.sgetCancelarPasajero);
+                cuerpo.append('id_via', cancelar.dataset.sgetViaje);
                 cuerpo.append('motivo', 'Cancelación en terminal');
 
                 fetch('../api/index.php', {

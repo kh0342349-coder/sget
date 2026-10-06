@@ -1,69 +1,57 @@
 <?php
-session_start();
-include '../assets/conexion.php'; 
-require('../assets/fpdf/fpdf.php'); 
+/**
+ * Pasajero/generar_ticket.php
+ * -----------------------------------------------------------------------------
+ * COMPROBANTE DE RESERVA DEL PASAJERO  (PDF)
+ * -----------------------------------------------------------------------------
+ * QUÉ ARREGLA ESTA SEGUNDA RONDA
+ *
+ *   1. INYECCIÓN SQL. La consulta era:
+ *          WHERE r.id_res = '$id_res'      con `$id_res = $_GET['id']`
+ *      Es decir, el identificador de la reserva se interpolaba SIN validar
+ *      dentro del SQL. Con un `?id=…` manipulado no hacía falta saber ningún
+ *      otro dato para leer datos de cualquier pasajero.
+ *      Ahora: `TicketService::datos()` usa PDO con sentencias preparadas y el id
+ *      se castea a entero ANTES de tocar la base de datos.
+ *
+ *   2. CONTROL POR OBJETO. Antes bastaba estar logueado COMO PASAJERO; el
+ *      endpoint no comprobaba de quién era la reserva, así que `?id=1`, `?id=2`
+ *      o `?id=3` imprimían el comprobante de otros pasajeros. Ahora
+ *      `TicketService::puedeVer()` exige que la reserva exista Y sea del usuario
+ *      de la sesión.
+ *
+ *   3. DUPLICACIÓN. Este archivo y `Admin/imprimir_ticket.php` tenían DOS
+ *      plantillas distintas del mismo comprobante. Ahora comparten servicio y
+ *      plantilla: una sola definición de «qué es un ticket».
+ *
+ *   4. SQL/schema frágil. Se hacía un `SHOW COLUMNS FROM reserva` en cada
+ *      descarga para preguntar si existían `metodo_pago`/`valor_pago`, y la
+ *      consulta cambiaba de forma según la respuesta. El esquema actual sí los
+ *      tiene y `Config` los describe; no hace falta preguntar en caliente.
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
-    header("Location: ../index.php");
-    exit();
+require_once __DIR__ . '/../core/bootstrap.php';
+
+Auth::requerirSesion();
+Auth::requerirRol(Config::ROL_PASAJERO);
+
+/* El id se normaliza a entero positivo ANTES de cualquier consulta: un valor
+   no numérico nunca llega a la capa de datos. */
+$idReserva = (int)($_GET['id'] ?? 0);
+if ($idReserva <= 0) {
+    http_response_code(400);
+    exit('Solicitud inválida: no se indicó una reserva.');
 }
 
-if (!isset($_GET['id'])) {
-    die("Error: No se ha especificado la reserva.");
-}
-$id_res = $_GET['id'];
+/* Control de acceso POR OBJETO: existe + es de este pasajero. */
+TicketService::exigir($idReserva);
 
-$sql = "SELECT r.fech_res, u.nom_usu, v.fec_via, v.hor_sal_via, v.val_via, rt.des_rut 
-        FROM reserva r 
-        JOIN usuario u ON r.id_usu_res = u.id_usu 
-        JOIN viaje v ON r.id_via_res = v.id_via 
-        JOIN rutas rt ON v.id_rut_via = rt.id_rut 
-        WHERE r.id_res = '$id_res'";
-
-$resultado = $conexion->query($sql);
-$data = $resultado->fetch_assoc();
-
-if (!$data) {
-    die("Error: No se encontró la reserva.");
+$ticket = TicketService::datos($idReserva);
+if (!$ticket) {
+    http_response_code(404);
+    exit('El comprobante solicitado no existe.');
 }
 
-$pdf = new FPDF('P', 'mm', array(80, 150));
-$pdf->AddPage();
-$pdf->SetMargins(5, 5, 5);
-
-// Título
-$pdf->SetFont('Arial', 'B', 16);
-$pdf->Cell(70, 10, 'SGET', 0, 1, 'C');
-$pdf->SetFont('Arial', '', 10);
-$pdf->Cell(70, 5, 'Comprobante de Reserva', 0, 1, 'C');
-$pdf->Ln(5);
-
-// Datos del ticket (Usamos utf8_decode para las tildes/ñ)
-$pdf->SetFont('Arial', 'B', 9);
-$pdf->Cell(30, 6, 'Pasajero:', 0, 0);
-$pdf->SetFont('Arial', '', 9);
-$pdf->Cell(40, 6, utf8_decode($data['nom_usu']), 0, 1);
-
-$pdf->SetFont('Arial', 'B', 9);
-$pdf->Cell(30, 6, 'Ruta:', 0, 0);
-$pdf->SetFont('Arial', '', 9);
-$pdf->Cell(40, 6, utf8_decode($data['des_rut']), 0, 1);
-
-$pdf->SetFont('Arial', 'B', 9);
-$pdf->Cell(30, 6, 'Fecha Viaje:', 0, 0);
-$pdf->SetFont('Arial', '', 9);
-$pdf->Cell(40, 6, $data['fec_via'], 0, 1);
-
-$pdf->SetFont('Arial', 'B', 9);
-$pdf->Cell(30, 6, 'Hora:', 0, 0);
-$pdf->SetFont('Arial', '', 9);
-$pdf->Cell(40, 6, date('h:i A', strtotime($data['hor_sal_via'])), 0, 1);
-
-$pdf->Ln(5);
-// Total
-$pdf->SetFont('Arial', 'B', 12);
-$pdf->Cell(70, 10, 'TOTAL: $'.number_format($data['val_via']), 'T', 1, 'R');
-
-// Salida: 'I' hace que se abra directamente en el navegador
-$pdf->Output('I', 'Ticket_Reserva_'.$id_res.'.pdf');
-?>
+TicketService::enviar($ticket);

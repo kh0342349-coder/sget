@@ -93,31 +93,43 @@ final class ReporteService
     /**
      * Un pasajero reporta una incidencia sobre un viaje suyo.
      *
+     * El viaje es OBLIGATORIO: `reportes_pasajeros.id_via_rep` es NOT NULL y,
+     * sobre todo, un reporte sin viaje no se puede investigating después. El
+     * flujo es el que pide el dominio:
+     *
+     *     Pasajero → elige viaje/reserva → crea reporte → Admin revisa
+     *
      * @return array{ok:bool, mensaje:string, id:int}
      */
     public static function crear(int $idPasajero, int $idViaje, string $descripcion): array
     {
+        $fallo = static fn(string $m): array => ['ok' => false, 'id' => 0, 'mensaje' => $m];
+
         if ($idPasajero <= 0) {
-            return ['ok' => false, 'mensaje' => 'Inicia sesión para reportar.', 'id' => 0];
+            return $fallo('Inicia sesión para reportar.');
         }
 
         $descripcion = trim($descripcion);
         if (mb_strlen($descripcion) < 15) {
-            return ['ok' => false, 'id' => 0, 'mensaje' => 'Describe el problema con al menos 15 caracteres.'];
+            return $fallo('Describe el problema con al menos 15 caracteres.');
         }
         if (mb_strlen($descripcion) > 500) {
             $descripcion = mb_substr($descripcion, 0, 500);
         }
 
-        // Solo puede reportar sobre un viaje en el que tenga reserva viva
-        if ($idViaje > 0) {
-            $tiene = (int) Database::scalar(
-                "SELECT COUNT(*) FROM reserva WHERE id_usu_res = ? AND id_via_res = ?",
-                [$idPasajero, $idViaje]
-            );
-            if ($tiene === 0) {
-                return ['ok' => false, 'id' => 0, 'mensaje' => 'Solo puedes reportar sobre un viaje tuyo.'];
-            }
+        if ($idViaje <= 0) {
+            return $fallo('Selecciona el viaje sobre el que quieres reportar.');
+        }
+
+        /* Control de propiedad: el reporte tiene que versar sobre un viaje del
+           propio pasajero. Antes bastaba con que el id fuera de un viaje
+           cualquiera. */
+        $tiene = (int) Database::scalar(
+            'SELECT COUNT(*) FROM reserva WHERE id_usu_res = ? AND id_via_res = ?',
+            [$idPasajero, $idViaje]
+        );
+        if ($tiene === 0) {
+            return $fallo('Solo puedes reportar sobre un viaje tuyo.');
         }
 
         try {
@@ -128,7 +140,7 @@ final class ReporteService
             );
         } catch (Throwable $e) {
             error_log('[SGET][ReporteService::crear] ' . $e->getMessage());
-            return ['ok' => false, 'id' => 0, 'mensaje' => 'No se pudo registrar el reporte.'];
+            return $fallo('No se pudo registrar el reporte.');
         }
 
         // Aviso inmediato al propio pasajero con el folio
@@ -137,10 +149,33 @@ final class ReporteService
             "Registramos tu reporte con el folio #$id.\n\n" .
             "La administración lo está revisando y podrás seguir su estado desde tu panel. " .
             "Si es urgente, preséntate en la terminal con tu documento.\n\n— Equipo SGET",
-            $idViaje > 0 ? $idViaje : null
+            $idViaje
         );
 
+        Logger::registrar(Database::pdo(), 'CREAR_REPORTE', sprintf(
+            'Reporte #%d creado por el pasajero #%d sobre el viaje #%d.',
+            $id, $idPasajero, $idViaje
+        ));
+
         return ['ok' => true, 'id' => $id, 'mensaje' => 'Reporte registrado. Te avisaremos cuando avance.'];
+    }
+
+    /** Viajes sobre los que este pasajero puede abrir un reporte. */
+    public static function viajesReportables(int $idPasajero, int $limite = 40): array
+    {
+        return Database::all(
+            "SELECT v.id_via, v.fec_via, v.hor_sal_via, v.est_via, r.nom_rut,
+                    (SELECT COUNT(*) FROM reportes_pasajeros rp
+                      WHERE rp.id_usu_rep = ? AND rp.id_via_rep = v.id_via) AS ya_reportado
+               FROM reserva res
+               INNER JOIN viaje v    ON v.id_via    = res.id_via_res
+               LEFT  JOIN rutas r    ON r.id_rut    = v.id_rut_via
+              WHERE res.id_usu_res = ? AND res.estado_pago <> ?
+              GROUP BY v.id_via, v.fec_via, v.hor_sal_via, v.est_via, r.nom_rut
+              ORDER BY v.fec_via DESC, v.hor_sal_via DESC
+              LIMIT " . (int)$limite,
+            [$idPasajero, $idPasajero, Config::RES_CANCELADA]
+        );
     }
 
     /**

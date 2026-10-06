@@ -49,11 +49,30 @@ final class Config
 
     /* ------------------------------------------------------------------ */
     /* Estados de VEHICULO (tabla vehiculo.est_veh)                        */
-    /* antes existian 0/1 y las constantes(global) de 1/2 -> colision.      */
     /* ------------------------------------------------------------------ */
-    public const VEH_DISPONIBLE      = 1;
-    public const VEH_FUERA_SERVICIO  = 0;
-    public const VEH_MANTENIMIENTO   = 0;
+    /* Son TEXTO, no 0/1. El 0/1 anterior obligaba a que «en mantenimiento»   */
+    /* y «fuera de servicio» fueran lo mismo, y a que al asignar un viaje la   */
+    /* unidad quedara marcada como averiada. Ahora cada situación tiene su     */
+    /* propio valor y `Asignado` lo pone y lo quita el sistema solo.           */
+    public const VEH_DISPONIBLE     = 'Disponible';
+    public const VEH_ASIGNADO       = 'Asignado';
+    public const VEH_MANTENIMIENTO  = 'Mantenimiento';
+    public const VEH_FUERA_SERVICIO = 'Fuera de servicio';
+
+    /** Catálogo completo, en el orden en el que se muestran al administrador. */
+    public const VEH_ESTADOS = [
+        self::VEH_DISPONIBLE,
+        self::VEH_ASIGNADO,
+        self::VEH_MANTENIMIENTO,
+        self::VEH_FUERA_SERVICIO,
+    ];
+
+    /** Estados en los que una unidad NO puede recibir un viaje nuevo. */
+    public const VEH_ESTADOS_NO_ASIGNABLES = [
+        self::VEH_ASIGNADO,
+        self::VEH_MANTENIMIENTO,
+        self::VEH_FUERA_SERVICIO,
+    ];
 
     /* ------------------------------------------------------------------ */
     /* Estados de VIAJE (tabla viaje.est_via) - ENUM real                  */
@@ -91,6 +110,121 @@ final class Config
     public const ROL_PASAJERO  = 3;
 
     /* ------------------------------------------------------------------ */
+    /* Freno a la fuerza bruta (persistencia en servidor)                   */
+    /* ------------------------------------------------------------------ */
+    /**
+     * ANTES el contador vivía en `$_SESSION['sget_intentos']`, así que crear
+     * una sesión nueva (borrar cookies, pestaña privada, `curl`) reiniciaba el
+     * contador y el freno no protegía nada. Ahora el estado se guarda en la
+     * tabla `sget_login_intentos`, con la clave `documento|IP`:
+     *
+     *   · 5  intentos fallidos  -> bloqueo de 5 minutos
+     *   · 10 intentos fallidos  -> bloqueo de 15 minutos
+     *   · la ventana se reinicia si pasan 30 min sin fallos
+     */
+    public const LOGIN_MAX_INTENTOS       = 5;
+    public const LOGIN_MAX_INTENTOS_ALTO  = 10;
+    public const LOGIN_BLOQUEO_SEGUNDOS   = 300;
+    public const LOGIN_BLOQUEO_ALTO_SEG   = 900;
+    public const LOGIN_VENTANA_SEGUNDOS   = 1800;
+
+    /* ------------------------------------------------------------------ */
+    /* reCAPTCHA                                                          */
+    /* ------------------------------------------------------------------ */
+    /**
+     * El captcha está ACTIVO POR DEFECTO y se configura por entorno, no a fuego
+     * en el código.
+     *
+     * POR QUÉ SIGUE SIENDO OBLIGATORIO (Y NO OPCIONAL)
+     *   La versión anterior solo verificaba el token «si venía»:
+     *
+     *       if ($respuestaRecaptcha !== '') { …verificar… }
+     *
+     *   Es decir, sin token se entraba igual. Eso no era una protección, era una
+     *   decoración: el widget estaba en pantalla y no bloqueaba nada.
+     *   Ahora, cuando el captcha está activo, la ausencia de token es un RECHAZO
+     *   siempre.
+     *
+     * QUÉ CAMBIÓ DESDE LA ÚLTIMA REVISIÓN
+     *   El captcha se había dejado apagado por defecto, lo que hizo
+     *   DESAPAREZER de la pantalla de acceso. Eso no era lo pedido: el control
+     *   debe seguir ahí. Por eso vuelve a estar activo, pero con una diferencia
+     *   importante: el sistema DECLARE si está protegiendo de verdad.
+     *
+     *   · Con claves reales (SGET_RECAPTCHA_SITEKEY / _SECRET)  -> protege.
+     *   · Sin claves configuradas -> se usan las claves PÚBLICAS DE PRUEBA de
+     *     Google, que validan cualquier token. En ese modo el aviso de
+     *     `recaptchaEnModoPrueba()` se muestra en el propio formulario: no es
+     *     una falsa sensación de seguridad, es un estado declarado.
+     *
+     * VARIABLES DE ENTORNO
+     *   SGET_RECAPTCHA_ENABLED = 1|0     activa/desactiva (por defecto, 1)
+     *   SGET_RECAPTCHA_SITEKEY = ...     clave de sitio real
+     *   SGET_RECAPTCHA_SECRET  = ...     clave secreta real
+     */
+    public const RECAPTCHA_SITEKEY_PRUEBA = '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI';
+    public const RECAPTCHA_SECRET_PRUEBA  = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe';
+
+    public static function recaptchaHabilitado(): bool
+    {
+        $flag = getenv('SGET_RECAPTCHA_ENABLED');
+
+        // Sin variable: ACTIVO. Solo se apaga si se pide explícitamente.
+        if ($flag === false || trim((string)$flag) === '') {
+            return true;
+        }
+        return !in_array(strtolower(trim((string)$flag)), ['0', 'false', 'no', 'off'], true);
+    }
+
+    public static function recaptchaSecret(): string
+    {
+        $v = getenv('SGET_RECAPTCHA_SECRET');
+        if ($v !== false && trim((string)$v) !== '') {
+            return trim((string)$v);
+        }
+        return self::RECAPTCHA_SECRET_PRUEBA;
+    }
+
+    public static function recaptchaSiteKey(): string
+    {
+        $v = getenv('SGET_RECAPTCHA_SITEKEY');
+        return ($v !== false && trim((string)$v) !== '') ? trim((string)$v) : self::RECAPTCHA_SITEKEY_PRUEBA;
+    }
+
+    /**
+     * ¿Estamos con las claves de PRUEBA de Google?
+     *
+     * Es el único modo en el que el captcha NO bloquea nada: Google acepta
+     * cualquier token. Se declara en pantalla para que nadie crea que el
+     * acceso está protegido cuando en realidad no lo está.
+     */
+    public static function recaptchaEnModoPrueba(): bool
+    {
+        return self::recaptchaHabilitado()
+            && self::recaptchaSiteKey() === self::RECAPTCHA_SITEKEY_PRUEBA;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Subida de imágenes                                                  */
+    /* ------------------------------------------------------------------ */
+    /** Formatos de imagen aceptados en todo el sistema (los mismos 4). */
+    public const IMG_EXTENSIONES = ['jpg', 'jpeg', 'png', 'webp'];
+
+    /** MIME reales aceptados para cada extensión: no se confía en el nombre. */
+    public const IMG_MIMES = [
+        'jpg'  => ['image/jpeg'],
+        'jpeg' => ['image/jpeg'],
+        'png'  => ['image/png'],
+        'webp' => ['image/webp'],
+    ];
+
+    public const IMG_MAX_BYTES      = 3 * 1024 * 1024;
+    public const IMG_MAX_ANCHO      = 4000;
+    public const IMG_MAX_ALTO       = 4000;
+    public const IMG_MIN_ANCHO      = 40;
+    public const IMG_MIN_ALTO       = 40;
+
+    /* ------------------------------------------------------------------ */
     /* Reglas de negocio                                                   */
     /* ------------------------------------------------------------------ */
     /** Minutos de inactividad antes de bloquear la sesion. */
@@ -107,6 +241,24 @@ final class Config
 
     /** Minutos de margen antes de cerrar automáticamente un viaje vencido. */
     public const MARGEN_CIERRE_AUTOMATICO_MIN = 15;
+
+    /**
+     * Margen OPERATIVO entre dos viajes del mismo conductor o vehículo.
+     *
+     * Es lo que impide que un recurso quede «libre» justo en el mismo minuto en
+     * que termina el viaje anterior: hace falta un respiro para bajar, limpiar
+     * y volver a salir.
+     *
+     *     Salida 10:00 · Llegada 12:00 · Margen 15 min -> libre a las 12:15
+     *
+     * Antes este valor no existía: la disponibilidad se decidía solo con
+     * `est_via IN ('Programado','En curso')`, así que un conductor quedaba
+     * bloqueado desde que se programaba el viaje y hasta que acababa, sin
+     * importar la hora, y no podía hacer dos viajes el mismo día.
+     *
+     * Vive AQUÍ y solo aquí: `DisponibilidadService` es su único consumidor.
+     */
+    public const MARGEN_DISPONIBILIDAD_MIN = 15;
 
     /** Longitud minima (caracteres) de la anotacion obligatoria de cancelacion. */
     public const MIN_ANOTACION_CANCELACION = 15;

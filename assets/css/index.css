@@ -170,60 +170,289 @@ html.dark {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Cabecera y navegación (móvil)                                              */
+/* CABECERA DE LA PORTADA (includes/header_index.php)                          */
 /* -------------------------------------------------------------------------- */
-/* Sin `display`: la visibilidad base la controla Tailwind (`hidden lg:flex`). */
+/* Regla de oro de este archivo: sobre contenedores que el marcado controla con
+   utilidades de Tailwind (`hidden`, `flex`) NO se declara `display`. Si se
+   declara, el estado depende del orden de carga y los menús quedan invisibles
+   pero presentes bloqueando la página.
+
+   La visibilidad se gobierna SIEMPRE con atributos:
+       data-abierto="1"  →  menú desplegable
+       .dark             →  tema oscuro
+   ------------------------------------------------------------------------- */
+.landing-header {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 50;
+    padding: .875rem clamp(1rem, 4vw, 3rem);
+    background: color-mix(in srgb, var(--sget-superficie) 72%, transparent);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    border-bottom: 1px solid var(--sget-borde);
+    transition: background-color var(--sget-transicion), border-color var(--sget-transicion),
+                box-shadow var(--sget-transicion);
+}
+html.dark .landing-header {
+    background: color-mix(in srgb, #0b0f19 78%, transparent);
+}
+.landing-header[data-scroll="1"] {
+    box-shadow: 0 10px 30px -18px rgb(2 6 23 / .55);
+}
+
+.landing-header__inner {
+    max-width: 80rem;
+    margin: 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+html.dark .landing-header__inner,
+.landing-header__inner { display: flex; flex-wrap: wrap; }
+
+/* --- Marca / logo --- */
+.landing-header__marca {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    border-radius: var(--sget-radio-sm);
+    transition: transform var(--sget-transicion), opacity var(--sget-transicion);
+}
+.landing-header__marca:hover { transform: translateY(-1px); }
+.landing-header__logo {
+    height: 2.5rem;
+    width: auto;
+    object-fit: contain;
+    display: block;
+}
+@media (min-width: 768px) { .landing-header__logo { height: 2.875rem; } }
+
+.landing-header__logo--oscuro { display: none; }
+html.dark .landing-header__logo--claro  { display: none; }
+html.dark .landing-header__logo--oscuro { display: block; }
+
+/* --- Navegación central --- */
 .landing-nav {
     align-items: center;
-    gap: .25rem;
-}
-
-.landing-nav__link {
-    padding: .5rem 1rem;
+    gap: .125rem;
+    padding: .25rem;
     border-radius: 999px;
-    font-size: .75rem;
+    background: var(--sget-superficie-2);
+    border: 1px solid var(--sget-borde);
+}
+.landing-nav__link {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .5rem .875rem;
+    border-radius: 999px;
+    font-size: .78rem;
     font-weight: 700;
     color: var(--sget-texto-suave);
-    transition: background-color var(--sget-transicion), color var(--sget-transicion);
     white-space: nowrap;
+    transition: background-color var(--sget-transicion), color var(--sget-transicion);
 }
-.landing-nav__link:hover { background: var(--sget-superficie-2); color: var(--sget-texto); }
-.landing-nav__link[aria-current="page"] { background: var(--sget-azul); color: #fff; }
+.landing-nav__link i { font-size: .7rem; opacity: .8; }
+.landing-nav__link:hover { background: var(--sget-superficie); color: var(--sget-texto); }
+.landing-nav__link.es-activo,
+.landing-nav__link[aria-current="page"] {
+    background: var(--sget-azul);
+    color: #fff;
+    box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--sget-azul) 90%, transparent);
+}
+.landing-nav__link.es-activo i,
+.landing-nav__link[aria-current="page"] i { opacity: 1; }
 
-/* Botón hamburguesa: visible solo en pantallas pequeñas */
-.landing-burger {
-    display: none;
+/* --- Acciones de la derecha --- */
+.landing-header__acciones {
+    display: flex;
     align-items: center;
-    justify-content: center;
+    gap: .5rem;
+    margin-left: auto;
+}
+.landing-header__acceso { display: flex; align-items: center; gap: .5rem; }
+.landing-header__idioma { height: 2.5rem; min-width: 6.5rem; }
+
+.landing-header__icono,
+.landing-header__burger {
+    display: grid;
+    place-items: center;
     width: 2.5rem;
     height: 2.5rem;
-    border-radius: var(--sget-radio-sm);
+    flex: none;
+    border-radius: 999px;
     background: var(--sget-superficie-2);
     border: 1px solid var(--sget-borde);
     color: var(--sget-texto);
     cursor: pointer;
+    transition: background-color var(--sget-transicion), color var(--sget-transicion),
+                border-color var(--sget-transicion), transform var(--sget-transicion);
+}
+.landing-header__icono:hover,
+.landing-header__burger:hover {
+    color: var(--sget-ambars);
+    border-color: color-mix(in srgb, var(--sget-ambars) 55%, transparent);
 }
 
-@media (max-width: 1023px) {
-    .landing-burger { display: inline-flex; }
+.landing-header__boton {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    height: 2.5rem;
+    padding: 0 1rem;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background-color var(--sget-transicion), color var(--sget-transicion),
+                border-color var(--sget-transicion), transform var(--sget-transicion);
+}
+.landing-header__boton--neutro {
+    background: var(--sget-superficie-2);
+    border-color: var(--sget-borde);
+    color: var(--sget-texto);
+}
+.landing-header__boton--neutro:hover { background: var(--sget-superficie); transform: translateY(-1px); }
+.landing-header__boton--primario {
+    background: var(--sget-azul);
+    color: #04121e;
+    font-weight: 900;
+}
+.landing-header__boton--primario:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px -12px color-mix(in srgb, var(--sget-azul) 90%, transparent);
+}
 
-    /* Menú desplegable. `data-abierto="1"` gana en especificidad (0,2,0) a la
-       utilidad `hidden` de Tailwind (0,1,0), así que el intercambio funciona
-       sin depender del orden de carga de las hojas de estilo. */
-    .landing-nav {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        gap: .25rem;
-        padding: .75rem;
-        background: var(--sget-superficie);
-        border: 1px solid var(--sget-borde);
-        border-radius: var(--sget-radio);
-        box-shadow: var(--sget-sombra-fuerte);
-    }
-    .landing-nav[data-abierto="1"] { display: flex; flex-direction: column; align-items: stretch; }
-    .landing-nav__link { text-align: left; padding: .75rem 1rem; }
+/* --- Tarjeta de sesión --- */
+.landing-header__sesion {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    padding: .25rem .25rem .25rem .625rem;
+    border-radius: 999px;
+    background: var(--sget-superficie-2);
+    border: 1px solid var(--sget-borde);
+}
+.landing-header__perfil {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    padding-right: .25rem;
+    min-width: 0;
+}
+.landing-header__avatar {
+    display: grid;
+    place-items: center;
+    width: 1.875rem;
+    height: 1.875rem;
+    flex: none;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--sget-azul), var(--sget-morado));
+    color: #04121e;
+    font-size: .75rem;
+    font-weight: 900;
+}
+.landing-header__perfil-datos { display: none; flex-direction: column; line-height: 1.15; min-width: 0; }
+.landing-header__perfil-datos strong {
+    font-size: .72rem;
+    font-weight: 800;
+    color: var(--sget-texto);
+    max-width: 9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.landing-header__perfil-datos small {
+    font-size: .58rem;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--sget-texto-suave);
+}
+@media (min-width: 640px) { .landing-header__perfil-datos { display: flex; } }
+
+.landing-header__salir {
+    display: grid;
+    place-items: center;
+    width: 2.125rem;
+    height: 2.125rem;
+    border-radius: 999px;
+    color: var(--sget-texto-suave);
+    transition: background-color var(--sget-transicion), color var(--sget-transicion);
+}
+.landing-header__salir:hover { background: color-mix(in srgb, var(--sget-rojo) 16%, transparent); color: var(--sget-rojo); }
+
+/* --- Menú desplegable (móvil) --- */
+.landing-menu {
+    display: none;
+    max-width: 80rem;
+    margin: .625rem auto 0;
+    padding: .625rem;
+    gap: .25rem;
+    flex-direction: column;
+    border-radius: var(--sget-radio-lg);
+    background: var(--sget-superficie);
+    border: 1px solid var(--sget-borde);
+    box-shadow: var(--sget-sombra-fuerte);
+}
+.landing-menu[data-abierto="1"] { display: flex; }
+
+.landing-menu__link {
+    display: flex;
+    align-items: center;
+    gap: .625rem;
+    padding: .75rem .875rem;
+    border-radius: var(--sget-radio-sm);
+    font-size: .8125rem;
+    font-weight: 700;
+    color: var(--sget-texto);
+}
+.landing-menu__link i { width: 1.125rem; color: var(--sget-texto-suave); text-align: center; }
+.landing-menu__link:hover { background: var(--sget-superficie-2); }
+.landing-menu__link.es-activo { color: var(--sget-azul); }
+.landing-menu__link.es-activo i { color: var(--sget-azul); }
+
+.landing-menu__acceso {
+    display: grid;
+    gap: .5rem;
+    margin-top: .5rem;
+    padding-top: .625rem;
+    border-top: 1px solid var(--sget-borde);
+}
+.landing-menu__salir {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    margin-top: .5rem;
+    padding: .75rem;
+    border-radius: var(--sget-radio-sm);
+    background: color-mix(in srgb, var(--sget-rojo) 12%, transparent);
+    color: var(--sget-rojo);
+    font-size: .8125rem;
+    font-weight: 800;
+}
+
+/* --- Puntos de corte --- */
+@media (max-width: 1023px) {
+    .landing-nav { display: none; }          /* solo existe en escritorio */
+    .landing-header__burger { display: grid; }
+}
+@media (min-width: 1024px) {
+    .landing-header__burger { display: none; }
+}
+/* Por debajo de 640 px la cabecera no puede：`— logo + 3 botones —` no caben
+   en 320 px y el menú se abría con el logotipo pisado. */
+@media (max-width: 640px) {
+    .landing-header__acceso .landing-header__boton--neutro { display: none; }
+    .landing-header__acceso .landing-header__boton span { display: none; }
+    .landing-header__boton--primario { width: 2.5rem; padding: 0; justify-content: center; }
+    .landing-header__boton--primario { font-size: 0; gap: 0; }
+    .landing-header__boton--primario i { font-size: .8rem; }
+    .landing-header__idioma { min-width: 5.25rem; }
+    .landing-header { padding: .75rem 1rem; }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -247,22 +476,31 @@ html.dark {
 }
 
 /* -------------------------------------------------------------------------- */
-/* BOTÓN DE GOOGLE en el modal de inicio de sesión                            */
+/* BOTÓN DE GOOGLE en los modales de acceso                                   */
 /* -------------------------------------------------------------------------- */
-/* Separador "o continúa con" + hueco reservado para el botón oficial.
-   While Google Identity Services carga se muestra un esqueleto; si el SDK no
-   llega (sin internet, bloqueado por extensión, client_id no válido) el hueco
-   se sustituye por un aviso, nunca queda un vacío mudo. */
+/* Un único componente para INICIAR SESIÓN y para REGISTRARSE: separador
+   «o continúa con» + hueco reservado para el botón oficial de Google.
+
+   El hueco tiene el ancho del formulario (no un ancho fijo de 240 px) para que
+   el botón quede alineado con el botón principal, con el mismo ritmo vertical
+   y sin saltos de maquetación cuando Google tarda en cargar.
+
+   Mientras el SDK carga se muestra un esqueleto de la MISMA medida; si el SDK
+   no llega (sin internet, bloqueado por una extensión, client_id no válido) el
+   hueco se sustituye por un aviso: nunca queda un vacío mudo. */
 .sget-sep-google {
+    margin: 1.375rem 0 .125rem;
+}
+
+/* FILA 1: línea · texto · línea */
+.sget-sep-google__fila {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: .625rem;
-    margin: 1.25rem 0 .5rem;
-    justify-content: center;
+    gap: .75rem;
+    margin-bottom: .875rem;
 }
 .sget-sep-google__linea {
-    flex: 1 1 2rem;
+    flex: 1 1 auto;
     height: 1px;
     background: var(--sget-borde);
 }
@@ -271,25 +509,41 @@ html.dark {
     font-size: .6875rem;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: .08em;
+    letter-spacing: .1em;
     color: var(--sget-texto-suave);
 }
-/* Contenedor del botón: tamaño fijo para que el esqueleto y el botón real
-   ocupen lo mismo y la página no salte al montarse. */
+
+/* FILA 2: hueco del botón oficial, al ancho completo del formulario */
 .sget-google-montaje {
     display: flex;
     justify-content: center;
     align-items: center;
     width: 100%;
-    min-height: 44px;
-    margin-top: .75rem;
+    max-width: 100%;
+    min-height: 48px;      /* misma altura que .sget-btn--lg */
+    /* Red de seguridad: si el botón de Google se midiera mal (fuentes sin
+       cargar, zoom del navegador), el recorte es preferible a que se salga de
+       la caja del modal. */
+    overflow: hidden;
 }
+/* El envoltorio que inyecta Google inherits un fondo claro: se neutraliza para
+   que solo se vea la píldora del botón, sin un marco blanco suelto alrededor. */
+.sget-google-montaje > div {
+    width: 100%;
+    max-width: min(100%, 400px);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+
 .sget-google-cargando {
     display: inline-flex;
     gap: .375rem;
     align-items: center;
-    height: 44px;
-    padding: 0 1.75rem;
+    justify-content: center;
+    width: 100%;
+    max-width: 400px;
+    height: 48px;
     border: 1px solid var(--sget-borde);
     border-radius: 999px;
     background: var(--sget-superficie-2);
@@ -320,6 +574,32 @@ html.dark {
 
 @media (prefers-reduced-motion: reduce) {
     .sget-google-cargando__barra { animation: none; opacity: .6; }
+}
+
+/* -------------------------------------------------------------------------- */
+/* reCAPTCHA (login)                                                          */
+/* -------------------------------------------------------------------------- */
+/* El widget gratuito de Google se muestra siempre sobre fondo claro, así que se
+   presenta sobre una tarjeta blanca CON INTENCIÓN en ambos temas. Si algún día
+   Google respeta `data-theme="dark"`, el fondo se mezcla con la tarjeta y el
+   conjunto sigue leyéndose como un bloque, no como un recuadro suelto. */
+.sget-recaptcha {
+    display: flex;
+    justify-content: center;
+    padding: .625rem;
+    border-radius: var(--sget-radio);
+    background: #fff;
+    border: 1px solid var(--sget-borde);
+}
+
+/* Con las claves de PRUEBA de Google, el widget superpone un aviso rojo sobre
+   la imagen del reto. Es ruido dentro de un formulario; se oculta, pero el
+   widget sigue funcionando igual. Para producción hay que sustituir las claves
+   por las reales y este bloque puede eliminarse. */
+.sget-recaptcha .grecaptcha-badge { visibility: hidden; }
+
+@media (max-width: 400px) {
+    .sget-recaptcha { padding: .5rem .25rem; overflow-x: auto; }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -548,4 +828,120 @@ html { scroll-padding-top: 6rem; }
 
 @media (max-width: 640px) {
     .sget-anuncio-vacio { padding: 1.125rem; gap: 1rem; }
+}
+
+/* ==========================================================================
+   NAVEGACIÓN DE LA PORTADA
+   ==========================================================================
+   `scroll-margin-top` en las secciones con anclas.
+
+   POR QUÉ ESTA REGLA
+     La cabecera de la portada es FIJA. Sin margen, al pulsar un enlace del menú
+     el navegador alineaba el inicio de la sección justo debajo de la cabecera y
+     el título quedaba oculto detrás de ella.
+
+     El valor es el margen de la cabecera (padding .875rem arriba y abajo más la
+     altura de su contenido), redondeado hacia arriba para no quedarse corto en
+     pantallas grandes.
+   ========================================================================== */
+
+/* La cabecera de la portada es más alta que la de los módulos internos
+   (padding propio), así que usa su propia variable y no la global. */
+:root {
+    --sget-landing-header-alto: 5rem;
+}
+
+section[id] {
+    scroll-margin-top: calc(var(--sget-landing-header-alto) + 1rem);
+}
+
+/* Con movimiento reducido NO hay que desactivar el desplazamiento suave por JS
+   (ya se respeta en el script); esto cubre además el desplazamiento que
+   dispara el propio navegador, p. ej. al navegar con las flechas del teclado. */
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+}
+
+/* ==========================================================================
+   ACCESO FLOTANTE A SGET
+   ==========================================================================
+   Va abajo a la IZQUIERDA porque el aviso de cookies ocupa la esquina inferior
+   derecha (y en móvil, todo el ancho). Aun así se oculta mientras ese aviso
+   está abierto: `data-sget-oculto="1"` lo pone el script de la landing.
+
+   Aparece con un desplazamiento suave en lugar de estar siempre fijo, para no
+   competir con el contenido ni llamar la atención más de lo necesario.
+   ========================================================================== */
+
+.sget-acceso-flotante {
+    position: fixed;
+    left: clamp(1rem, 3vw, 2rem);
+    bottom: clamp(1rem, 3vw, 2rem);
+    z-index: 60;               /* por debajo del aviso de cookies (z-100) */
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity .25s ease, transform .25s ease, visibility .25s;
+}
+
+.sget-acceso-flotante[data-sget-oculto="1"] {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(.75rem);
+    pointer-events: none;
+}
+
+.sget-acceso-flotante__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .55rem;
+    padding: .7rem 1.1rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--sget-azul) 35%, transparent);
+    background: color-mix(in srgb, var(--sget-superficie) 88%, transparent);
+    backdrop-filter: blur(14px) saturate(1.3);
+    color: var(--sget-texto);
+    font-size: .75rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+    box-shadow: 0 12px 30px -14px rgb(0 0 0 / .55);
+    transition: background-color .2s, border-color .2s, transform .2s, box-shadow .2s;
+    white-space: nowrap;
+}
+
+.sget-acceso-flotante__btn:hover {
+    background: color-mix(in srgb, var(--sget-azul) 18%, var(--sget-superficie));
+    border-color: var(--sget-azul);
+    transform: translateY(-2px);
+    box-shadow: 0 16px 34px -14px rgb(0 0 0 / .6);
+}
+
+.sget-acceso-flotante__btn:focus-visible {
+    outline: 2px solid var(--sget-azul);
+    outline-offset: 3px;
+}
+
+.sget-acceso-flotante__btn--panel {
+    border-color: color-mix(in srgb, var(--sget-esmeralda, #10b981) 40%, transparent);
+}
+
+.sget-acceso-flotante__btn--salir {
+    border-color: color-mix(in srgb, var(--sget-rojo, #ef4444) 35%, transparent);
+    color: var(--sget-rojo, #ef4444);
+}
+
+.sget-acceso-flotante__salir { display: inline-flex; margin: 0; }
+
+/* El formulario del logout no debe heredar espaciado ni romper el flex. */
+.sget-acceso-flotante form { margin: 0; }
+
+/* En pantallas muy pequeñas la etiqueta larga ocupa demasiado: se deja solo
+   el icono, que ya tiene `aria-label` y `title` con el texto completo. */
+@media (max-width: 420px) {
+    .sget-acceso-flotante__btn span { display: none; }
+    .sget-acceso-flotante__btn { padding: .7rem .85rem; }
 }

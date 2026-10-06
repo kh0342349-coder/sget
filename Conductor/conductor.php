@@ -1,7 +1,9 @@
 <?php
 date_default_timezone_set('America/Bogota');
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+if (!class_exists('Auth')) {
+    require_once __DIR__ . '/../core/bootstrap.php';
+} elseif (session_status() === PHP_SESSION_NONE) {
+    Auth::iniciar();
 }
 
 // Cargar diccionario según idioma de la sesión
@@ -13,98 +15,50 @@ if (file_exists($archivoIdioma)) {
     require_once __DIR__ . '/../lang/es.php';
 }
 
-include '../assets/conexion.php'; 
+/* La guardia vive en `Auth`: una sola política de autorización para toda
+   la aplicación. Antes cada página repetía su propio
+   `if (!isset($_SESSION['documento']) || $_SESSION['rol'] != N)`. */
+Auth::requerirSesion();
+Auth::requerirRol(Config::ROL_CONDUCTOR);
 
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 2) {
-    header("Location: ../index.php");
-    exit();
-}
+$nombreReal = Auth::nombre();
 
-$nombreReal = $_SESSION['nombre_usuario'] ?? "Conductor";
-$documento  = $_SESSION['documento'];
+/* ---------------------------------------------------------------------------
+ * DATOS DEL PANEL
+ * ---------------------------------------------------------------------------
+ * Antes esta página leía `usuario.restricciones`, montaba su propia función
+ * `tiene_acceso()` y repetía el patrón mysqli+prepare en cinco consultas.
+ * Eso era el SEGUNDO sistema de autorización conviviendo con el de `Auth`, con
+ * etiquetas (`ver_rutas`, `ver_ranking`) que no existían en el catálogo de
+ * permisos. La tabla y la columna ya no existen (migración 010): aquí solo se
+ * usa `Auth::tieneAcceso()`, que es la política única del sistema.
+ * ------------------------------------------------------------------------- */
+$id_conductor = Auth::id();
 
-$id_conductor = 0;
-$total_viajes = 0;
-$viajes_data = [];
-$promedio = 0;
-$total_votos = 0;
-$restricciones_actuales = '';
+$total_viajes = (int) Database::scalar(
+    'SELECT COUNT(*) FROM viaje WHERE id_usu_via = ?',
+    [$id_conductor]
+);
 
-// Consulta para obtener ID y restricciones
-$stmt_user = $conexion->prepare("SELECT id_usu, restricciones FROM usuario WHERE num_doc_usu = ?");
+// Calificación RECIBIDA por este conductor (`id_usu_des` = quien fue calificado).
+$res_cal = Database::one(
+    'SELECT AVG(pun_cal) AS promedio, COUNT(id_cal) AS total FROM calificacion WHERE id_usu_des = ?',
+    [$id_conductor]
+) ?: [];
+$promedio   = round((float)($res_cal['promedio'] ?? 0), 1);
+$total_votos = (int)($res_cal['total'] ?? 0);
 
-// CONTROL DE ERRORES: Si la consulta falla (p. ej., si falta la columna 'restricciones')
-if (!$stmt_user) {
-    // Intento secundario si la columna 'restricciones' aún no ha sido agregada a la BD
-    $stmt_user = $conexion->prepare("SELECT id_usu FROM usuario WHERE num_doc_usu = ?");
-    if (!$stmt_user) {
-        die("Error en la consulta a la base de datos: " . $conexion->error);
-    }
-}
-
-$stmt_user->bind_param("s", $documento);
-$stmt_user->execute();
-$result_user = $stmt_user->get_result();
-
-if ($result_user && $result_user->num_rows > 0) {
-    $user_data = $result_user->fetch_assoc();
-    $id_conductor = $user_data['id_usu'];
-    $restricciones_actuales = $user_data['restricciones'] ?? '';
-
-    // 1. Contar total de viajes
-    $stmt_count = $conexion->prepare("SELECT COUNT(*) as total FROM viaje WHERE id_usu_via = ?");
-    if ($stmt_count) {
-        $stmt_count->bind_param("i", $id_conductor);
-        $stmt_count->execute();
-        $total_viajes = $stmt_count->get_result()->fetch_assoc()['total'];
-        $stmt_count->close();
-    }
-
-    // 2. Obtener promedio de calificación
-    $stmt_cal = $conexion->prepare("SELECT AVG(pun_cal) as promedio, COUNT(id_cal) as total FROM calificacion WHERE id_usu_des = ?");
-    if ($stmt_cal) {
-        $stmt_cal->bind_param("i", $id_conductor);
-        $stmt_cal->execute();
-        $res_cal = $stmt_cal->get_result();
-        if ($res_cal) {
-            $datos_cal = $res_cal->fetch_assoc();
-            $promedio = round($datos_cal['promedio'] ?? 0, 1);
-            $total_votos = $datos_cal['total'] ?? 0;
-        }
-        $stmt_cal->close();
-    }
-
-    // 3. Consulta de viajes recientes
-    $sql_viajes = "SELECT v.*, r.des_rut, ve.pla_veh, ve.mode_veh,
-                    (SELECT COUNT(*) FROM reserva WHERE id_via_res = v.id_via) as num_pasajeros
-                    FROM viaje v 
-                    JOIN rutas r ON v.id_rut_via = r.id_rut 
-                    LEFT JOIN vehiculo ve ON v.id_veh = ve.id_veh 
-                    WHERE v.id_usu_via = ? 
-                    ORDER BY v.fec_via DESC LIMIT 5";
-    
-    $stmt_viajes = $conexion->prepare($sql_viajes);
-    if ($stmt_viajes) {
-        $stmt_viajes->bind_param("i", $id_conductor);
-        $stmt_viajes->execute();
-        $result_viajes = $stmt_viajes->get_result();
-        
-        while($row = $result_viajes->fetch_assoc()) {
-            $viajes_data[] = $row;
-        }
-        $stmt_viajes->close();
-    }
-}
-$stmt_user->close();
-
-// FUNCIÓN DE VERIFICACIÓN DE RESTRICCIONES EN TIEMPO REAL
-function tiene_acceso($permiso, $cadena_restricciones) {
-    if (empty($cadena_restricciones)) {
-        return true;
-    }
-    $denegados = explode(',', $cadena_restricciones);
-    return !in_array($permiso, $denegados);
-}
+$viajes_data = Database::all(
+    'SELECT v.*, r.des_rut, ve.pla_veh, ve.mode_veh,
+            (SELECT COUNT(*) FROM reserva WHERE id_via_res = v.id_via) AS num_pasajeros
+       FROM viaje v
+       INNER JOIN rutas r         ON v.id_rut_via = r.id_rut
+       LEFT  JOIN vehiculo ve    ON v.id_veh     = ve.id_veh
+      WHERE v.id_usu_via = ?
+      ORDER BY v.fec_via DESC
+      LIMIT 5',
+    [$id_conductor]
+);
 
 $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
 ?>
@@ -198,7 +152,9 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
                 </div>
 
                 <!-- Card 3: Reputación / Ranking -->
-                <?php if (tiene_acceso('ver_ranking', $restricciones_actuales)): ?>
+                <?php /* ÚNICO sistema de permisos: `Auth::tieneAcceso()`, la misma
+                       política que aplica el backend en cada endpoint. */ ?>
+                <?php if (Auth::tieneAcceso('ver_calificaciones')): ?>
                 <div class="bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 p-6 rounded-3xl relative overflow-hidden flex items-center justify-between group hover:border-slate-300 dark:hover:border-white/20 transition-all duration-300 shadow-xl">
                     <div>
                         <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
@@ -231,7 +187,7 @@ $vehiculoReciente = (!empty($viajes_data)) ? $viajes_data[0] : null;
             </div>
 
             <!-- TABLA DE HISTORIAL DE VIAJES -->
-            <?php if (tiene_acceso('ver_rutas', $restricciones_actuales)): ?>
+            <?php if (Auth::tieneAcceso('gestionar_propio_viaje')): ?>
             <div class="bg-white dark:bg-[#121826] border border-slate-200 dark:border-white/10 p-6 rounded-3xl shadow-xl max-w-6xl transition-colors duration-300">
                 <h3 class="font-bold text-slate-900 dark:text-white text-base mb-4 tracking-tight flex items-center gap-2">
                     <i class="fas fa-history text-slate-400 text-sm"></i> <?= ($idiomaActual === 'en') ? 'Recent Trip Records' : 'Últimos Viajes Registrados' ?>

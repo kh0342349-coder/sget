@@ -1,118 +1,160 @@
 <?php
-// Configurar las directivas de seguridad para la cookie de sesión antes de iniciarla
-session_set_cookie_params([
-    'lifetime' => 0,         // Persiste durante la sesión activa del navegador
-    'path'     => '/',
-    'domain'   => '',        // Asigna automáticamente el dominio/host actual
-    'secure'   => true,      // Tridente defensivo: Transmisión exclusiva mediante HTTPS
-    'httponly' => true,      // Tridente defensivo: Inaccesible mediante JS/document.cookie (Anti-XSS)
-    'samesite' => 'Lax'      // Tridente defensivo: Protección contra ataques CSRF
-]);
+/**
+ * validar.php
+ * -----------------------------------------------------------------------------
+ * Inicio de sesión con documento y contraseña.
+ * -----------------------------------------------------------------------------
+ * ANTES (problemas que este archivo corrige)
+ *   · `session_set_cookie_params(['secure' => true])` FIJO, sin mirar el
+ *     protocolo: en la red local (http://localhost/...) el navegador descarta
+ *     la cookie, así que el login "funcionaba" y a los 2 segundos el usuario
+ *     volvía a la portada. La cookie ahora la fija `Auth::iniciar()` según la
+ *     conexión real.
+ *   · Sin token anti-CSRF en el formulario: un sitio externo podía reenviar el
+ *     POST y forzar el inicio de sesión de una cuenta conocida (login CSRF).
+ *   · Comparaba contraseñas a mano (`password_verify` + texto plano) y
+ *     aceptaba cuentas en claro: ahora toda comprobación pasa por
+ *     `core/Password.php`, que además migra la cuenta heredada al vuelo.
+ *   · Sin freno a la fuerza bruta: cada intento fallido se registra y a partir
+ *     del quinto la cuenta se bloquea temporalmente para esa IP.
+ *   · Mensajes técnicos y mensajes que permitían enumerar usuarios.
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-session_start();
-include 'assets/conexion.php';
+require_once __DIR__ . '/core/bootstrap.php';
 
-// 1. Validar presencia del token de reCAPTCHA
-if (!isset($_POST['g-recaptcha-response']) || empty($_POST['g-recaptcha-response'])) {
-    $_SESSION['msg'] = "Por favor complete la verificación reCAPTCHA.";
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
+
+/** Vuelve a la portada abriendo el modal de login con el mensaje dado. */
+$volverAlLogin = static function (string $mensaje): void {
+    Flash::error($mensaje);
     $_SESSION['abrir_login'] = true;
-    header('Location: index.php');
-    exit();
+    sget_redirigir(Config::basePath() . '/index.php');
+};
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    sget_redirigir(Config::basePath() . '/index.php');
 }
 
-$recaptcha_response = $_POST['g-recaptcha-response'];
-// CLAVE SECRETA DE PRUEBA OFICIAL PARA LOCALHOST
-$secret_key = '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe'; 
-
-// 2. Comprobar con la API de Google
-$api_url = "https://www.google.com/recaptcha/api/siteverify?secret=" . $secret_key . "&response=" . $recaptcha_response;
-$verify_response = @file_get_contents($api_url);
-$response_data = json_decode($verify_response);
-
-if (!$response_data || !$response_data->success) {
-    $_SESSION['msg'] = "Error en la verificación de seguridad.";
-    $_SESSION['abrir_login'] = true;
-    header('Location: index.php');
-    exit();
+/* -------------------------------------------------------------------------- */
+/* 1. Token anti-CSRF                                                          */
+/* -------------------------------------------------------------------------- */
+if (!Auth::validarToken((string) ($_POST['_token'] ?? ''))) {
+    http_response_code(403);
+    $volverAlLogin('La sesión del formulario caducó. Vuelve a intentarlo.');
 }
 
-// 3. Procesar autenticación normal de usuario
-$doc = trim($_POST['documento'] ?? '');
-$pass = trim($_POST['clave'] ?? '');
-
-if (empty($doc) || empty($pass)) {
-    $_SESSION['msg'] = "Por favor llene todos los campos.";
-    $_SESSION['abrir_login'] = true;
-    header('Location: index.php');
-    exit();
+/* -------------------------------------------------------------------------- */
+/* 2. reCAPTCHA (CONFIGURABLE · ver core/Recaptcha.php)                        */
+/* -------------------------------------------------------------------------- */
+/*
+ * Antes el código era:
+ *
+ *     if ($respuestaRecaptcha !== '') { …verificar… }
+ *
+ * es decir, si el POST no traía token se entraba igual. Y la clave pública era
+ * la de PRUEBA de Google, que valida cualquier cosa. El captcha estaba en
+ * pantalla pero no era obligatorio: falsa sensación de seguridad.
+ *
+ * Ahora `Recaptcha::verificar()` decide según `SGET_RECAPTCHA_ENABLED`:
+ *   · apagado    → no se pide token (desarrollo)
+ *   · encendido  → token obligatorio; si falta, se rechaza
+ *   · encendido sin secreto configurado → se rechaza en cerrado
+ */
+$recaptcha = Recaptcha::verificar((string)($_POST['g-recaptcha-response'] ?? ''));
+if (!$recaptcha['ok']) {
+    http_response_code(400);
+    $volverAlLogin($recaptcha['mensaje']);
 }
 
-// Consultar usuario en la base de datos
-$stmt = $conexion->prepare("SELECT id_usu, num_doc_usu, nom_usu, pass_usu, id_rol_usu, estado FROM usuario WHERE num_doc_usu = ?");
-$stmt->bind_param("s", $doc);
-$stmt->execute();
-$result = $stmt->get_result();
+/* -------------------------------------------------------------------------- */
+/* 3. Datos del formulario                                                     */
+/* -------------------------------------------------------------------------- */
+$documento = trim((string) ($_POST['documento'] ?? ''));
+$clave     = (string) ($_POST['clave'] ?? '');          // sin trim: la clave es exacta
 
-if ($result->num_rows > 0) {
-    $data_user = $result->fetch_assoc();
-    $hash = $data_user['pass_usu'];
-    $estado = $data_user['estado'];
-
-    // Verificar si la clave coincide (soporta contraseñas hash de PHP y texto plano)
-    $es_valida = false;
-
-    if (password_verify($pass, $hash)) {
-        $es_valida = true;
-    } elseif ($pass === $hash) {
-        // Si la clave está en texto plano en la BD, la valida y actualiza a Hash seguro
-        $es_valida = true;
-        $nuevo_hash = password_hash($pass, PASSWORD_DEFAULT);
-        $update_stmt = $conexion->prepare("UPDATE usuario SET pass_usu = ? WHERE id_usu = ?");
-        $update_stmt->bind_param("si", $nuevo_hash, $data_user['id_usu']);
-        $update_stmt->execute();
-        $update_stmt->close();
-    }
-
-    if ($es_valida) {
-        if ($estado == 0) {
-            $_SESSION['msg'] = "Su cuenta está desactivada. Contacte al administrador.";
-            $_SESSION['abrir_login'] = true;
-            $stmt->close();
-            header('Location: index.php');
-            exit();
-        }
-
-        session_regenerate_id(true);
-
-        $_SESSION['id_usu'] = $data_user['id_usu'];
-        $_SESSION['documento'] = $data_user['num_doc_usu'];
-        $_SESSION['nombre_usuario'] = $data_user['nom_usu'];
-        $_SESSION['rol'] = $data_user['id_rol_usu'];
-
-        $_SESSION['restricciones'] = '';
-
-        $rol = $data_user['id_rol_usu'];
-        $stmt->close();
-
-        switch ($rol) {
-            case 1: header('Location: Admin/admin.php'); break;
-            case 2: header('Location: Conductor/conductor.php'); break;
-            case 3: header('Location: Pasajero/pasajero.php'); break;
-            default: header('Location: index.php'); break;
-        }
-        exit();
-    } else {
-        $_SESSION['msg'] = "Error al ingresar la contraseña del usuario";
-        $_SESSION['abrir_login'] = true;
-        $stmt->close();
-        header('Location: index.php');
-        exit();
-    }
-} else {
-    $_SESSION['msg'] = "El usuario no está registrado";
-    $_SESSION['abrir_login'] = true;
-    $stmt->close();
-    header('Location: index.php');
-    exit();
+if ($documento === '' || $clave === '') {
+    $volverAlLogin('Escribe tu número de documento y tu contraseña.');
 }
-?>
+
+/* -------------------------------------------------------------------------- */
+/* 4. Freno a la fuerza bruta (persistido en servidor, no en la sesión)       */
+/* -------------------------------------------------------------------------- */
+$espera = Auth::intentosBloqueados($documento);
+if ($espera > 0) {
+    http_response_code(429);
+    Logger::registrar(Database::pdo(), 'LOGIN_BLOQUEADO', sprintf(
+        'Cuenta bloqueada por intentos fallidos (documento %s).',
+        substr($documento, 0, 4) . '***'
+    ));
+    $volverAlLogin(sprintf(
+        'Demasiados intentos fallidos. Vuelve a intentar en %d minuto(s).',
+        (int) ceil($espera / 60)
+    ));
+}
+
+/* -------------------------------------------------------------------------- */
+/* 5. Buscar la cuenta                                                        */
+/* -------------------------------------------------------------------------- */
+$fila = Database::one(
+    "SELECT id_usu, tip_doc_usu, num_doc_usu, nom_usu, corre_usu,
+            pass_usu, id_rol_usu, estado
+       FROM usuario
+      WHERE num_doc_usu = ?",
+    [$documento]
+);
+
+/**
+ * Mensaje ÚNICO para "no existe" y "contraseña incorrecta".
+ *
+ * Distinguirlos convertía el login en un oráculo: cualquiera podía
+ * comprobar si un documento estaba registrado escribiendo cualquier contraseña.
+ */
+if (!$fila || !Password::verify($clave, (string) $fila['pass_usu'])) {
+    Auth::registrarIntentoFallido($documento);
+    error_log('[SGET][login] Intento fallido para el documento ' . substr($documento, 0, 4) . '***');
+    http_response_code(401);
+    $volverAlLogin('El documento o la contraseña no son correctos.');
+}
+
+Auth::limpiarIntentos($documento);
+
+/* -------------------------------------------------------------------------- */
+/* 6. Migración silenciosa de contraseñas heredadas (MD5 / texto plano)        */
+/* -------------------------------------------------------------------------- */
+if (Password::necesitaMigracion((string) $fila['pass_usu'])) {
+    Database::query(
+        'UPDATE usuario SET pass_usu = ? WHERE id_usu = ?',
+        [Password::hash($clave), (int) $fila['id_usu']]
+    );
+    error_log('[SGET][login] Contraseña migrada al formato actual del usuario #' . (int) $fila['id_usu']);
+}
+
+/* -------------------------------------------------------------------------- */
+/* 7. Cuenta activa                                                            */
+/* -------------------------------------------------------------------------- */
+if ((int) $fila['estado'] !== Config::USU_ACTIVO) {
+    http_response_code(403);
+    $volverAlLogin('Tu cuenta está desactivada. Contacta al administrador de SGET.');
+}
+
+/* -------------------------------------------------------------------------- */
+/* 8. Rol válido y sesión                                                      */
+/* -------------------------------------------------------------------------- */
+$rolesValidos = Database::all('SELECT id_rol FROM rol WHERE id_rol = ?', [(int) $fila['id_rol_usu']]);
+if ($rolesValidos === []) {
+    $volverAlLogin('Tu cuenta no tiene un rol asignado. Contacta al administrador.');
+}
+
+Auth::establecerSesion($fila);
+
+Logger::registrar(Database::pdo(), 'INICIAR_SESION', sprintf(
+    'Inicio de sesión del usuario #%d (%s, rol %d).',
+    (int) $fila['id_usu'],
+    (string) $fila['nom_usu'],
+    (int) $fila['id_rol_usu']
+));
+
+sget_redirigir(Auth::inicioPorRol());

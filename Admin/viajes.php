@@ -42,6 +42,20 @@ foreach (Database::all("SELECT est_via, COUNT(*) n FROM viaje GROUP BY est_via")
 }
 
 $tituloPagina = 'Despacho de Viajes';
+
+/* Cuántos puestos embarcaron en cada viaje.
+   Se calcula en UNA consulta para todas las tarjetas y no una por viaje: son
+   datos de lectura que solo sirven para el «x de y» de la tarjeta. `embarco` va
+   aparte del estado de pago porque se puede haber pagado al abordar y sí subir. */
+$embarques = [];
+foreach (Database::all(
+    "SELECT id_via_res, COUNT(*) AS n FROM reserva
+      WHERE estado_pago <> ? AND embarco = 1
+      GROUP BY id_via_res",
+    [Config::RES_CANCELADA]
+) as $_f) {
+    $embarques[(int)$_f['id_via_res']] = (int)$_f['n'];
+}
 include __DIR__ . '/../views/partials/head.php';
 ?>
 <?php include __DIR__ . '/../includes/sidebar.php'; ?>
@@ -99,7 +113,7 @@ include __DIR__ . '/../views/partials/head.php';
         <div class="sget-toolbar">
             <div class="sget-search">
                 <i class="fas fa-magnifying-glass"></i>
-                <input type="search" id="buscarViaje" class="sget-input" placeholder="Buscar ruta, conductor o placa… (Ctrl+K)">
+                <input type="search" id="buscarViaje" class="sget-input" placeholder="Buscar ruta, conductor o placa… (Ctrl+K)" autocomplete="off" spellcheck="false">
             </div>
         </div>
 
@@ -205,9 +219,19 @@ include __DIR__ . '/../views/partials/head.php';
                             <p class="sget-label">Reservas</p>
                             <p class="sget-mono"><?= $reservas ?> pasajero(s)</p>
                         </div>
+                        <div>
+                            <p class="sget-label">Embarcaron</p>
+                            <?php $emb = (int) ($embarques[$id] ?? 0); ?>
+                            <p class="sget-mono"><?= $emb ?> de <?= $reservas ?></p>
+                        </div>
                     </div>
 
                     <footer style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:auto;padding-top:.875rem;border-top:1px solid var(--sget-borde)">
+                        <a class="sget-btn sget-btn--neutro sget-btn--sm" style="flex:1"
+                           href="reportes.php?tab=pasajeros&amp;viaje=<?= $id ?>">
+                            <i class="fas fa-users"></i> Pasajeros
+                        </a>
+
                         <button type="button" class="sget-btn sget-btn--neutro sget-btn--sm" style="flex:1"
                                 data-sget-modal="modalViaje" data-sget-nuevo="Programar Nuevo Viaje"
                                 data-sget-datos='<?= htmlspecialchars(json_encode($datosEdicion, JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
@@ -222,11 +246,33 @@ include __DIR__ . '/../views/partials/head.php';
                             </button>
                         <?php endif; ?>
 
-                        <button type="button" class="sget-btn sget-btn--neutro sget-btn--sm" style="flex:1"
-                                data-sget-accion="finalizar"
-                                data-sget-dato='<?= htmlspecialchars(json_encode(['id' => $id], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
-                            <i class="fas fa-flag-checkered"></i> Terminar
-                        </button>
+                        <?php /* «Terminar» solo si el viaje REALMENTE puede terminarse.
+                               La misma regla (`ViajeService::puedeFinalizar`) la
+                               aplica el backend al recibir la petición, así que
+                               el botón y la validación no pueden discrepar.
+
+                               Antes el botón salía SIEMPRE y el backend solo
+                               miraba que el viaje no estuviera cerrado: un viaje
+                               programado para mañana se podía «finalizar» hoy
+                               sin que hubiera salido nunca. Cuando no se puede,
+                               no se esconde: se explica por qué, que es lo que
+                               evita que el administrador piense que la pantalla
+                               está rota. */ ?>
+                        <?php [$puedeTerminar, $motivoTerminar] = ViajeService::puedeFinalizar($v); ?>
+                        <?php if ($puedeTerminar): ?>
+                            <button type="button" class="sget-btn sget-btn--neutro sget-btn--sm" style="flex:1"
+                                    data-sget-accion="finalizar"
+                                    data-sget-dato='<?= htmlspecialchars(json_encode(['id' => $id], JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'>
+                                <i class="fas fa-flag-checkered"></i> Terminar
+                            </button>
+                        <?php else: ?>
+                            <span class="sget-btn sget-btn--neutro sget-btn--sm"
+                                  style="flex:1;opacity:.5;cursor:not-allowed"
+                                  title="<?= htmlspecialchars($motivoTerminar, ENT_QUOTES, 'UTF-8') ?>"
+                                  aria-disabled="true">
+                                <i class="fas fa-flag-checkered"></i> Terminar
+                            </span>
+                        <?php endif; ?>
 
                         <button type="button" class="sget-icon-btn <?= $vencido ? '' : 'sget-icon-btn--peligro' ?>"
                                 title="<?= $vencido ? 'Ver por qué no se puede cancelar' : 'Cancelar viaje y notificar pasajeros' ?>"

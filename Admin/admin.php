@@ -6,8 +6,10 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+if (!class_exists('Auth')) {
+    require_once __DIR__ . '/../core/bootstrap.php';
+} elseif (session_status() === PHP_SESSION_NONE) {
+    Auth::iniciar();
 }
 
 // Cargar diccionario de idioma global
@@ -18,75 +20,82 @@ if ($idiomaActual === 'en') {
     @include_once __DIR__ . '/../lang/es.php';
 }
 
-require_once __DIR__ . '/../assets/conexion.php';
 
 // Verificación de seguridad para Administrador (Rol 1)
-$rolSesion = $_SESSION['rol'] ?? $_SESSION['id_rol_usu'] ?? 0;
-if (!isset($_SESSION['documento']) || $rolSesion != 1) {
-    header("Location: ../index.php");
-    exit();
-}
+/* La guardia vive en `Auth` (una sola política para toda la aplicación). */
+Auth::requerirSesion();
+Auth::requerirAdmin();
 
-$idUsuarioActual = $_SESSION['id_usu'] ?? 0;
 Auth::requerirAcceso('admin');
 
-$nombreReal = $_SESSION['nombre_usuario'] ?? 'Administrador';
+$idUsuarioActual = Auth::id();
+$nombreReal      = Auth::nombre();
 
-// --- CONSULTAS OPERATIVAS DEL DASHBOARD ---
-$mes_actual = date('m');
+/* ---------------------------------------------------------------------------
+ * CONSULTAS OPERATIVAS DEL DASHBOARD
+ * ---------------------------------------------------------------------------
+ * Estaban escritas con `$conexion->query()` y, dos de ellas, con el mes
+ * concatenado en el SQL. Además `usuarios_mes` era una COPIA de `total_usuarios`
+ * (se le había olvidado la condición de fecha), así que el «crecimiento de
+ * usuarios» era siempre 100 %.
+ * ------------------------------------------------------------------------- */
+$mes_actual  = date('m');
 $anio_actual = date('Y');
 
-// 1. Estadísticas de Usuarios
-$total_usuarios = 0;
-$res_total_usu = $conexion->query("SELECT COUNT(*) as total FROM usuario WHERE id_rol_usu IN (2,3)");
-if ($res_total_usu) {
-    $row = $res_total_usu->fetch_assoc();
-    $total_usuarios = $row['total'] ?? 0;
-}
+// 1. Estadísticas de usuarios (totales y altas de ESTE mes)
+$total_usuarios = (int) Database::scalar(
+    'SELECT COUNT(*) FROM usuario WHERE id_rol_usu IN (?, ?)',
+    [Config::ROL_CONDUCTOR, Config::ROL_PASAJERO]
+);
 
-$usuarios_mes = 0;
-$res_mes_usu = $conexion->query("SELECT COUNT(*) as mes FROM usuario WHERE id_rol_usu IN (2,3)");
-if ($res_mes_usu) {
-    $row = $res_mes_usu->fetch_assoc();
-    $usuarios_mes = $row['mes'] ?? 0;
-}
+$usuarios_mes = (int) Database::scalar(
+    'SELECT COUNT(*) FROM usuario
+      WHERE id_rol_usu IN (?, ?) AND estado = ?
+        AND MONTH(COALESCE(fecha_acepta_politica, NOW())) = ? AND YEAR(COALESCE(fecha_acepta_politica, NOW())) = ?',
+    [Config::ROL_CONDUCTOR, Config::ROL_PASAJERO, Config::USU_ACTIVO, (int)$mes_actual, (int)$anio_actual]
+);
 $porcentaje_usu = $total_usuarios > 0 ? round(($usuarios_mes / $total_usuarios) * 100, 1) : 0;
 
-// 2. Estadísticas de Viajes
-$total_viajes = 0;
-$res_total_via = $conexion->query("SELECT COUNT(*) as total FROM viaje");
-if ($res_total_via) {
-    $row = $res_total_via->fetch_assoc();
-    $total_viajes = $row['total'] ?? 0;
-}
+// 2. Estadísticas de viajes
+$total_viajes = (int) Database::scalar('SELECT COUNT(*) FROM viaje');
 
-$viajes_mes = 0;
-$res_mes_via = $conexion->query("SELECT COUNT(*) as mes FROM viaje WHERE MONTH(fec_via) = '$mes_actual' AND YEAR(fec_via) = '$anio_actual'");
-if ($res_mes_via) {
-    $row = $res_mes_via->fetch_assoc();
-    $viajes_mes = $row['mes'] ?? 0;
-}
+$viajes_mes = (int) Database::scalar(
+    'SELECT COUNT(*) FROM viaje WHERE MONTH(fec_via) = ? AND YEAR(fec_via) = ?',
+    [(int)$mes_actual, (int)$anio_actual]
+);
 $porcentaje_via = $total_viajes > 0 ? round(($viajes_mes / $total_viajes) * 100, 1) : 0;
 
 // 3. Estado de la Flota de Vehículos
-$vehiculos = ['Activo' => 0, 'Inactivo' => 0];
-$res_veh = $conexion->query("SELECT est_veh, COUNT(*) as cantidad FROM vehiculo GROUP BY est_veh");
-if ($res_veh) {
-    while($row = $res_veh->fetch_assoc()) {
-        $estado = ($row['est_veh'] == 1) ? 'Activo' : 'Inactivo';
-        $vehiculos[$estado] = $row['cantidad'];
-    }
+/* Los cuatro estados reales de la unidad, cada uno con su propia tarjeta.
+   Antes se agrupaban en 'Activo'/'Inactivo', que escondía justo lo que había que
+   ver: cuántas unidades están en el taller y cuántas retiradas. */
+$vehiculos = [
+    Config::VEH_DISPONIBLE     => 0,
+    Config::VEH_ASIGNADO       => 0,
+    Config::VEH_MANTENIMIENTO  => 0,
+    Config::VEH_FUERA_SERVICIO => 0,
+];
+foreach (VehiculoService::todos() as $row) {
+    $clave = VehiculoService::normalizar((string)$row['est_veh']);
+    $vehiculos[$clave] = ($vehiculos[$clave] ?? 0) + 1;
 }
 
-// 4. Conductores Disponibles
-$conductores_disponibles = $conexion->query("
-    SELECT u.id_usu, u.nom_usu, v.pla_veh 
-    FROM usuario u 
-    LEFT JOIN asignacion a ON u.id_usu = a.id_usu_asig 
-    LEFT JOIN vehiculo v ON a.id_veh_asig = v.id_veh 
-    WHERE u.id_rol_usu = 2 AND u.est_con_usu = 1 
-    LIMIT 5
-");
+// 4. Conductores disponibles
+/* Fuente de verdad: `viaje`. Antes se leía la tabla `asignacion`, que
+   duplicaba la relación conductor→vehículo y además podía contradecirla
+   (si el viaje se reasignaba, `asignacion` se quedaba con el valor viejo). */
+$conductores_disponibles = Database::all(
+    'SELECT u.id_usu, u.nom_usu, veh.pla_veh
+       FROM usuario u
+       LEFT JOIN vehiculo veh
+              ON veh.id_veh = (SELECT v2.id_veh FROM viaje v2
+                                WHERE v2.id_usu_via = u.id_usu
+                                  AND v2.est_via IN (?, ?)
+                                ORDER BY v2.fec_via DESC LIMIT 1)
+      WHERE u.id_rol_usu = ? AND u.est_con_usu = ? AND u.estado = ?
+      LIMIT 5',
+    [Config::VIA_PROGRAMADO, Config::VIA_EN_CURSO, Config::ROL_CONDUCTOR, Config::CON_DISPONIBLE, Config::USU_ACTIVO]
+);
 ?>
 <!DOCTYPE html>
 <html lang="<?php echo $idiomaActual; ?>">
@@ -146,9 +155,6 @@ $conductores_disponibles = $conexion->query("
                 <div>
                     <div class="flex items-center gap-2.5">
                         <h2 class="text-3xl font-black text-slate-900 dark:text-white tracking-tight"><?php echo $lang['bienvenido'] ?? 'Bienvenido al Panel General'; ?></h2>
-                        <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
-                            <i class="fas fa-question text-[10px]"></i>
-                        </button>
                     </div>
                     <p class="text-slate-500 dark:text-slate-400 text-xs mt-1"><?php echo $lang['sub_bienvenido'] ?? 'Resumen general de operaciones logísticas, control de flota y personal de SGET.'; ?></p>
                 </div>
@@ -194,14 +200,25 @@ $conductores_disponibles = $conexion->query("
                     <div class="flex justify-between items-start">
                         <div>
                             <p class="text-[11px] font-bold text-slate-400 uppercase tracking-wider"><?php echo $lang['flota_disponible'] ?? 'FLOTA DISPONIBLE'; ?></p>
-                            <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono"><?php echo $vehiculos['Activo']; ?></h3>
+                            <h3 class="text-3xl font-black text-slate-900 dark:text-white mt-2 font-mono"><?= (int)($vehiculos[Config::VEH_DISPONIBLE] ?? 0) ?></h3>
                         </div>
                         <div class="w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center text-lg border border-emerald-500/20">
                             <i class="fas fa-bus"></i>
                         </div>
                     </div>
-                    <div class="mt-4 flex items-center gap-2 text-xs text-slate-400 font-semibold">
-                        <span>Inactivos: <b class="text-red-400"><?php echo $vehiculos['Inactivo']; ?></b></span>
+                    <!--
+                        Los cuatro estados reales de la unidad. Antes esta línea
+                        decía «Inactivos» y sumaba mantenimiento + averiadas + en
+                        ruta en un único número, que no correspondía a nada que el
+                        administrador pudiera actuar.
+                    -->
+                    <div class="mt-4 flex items-center gap-3 flex-wrap text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                        <span><i class="fas fa-truck-fast text-sky-500"></i>
+                            En ruta: <b class="text-sky-500"><?= (int)($vehiculos[Config::VEH_ASIGNADO] ?? 0) ?></b></span>
+                        <span><i class="fas fa-wrench text-amber-500"></i>
+                            En mantenimiento: <b class="text-amber-500"><?= (int)($vehiculos[Config::VEH_MANTENIMIENTO] ?? 0) ?></b></span>
+                        <span><i class="fas fa-ban text-red-400"></i>
+                            Fuera de servicio: <b class="text-red-400"><?= (int)($vehiculos[Config::VEH_FUERA_SERVICIO] ?? 0) ?></b></span>
                     </div>
                 </div>
 
@@ -243,23 +260,27 @@ $conductores_disponibles = $conexion->query("
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-slate-100 dark:divide-white/5 text-xs">
-                                <?php if ($conductores_disponibles && $conductores_disponibles->num_rows > 0): ?>
-                                    <?php while($c = $conductores_disponibles->fetch_assoc()): ?>
+                                <?php if (!empty($conductores_disponibles)): ?>
+                                    <?php foreach ($conductores_disponibles as $c): ?>
                                     <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                                         <td class="py-3.5 font-bold text-slate-800 dark:text-white flex items-center gap-2.5">
                                             <div class="w-7 h-7 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center text-xs font-black">
-                                                <?php echo strtoupper(substr($c['nom_usu'], 0, 1)); ?>
+                                                <?php echo htmlspecialchars(mb_strtoupper(mb_substr((string)$c['nom_usu'], 0, 1)), ENT_QUOTES, 'UTF-8'); ?>
                                             </div>
-                                            <?php echo htmlspecialchars($c['nom_usu']); ?>
+                                            <?php echo htmlspecialchars((string)$c['nom_usu'], ENT_QUOTES, 'UTF-8'); ?>
                                         </td>
                                         <td class="py-3.5 font-mono text-slate-500 dark:text-slate-300">
-                                            <?php echo $c['pla_veh'] ? htmlspecialchars($c['pla_veh']) : '<span class="text-amber-400 italic">' . ($lang['sin_asignar'] ?? 'Sin asignar') . '</span>'; ?>
+                                            <?php if (!empty($c['pla_veh'])): ?>
+                                                <?php echo htmlspecialchars((string)$c['pla_veh'], ENT_QUOTES, 'UTF-8'); ?>
+                                            <?php else: ?>
+                                                <span class="text-amber-400 italic"><?php echo $lang['sin_asignar'] ?? 'Sin asignar'; ?></span>
+                                            <?php endif; ?>
                                         </td>
                                         <td class="py-3.5 text-center">
                                             <span class="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-extrabold uppercase"><?php echo $lang['disponible'] ?? 'Disponible'; ?></span>
                                         </td>
                                     </tr>
-                                    <?php endwhile; ?>
+                                    <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr>
                                         <td colspan="3" class="py-8 text-center text-slate-400 italic">No hay conductores disponibles registrados en este momento.</td>
@@ -309,42 +330,7 @@ $conductores_disponibles = $conexion->query("
         </main>
     </div>
 
-    <!-- MODAL DE AYUDA -->
-    <div id="overlayAyuda" onclick="cerrarModalAyuda()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300"></div>
-    <div id="modalAyuda" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
-        <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
-            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
-                <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                    <i class="fas fa-info-circle text-sky-400"></i> Guía del Panel General (Dashboard)
-                </h3>
-                <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center"><i class="fas fa-times text-xs"></i></button>
-            </div>
-            <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-chart-pie text-sky-400 mt-0.5"></i>
-                    <span><b>Métricas Principales:</b> Visualiza en tiempo real el volumen de usuarios, viajes despachados y la disponibilidad operativa de la flota.</span>
-                </li>
-            </ul>
-            <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
-                Entendido
-            </button>
-        </div>
-    </div>
-
     <script>
-    function abrirModalAyuda() {
-        document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
-        document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');
-        document.getElementById('modalAyuda').classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
-        document.getElementById('modalAyuda').classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
-    }
-
-    function cerrarModalAyuda() {
-        document.getElementById('modalAyuda').classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
-        document.getElementById('modalAyuda').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
-        document.getElementById('overlayAyuda').classList.remove('opacity-100', 'pointer-events-auto');
-        document.getElementById('overlayAyuda').classList.add('opacity-0', 'pointer-events-none');
-    }
     </script>
 </body>
 </html>

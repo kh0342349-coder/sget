@@ -1,4 +1,5 @@
 <?php
+
 /**
  * pruebas/smoke.php  ·  Ejecución:  php pruebas/smoke.php
  * -----------------------------------------------------------------------------
@@ -14,6 +15,8 @@
  */
 declare(strict_types=1);
 
+
+require_once __DIR__ . '/_guardia.php';
 define('SGET_SMOKE', true);
 require_once dirname(__DIR__) . '/core/bootstrap.php';
 
@@ -141,8 +144,11 @@ if ($conductor && $vehiculo) {
     check('hor_sal_via queda como H:i:s',  $viaje['hor_sal_via'] === '07:30:00', (string)$viaje['hor_sal_via']);
     check('cupos heredados del vehículo',  (int)$viaje['cup_tot'] === (int)$vehiculo['cap_veh']);
 
+    /* Un viaje FUTURO (dentro de 2 días) NO debe bloquear al conductor hoy:
+       antes bastaba con tener un viaje en 'Programado' para marcarlo ocupado,
+       y el sistema no permitía，复，计划在行程开始前继续安排其他班次。 */
     $ocupado = (int) Database::scalar("SELECT est_con_usu FROM usuario WHERE id_usu = ?", [(int)$conductor['id_usu']]);
-    check('Conductor queda OCUPADO (0)', $ocupado === Config::CON_OCUPADO, "valor: {$ocupado}");
+    check('Un viaje FUTURO no bloquea al conductor hoy', $ocupado === Config::CON_DISPONIBLE, "valor: {$ocupado}");
 
     // No se puede reutilizar un conductor ya ocupado
     $repetido = $base; $repetido['id_veh'] = (int)$vehiculo['id_veh'];

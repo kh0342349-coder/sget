@@ -14,7 +14,15 @@
  */
 require_once dirname(__DIR__) . '/core/bootstrap.php';
 
-// Las constantes antiguas se mantienen como alias de Config para no romper
-// callers legacy, pero los valores correctos viven en core/Config.php.
+/*
+ * Alias de las constantes antiguas, para no romper llamadores legacy.
+ * Los valores correctos viven ÚNICOS en `core/Config.php`.
+ *
+ * `ESTADO_OCUPADO` apuntaba a «Fuera de servicio», que además de ser el valor
+ * equivocado era el que dejaba la flota llena de averías: `vehiculo.est_veh`
+ * ahora distingue los cuatro estados (Disponible · Asignado · Mantenimiento ·
+ * Fuera de servicio) y «ocupado» es, literalmente, «Asignado».
+ */
 if (!defined('ESTADO_DISPONIBLE')) define('ESTADO_DISPONIBLE', Config::VEH_DISPONIBLE);
-if (!defined('ESTADO_OCUPADO'))    define('ESTADO_OCUPADO',    Config::VEH_FUERA_SERVICIO);
+if (!defined('ESTADO_OCUPADO'))    define('ESTADO_OCUPADO',    Config::VEH_ASIGNADO);
+if (!defined('ESTADO_MANTENIMIENTO')) define('ESTADO_MANTENIMIENTO', Config::VEH_MANTENIMIENTO);

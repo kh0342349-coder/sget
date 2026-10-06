@@ -1,14 +1,16 @@
 <?php
 date_default_timezone_set('America/Bogota');
-session_start();
-
+if (!class_exists('Auth')) {
+    require_once __DIR__ . '/../core/bootstrap.php';
+}
 include '../assets/conexion.php'; 
 
 // 1. Verificación de seguridad
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 2) {
-    header("Location: ../index.php");
-    exit();
-}
+/* La guardia vive en `Auth`: una sola política de autorización para toda
+   la aplicación. Antes cada página repetía su propio
+   `if (!isset($_SESSION['documento']) || $_SESSION['rol'] != N)`. */
+Auth::requerirSesion();
+Auth::requerirRol(Config::ROL_CONDUCTOR);
 
 $documento = $_SESSION['documento'];
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Derrick Mendoza";
@@ -57,7 +59,13 @@ if ($rutas_select) {
     }
     $rutas_select->data_seek(0);
 }
-$vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = 1 ORDER BY pla_veh ASC");
+$stmt_vehiculos = $conexion->prepare("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = ? ORDER BY pla_veh ASC");
+// `bind_param` exige variables POR REFERENCIA: pasar la constante directamente
+// es un error fatal (`Argument #2 cannot be passed by reference`).
+$stmt_vehiculos_estado = Config::VEH_DISPONIBLE;
+$stmt_vehiculos->bind_param("s", $stmt_vehiculos_estado);
+$stmt_vehiculos->execute();
+$vehiculos_select = $stmt_vehiculos->get_result();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -118,32 +126,15 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Feedback de Pasajeros</h1>
                         
-                        <!-- 1. BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
-                        <div class="relative group">
-                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
-                                <i class="fas fa-question text-[10px]"></i>
-                            </button>
+                        <!--
+                             BOTÓN DE AYUDA DEL MÓDULO · RETIRADO
+                             Este «?» por pantalla se sustituyó por UNO SOLO global en la
+                             esquina inferior derecha (views/modals/ayuda.php), que además
+                             cambia de contenido según el rol y el módulo. Con estos botones
+                             repartidos, cada módulo llevaba su propia copia de la guía y se
+                             desincronizaban entre sí.
+                        -->
 
-                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
-                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
-                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía de Calificaciónes
-                                </p>
-                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-star text-amber-400 mt-0.5 shrink-0"></i>
-                                        <span><b>Estrellas:</b> Puntuación máxima de 5 estrellas otorgada por los pasajeros.</span>
-                                    </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-comment text-blue-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Detalle:</b> Haz clic en el botón de lectura de la tarjeta para desplegar el pop-up informativo.</span>
-                                    </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-plus-circle text-emerald-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Programar Viaje (+):</b> Abre el formulario deslizante para registrar una nueva salida.</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Lo que dicen los usuarios sobre tu servicio en la vía.</p>
                 </div>

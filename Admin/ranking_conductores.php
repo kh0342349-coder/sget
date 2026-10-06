@@ -1,15 +1,17 @@
 <?php
 // Archivo: Admin/ranking_conductores.php
 date_default_timezone_set('America/Bogota');
-session_start();
-
+if (!class_exists('Auth')) {
+    require_once __DIR__ . '/../core/bootstrap.php';
+}
 include '../assets/conexion.php';
 
 // Verificación de seguridad (Solo Admin)[cite: 7]
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 1) {
-    header("Location: ../index.php");
-    exit();
-}
+/* La guardia vive en `Auth`: una sola política de autorización para toda
+   la aplicación. Antes cada página repetía su propio
+   `if (!isset($_SESSION['documento']) || $_SESSION['rol'] != N)`. */
+Auth::requerirSesion();
+Auth::requerirRol(Config::ROL_ADMIN);
 
 // BLOQUEO DE SEGURIDAD POR RESTRICCIONES[cite: 7]
 $idUsuarioActual = $_SESSION['id_usu'] ?? 0;
@@ -75,9 +77,6 @@ $resultado_ranking = $conexion->query($query_ranking);
                         <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Ranking de Conductores</h1>
                         
                         <!-- BOTÓN DE AYUDA DEL SISTEMA -->
-                        <button type="button" onclick="abrirModalAyuda()" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer" title="Ver guía del módulo">
-                            <i class="fas fa-question text-[10px]"></i>
-                        </button>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Evaluación de desempeño, cantidad de viajes realizados y métricas del personal de conducción[cite: 7].</p>
                 </div>
@@ -138,47 +137,8 @@ $resultado_ranking = $conexion->query($query_ranking);
         </main>
     </div>
 
-    <!-- MODAL DE AYUDA DEL MÓDULO -->
-    <div id="overlayAyuda" onclick="cerrarModalAyuda()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 opacity-0 pointer-events-none transition-opacity duration-300"></div>
-    <div id="modalAyuda" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none opacity-0 transition-all duration-300 p-4">
-        <div class="bg-white dark:bg-[#121826] w-full max-w-md rounded-3xl p-6 border border-slate-200 dark:border-white/10 shadow-2xl space-y-4 transform scale-95 transition-all duration-300">
-            <div class="flex justify-between items-center border-b border-slate-100 dark:border-white/5 pb-3">
-                <h3 class="font-extrabold text-slate-900 dark:text-white text-base flex items-center gap-2">
-                    <i class="fas fa-info-circle text-sky-400"></i> Guía de Ranking de Conductores
-                </h3>
-                <button onclick="cerrarModalAyuda()" class="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-white flex items-center justify-center cursor-pointer"><i class="fas fa-times text-xs"></i></button>
-            </div>
-            <ul class="space-y-2.5 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-trophy text-amber-400 mt-0.5"></i>
-                    <span><b>Tabla de Posiciones:</b> El sistema genera automáticamente el orden de los conductores basándose en la cantidad de viajes registrados exitosamente en el despacho.</span>
-                </li>
-                <li class="flex items-start gap-2">
-                    <i class="fas fa-medal text-sky-400 mt-0.5"></i>
-                    <span><b>Top Rendimiento:</b> Destaca visualmente a los tres (3) mejores conductores con iconos de medallas (Oro, Plata y Bronce) para facilitar la lectura del desempeño.</span>
-                </li>
-            </ul>
-            <button onclick="cerrarModalAyuda()" class="w-full py-3 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-800 dark:text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer mt-2">
-                Entendido
-            </button>
-        </div>
-    </div>
-
     <!-- SCRIPTS DE CONTROL -->
     <script>
-        function abrirModalAyuda() {
-            document.getElementById('overlayAyuda').classList.remove('opacity-0', 'pointer-events-none');
-            document.getElementById('overlayAyuda').classList.add('opacity-100', 'pointer-events-auto');
-            document.getElementById('modalAyuda').classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
-            document.getElementById('modalAyuda').classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
-        }
-
-        function cerrarModalAyuda() {
-            document.getElementById('modalAyuda').classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
-            document.getElementById('modalAyuda').classList.add('opacity-0', 'pointer-events-none', 'scale-95');
-            document.getElementById('overlayAyuda').classList.remove('opacity-100', 'pointer-events-auto');
-            document.getElementById('overlayAyuda').classList.add('opacity-0', 'pointer-events-none');
-        }
     </script>
 </body>
 </html>

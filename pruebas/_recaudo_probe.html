@@ -142,18 +142,39 @@ async function run() {
     info('reservas listadas: ' + filas.length);
     anotar(filas.length > 0, 'El modal lista las reservas del viaje', 'filas=' + filas.length);
 
-    const btnCobrar = lista.querySelector('[data-sget-cobrar-reserva]');
-    anotar(!!btnCobrar, 'Las reservas pendientes ofrecen el botón de cobrar');
+    /* El cobro se hace POR PASAJERO, no por fila de reserva. Antes cada puesto
+       era una fila y el botón mandaba el valor de UNA de ellas, que en las
+       reservas online venía NULL: el pago quedaba registrado como $0. */
+    const btnCobrar = lista.querySelector('[data-sget-cobrar-pasajero]');
+    anotar(!!btnCobrar, 'Los pasajeros con puestos pendientes ofrecen el botón de cobrar');
+
     if (btnCobrar) {
+        const importe = parseFloat(btnCobrar.dataset.valor || '0');
+        anotar(importe > 0,
+               'El botón de cobrar trae el importe REAL que debe el pasajero (no 0)',
+               'data-valor=' + btnCobrar.dataset.valor);
+
+        const puestos = parseInt(btnCobrar.dataset.puestos || '0', 10);
+        anotar(puestos > 0, 'El botón indica cuántos puestos pendientes se van a cobrar',
+               'puestos=' + btnCobrar.dataset.puestos);
+
         btnCobrar.click();
         const final = await esperarCambio(idViaje, 'pendientes', e => e.pendientes < tras.pendientes);
-        anotar(final.pendientes === tras.pendientes - 1,
-               'Al cobrar, la reserva pasa de Pendiente a Confirmada',
+        anotar(final.pendientes < tras.pendientes,
+               'Al cobrar, el pasajero deja de tener puestos pendientes',
                tras.pendientes + ' -> ' + final.pendientes);
+
+        /* La comprobación que de verdad importa: que el cobro NO se guarde en 0.
+           Es el bug que se reportaba: el botón mandaba el valor de una fila y,
+           como en las reservas online venía NULL, el pago quedaba confirmado en
+           $0 y los ingresos no sumaban nada. */
+        const cobrado = (await estado(idViaje)).recaudo;
+        anotar(cobrado > 0, 'El cobro quedó registrado con un importe mayor que cero',
+               'recaudo del viaje=' + cobrado);
     }
 
     /* --- 4) Cancelar y devolver el cupo --- */
-    const btnCancelar = d.querySelector('[data-sget-lista-reservas] [data-sget-cancelar-reserva]');
+    const btnCancelar = d.querySelector('[data-sget-lista-reservas] [data-sget-cancelar-pasajero]');
     anotar(!!btnCancelar, 'Las reservas se pueden cancelar');
     if (btnCancelar) {
         const cuposAntes = (await estado(idViaje)).cupos_libres;
@@ -163,7 +184,7 @@ async function run() {
         if (ok) {
             ok.click();
             const fin = await esperarCambio(idViaje, 'cupos_libres', e => e.cupos_libres > cuposAntes);
-            anotar(fin.cupos_libres === cuposAntes + 1, 'Al cancelar, el cupo vuelve al viaje',
+            anotar(fin.cupos_libres > cuposAntes, 'Al cancelar, el cupo vuelve al viaje',
                    cuposAntes + ' -> ' + fin.cupos_libres);
         }
     }

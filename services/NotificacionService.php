@@ -56,6 +56,8 @@ final class NotificacionService
     public const TIPO_RECAUDO     = 'pago_registrado';
     public const TIPO_RECORDATORIO= 'recordatorio_salida';
     public const TIPO_CALIFICACION= 'calificacion';
+    public const TIPO_NO_PRESENTE = 'no_presente';
+    public const TIPO_VIAJE_PERDIDO= 'viaje_perdido';
 
     public const ESTADO_NO_LEIDA = 0;
     public const ESTADO_LEIDA    = 1;
@@ -70,6 +72,8 @@ final class NotificacionService
         self::TIPO_RECAUDO      => ['icono' => 'fa-cash',                'tono' => 'emerald', 'etiqueta' => 'Pago'],
         self::TIPO_RECORDATORIO => ['icono' => 'fa-clock',               'tono' => 'ambars',  'etiqueta' => 'Recordatorio'],
         self::TIPO_CALIFICACION => ['icono' => 'fa-star',                'tono' => 'ambars',  'etiqueta' => 'Calificación'],
+        self::TIPO_NO_PRESENTE  => ['icono' => 'fa-user-slash',         'tono' => 'rojo',    'etiqueta' => 'No se presentó'],
+        self::TIPO_VIAJE_PERDIDO => ['icono' => 'fa-triangle-exclamation', 'tono' => 'rojo',  'etiqueta' => 'Viaje perdido'],
         self::TIPO_GENERAL      => ['icono' => 'fa-bullhorn',            'tono' => 'morado',  'etiqueta' => 'Comunicado'],
         self::TIPO_SISTEMA      => ['icono' => 'fa-circle-info',         'tono' => 'azul',    'etiqueta' => 'Sistema'],
     ];
@@ -358,9 +362,17 @@ final class NotificacionService
     /**
      * RECORDATORIO DE SALIDA: se genera una sola vez por usuario y viaje.
      *
-     * Se dispara desde el propio buzón (`api/inactividad`-like, acción
-     * `recordatorios`) y revisa los viajes del usuario que salen en los
-     * próximos minutos, incluidos los que tiene como conductor.
+     * Se dispara desde el propio buzón (acción `recordatorios`) y revisa los
+     * viajes del usuario que salen en los próximos minutos, incluidos los que
+     * tiene como conductor.
+     *
+     * CORRECCIÓN IMPORTANTE
+     *   Antes un `LEFT JOIN reserva` + `GROUP BY res.estado_pago` devolvía una
+     *   fila por cada combinación de estado: un pasajero con 3 puestos (una
+     *   pagada y dos pendientes) recibía DOS recordatorios del mismo viaje. Y
+     *   el LEFT JOIN traía también las reservas canceladas, que ya no iban en
+     *   el bus. Ahora se filtra por `estado_pago` en el WHERE y se agrupa solo
+     *   por viaje.
      */
     public static function recordatorios(int $idUsuario, int $minutos = 90): int
     {
@@ -371,18 +383,20 @@ final class NotificacionService
 
         $filas = Database::all(
             "SELECT v.id_via, v.fec_via, v.hor_sal_via, v.hor_lleg_via,
-                    r.nom_rut, r.ori_rut, r.des_rut,
-                    res.estado_pago
+                    r.nom_rut, r.ori_rut, r.des_rut
                FROM viaje v
                INNER JOIN rutas r ON r.id_rut = v.id_rut_via
-               LEFT JOIN reserva res ON res.id_via_res = v.id_via
               WHERE v.est_via = ?
                 AND DATE(v.fec_via) = CURDATE()
                 AND TIMESTAMP(v.fec_via, v.hor_sal_via) BETWEEN ? AND ?
-                AND (v.id_usu_via = ? OR res.id_usu_res = ?)
+                AND (v.id_usu_via = ?
+                     OR EXISTS (SELECT 1 FROM reserva res
+                                 WHERE res.id_via_res = v.id_via
+                                   AND res.id_usu_res = ?
+                                   AND res.estado_pago <> ?))
               GROUP BY v.id_via, v.fec_via, v.hor_sal_via, v.hor_lleg_via,
-                       r.nom_rut, r.ori_rut, r.des_rut, res.estado_pago",
-            [Config::VIA_PROGRAMADO, $desde, $hasta, $idUsuario, $idUsuario]
+                       r.nom_rut, r.ori_rut, r.des_rut",
+            [Config::VIA_PROGRAMADO, $desde, $hasta, $idUsuario, $idUsuario, Config::RES_CANCELADA]
         );
 
         $n = 0;

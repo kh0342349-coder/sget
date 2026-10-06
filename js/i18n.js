@@ -1552,10 +1552,15 @@
         if (!['es', 'en'].includes(lang)) return;
         try {
             const url = window.SGET_LANGUAGE_URL || 'set_language.php';
+            // El endpoint exige token anti-CSRF (igual que el resto de acciones
+            // que modifican algo). Sin él, el idioma se traducía en pantalla
+            // pero NUNCA se guardaba en la sesión y se perdía al recargar.
+            const params = new URLSearchParams({ idioma: lang });
+            if (window.SGET_CSRF) params.set('_token', window.SGET_CSRF);
             await fetch(url, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
-                body: new URLSearchParams({ idioma: lang }).toString(),
+                body: params.toString(),
                 credentials: 'same-origin'
             });
         } catch (e) {

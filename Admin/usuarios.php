@@ -141,7 +141,7 @@ include __DIR__ . '/../views/partials/head.php';
             <div class="sget-page-actions">
                 <div class="sget-search">
                     <i class="fas fa-magnifying-glass"></i>
-                    <input type="search" id="buscarUsuario" class="sget-input" placeholder="Buscar documento, nombre o correo… (Ctrl+K)">
+                    <input type="search" id="buscarUsuario" class="sget-input" placeholder="Buscar documento, nombre o correo… (Ctrl+K)" autocomplete="off" spellcheck="false">
                 </div>
                 <button type="button" class="sget-btn sget-btn--primario" data-sget-modal="modalUsuario" data-sget-nuevo="Registrar Nuevo Usuario">
                     <i class="fas fa-user-plus"></i> Nuevo Usuario

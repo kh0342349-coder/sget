@@ -74,19 +74,26 @@ $v = fn(string $k, $def = '') => htmlspecialchars((string)($__veh[$k] ?? $def), 
                     <label class="sget-label" for="veh_estado">
                         <i class="fas fa-toggle-on"></i> Estado operativo
                     </label>
-                    <select id="veh_estado" name="est_veh" class="sget-select">
-                        <option value="<?= Config::VEH_DISPONIBLE ?>"     <?= (int)($__veh['est_veh'] ?? 1) === Config::VEH_DISPONIBLE ? 'selected' : '' ?>>Disponible</option>
-                        <option value="<?= Config::VEH_FUERA_SERVICIO ?>" <?= (int)($__veh['est_veh'] ?? 1) === Config::VEH_FUERA_SERVICIO ? 'selected' : '' ?>>Fuera de servicio</option>
+                    <?php $__estadoVeh = VehiculoService::normalizar((string)($__veh['est_veh'] ?? Config::VEH_DISPONIBLE)); ?>
+                    <select id="veh_estado" name="est_veh" class="sget-select" data-sget-estado-veh>
+                        <?php foreach ([Config::VEH_DISPONIBLE, Config::VEH_MANTENIMIENTO, Config::VEH_FUERA_SERVICIO] as $__opcion): ?>
+                            <option value="<?= htmlspecialchars($__opcion, ENT_QUOTES, 'UTF-8') ?>"
+                                <?= $__estadoVeh === $__opcion ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($__opcion, ENT_QUOTES, 'UTF-8') ?>
+                            </option>
+                        <?php endforeach; ?>
                     </select>
+                    <span class="sget-help"><?= VehiculoService::ayudaEstado($__estadoVeh) ?></span>
                     <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
                 </div>
             </div>
 
             <p class="sget-help" style="margin-top:1rem">
                 <i class="fas fa-circle-info"></i>
-                Al asignar la unidad a un viaje su estado cambia a
-                <strong>Fuera de servicio</strong> y vuelve a <strong>Disponible</strong>
-                al finalizar o cancelar el viaje.
+                Al asignar la unidad a un viaje su estado pasa a
+                <strong>Asignado</strong> y vuelve a <strong>Disponible</strong>
+                al finalizar o cancelar el viaje. El estado
+                <strong>Asignado</strong> no se elige a mano: lo aplica el sistema.
             </p>
         </div>
 

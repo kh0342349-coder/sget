@@ -162,7 +162,7 @@ final class UsuarioService
                                id_rol_usu = ?, estado = ?, est_con_usu = ?";
                 if ($clave !== '') {
                     $sql .= ", pass_usu = ?";
-                    $params[] = password_hash($clave, PASSWORD_DEFAULT);
+                    $params[] = Password::hash($clave);
                 }
                 $sql .= " WHERE id_usu = ?";
                 $params[] = $id;
@@ -173,7 +173,12 @@ final class UsuarioService
                         (tip_doc_usu, num_doc_usu, nom_usu, corre_usu, tel_usu, id_rol_usu, pass_usu, estado, est_con_usu)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     [$tipDoc, $numDoc, $nombre, $correo, $tel, $rol,
-                     password_hash($clave !== '' ? $clave : '123456', PASSWORD_DEFAULT),
+                     // La validación exige contraseña en el alta, pero si llegara
+                     // vacía la cuenta nace con una credencial ALEATORIA e
+                     // inutilizable, no con «123456». La alternativa —dejar la
+                     // columna vacía o poner una contraseña conocida— convertía
+                     // cualquier alta en una puerta trasera al panel.
+                     $clave !== '' ? Password::hash($clave) : Password::hash(Password::aleatoria()),
                      $estadoCuenta, $estadoConductor]
                 );
             }

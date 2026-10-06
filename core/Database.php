@@ -102,6 +102,44 @@ final class Database
     }
 
     /* ------------------------------------------------------------------ */
+    /**
+     * Código de error REAL de MySQL de una excepción de PDO.
+     *
+     * POR QUÉ HACE FALTA
+     *   Cuando una sentencia DDL falla, PDO devuelve `errorInfo[1] = 1005`
+     *   (ER_CANT_CREATE_TABLE), que es un error genérico que no dice nada. La
+     *   causa concreta —por ejemplo 121 «Duplicate key on write or update»— va
+     *   escondida DENTRO del mensaje. Las migraciones comparan códigos para
+     *   decidir si un «ya existía» es normal, y con 1005 no hay manera de
+     *   distinguirlo de un fallo de verdad: por eso una migración que se
+     *   ejecutaba bien sobre la base de desarrollo reventaba al aplicarse a una
+     *   base recién importada de un volcado que ya traía la restricción.
+     *
+     * @return int  el número de MySQL, o 0 si no se puede averiguar
+     */
+    public static function errorCode(Throwable $e): int
+    {
+        $info = $e instanceof PDOException ? $e->errorInfo : null;
+        if (is_array($info) && isset($info[1])) {
+            $directo = (int)$info[1];
+            // 1005/1054 y compañía son envoltorios: el número útil va en el texto.
+            if ($directo !== 1005) return $directo;
+        }
+
+        if (preg_match('/errno:\s*(\d+)/', $e->getMessage(), $m) === 1) {
+            return (int)$m[1];
+        }
+
+        return $info && isset($info[1]) ? (int)$info[1] : 0;
+    }
+
+    /** ¿Este error es uno de los que la migración debe ignorar? */
+    public static function errorEs(Throwable $e, array $codigos): bool
+    {
+        return in_array(self::errorCode($e), $codigos, true);
+    }
+
+    /* ------------------------------------------------------------------ */
     private static function fallarConexion(string $mensaje): void
     {
         error_log('[SGET][DB] ' . $mensaje);

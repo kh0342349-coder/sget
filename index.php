@@ -1,21 +1,26 @@
 <?php
-// Detección dinámica de protocolo (HTTP en red local / HTTPS en producción)
-$esHttps = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
+/**
+ * index.php — PORTADA PÚBLICA DE SGET
+ * -----------------------------------------------------------------------------
+ * Loader único: `core/bootstrap.php` deja lista la sesión, la base de datos,
+ * los servicios y los mensajes Flash. Esta página ya no abre la sesión ni crea
+ * la conexión por su cuenta (antes lo hacía, y eso obligaba a repetir el bloque
+ * en cada archivo, con cuatro sitios distintos configurando la cookie).
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_set_cookie_params([
-        'lifetime' => 0,         // Persiste mientras el navegador permanezca abierto
-        'path'     => '/',
-        'domain'   => '',        // Dominio actual (localhost, IP o producción)
-        'secure'   => $esHttps,  // false en red local HTTP para permitir login; true en HTTPS
-        'httponly' => true,      // Tridente defensivo: Inaccesible desde JavaScript (XSS)
-        'samesite' => 'Lax'      // Tridente defensivo: Protección CSRF
-    ]);
-    session_start();
+require_once __DIR__ . '/core/bootstrap.php';
+
+$BASE = Config::basePath();
+
+/* Aviso de «necesitas iniciar sesión» cuando se llega desde el botón DIRECCIÓN
+   del módulo de anuncios. Ese botón lleva a la portada; si el enlace del anuncio
+   apunta a un módulo del panel (`Admin/viajes.php`), hace falta una sesión, y
+   sin este aviso el visitante landing ve un 403 sin explicación. */
+if (isset($_GET['aviso_portal']) && !Auth::estaLogueado()) {
+    Flash::aviso('Para abrir los módulos del panel de SGET necesitas iniciar sesión.');
 }
-
-// Ruta de conexión a la base de datos
-require_once 'assets/conexion.php';
 
 /* -----------------------------------------------------------------------------
  * ANUNCIOS DE LA LANDING
@@ -42,8 +47,8 @@ $puedeVerAnuncios  = false;
 
 if (empty($anunciosLanding)) {
     try {
-        // tieneAcceso() ya devuelve false si no hay sesión, y el Admin tiene
-        // acceso total: no hace falta comprobar el rol a mano.
+        // tieneAcceso() ya devuelve false si no hay sesión, y el rol concede
+        // lo que tiene en `rol_permiso`: no hace falta comprobar el rol a mano.
         $puedeVerAnuncios = Auth::tieneAcceso('anuncios');
         if ($puedeVerAnuncios) {
             $r = AnuncioService::resumen();
@@ -55,29 +60,29 @@ if (empty($anunciosLanding)) {
     }
 }
 
-// Consulta SQL ajustada para traer imagen de ruta (img_rut) y valor del viaje (val_via)
-$query_viajes = "SELECT 
-                    v.id_via,
-                    v.val_via,
-                    r.nom_rut,
-                    r.img_rut,
-                    r.ori_rut AS origen,
-                    r.des_rut AS destino,
-                    v.hor_sal_via AS hora_salida,
-                    v.est_via AS estado_viaje,
-                    veh.pla_veh AS placa_veh
-                 FROM viaje v
-                 INNER JOIN rutas r ON v.id_rut_via = r.id_rut
-                 LEFT JOIN vehiculo veh ON v.id_veh = veh.id_veh
-                 WHERE v.est_via IN ('Programado', 'En curso')
-                 ORDER BY v.id_via DESC
-                 LIMIT 6";
+/* -----------------------------------------------------------------------------
+ * VIAJES PUBLICADOS
+ * -----------------------------------------------------------------------------
+ * La consulta pasa por el servicio (PDO + sentencias preparadas) en lugar de
+ * SQL suelto con mysqli. Antes, un fallo de conexión aquí mataba la portada
+ * entera con un `die()` que enseñaba el error crudo al visitante.
+ * -------------------------------------------------------------------------- */
+try {
+    $viajesPublicos = ViajeService::listar([
+        'estados' => [Config::VIA_PROGRAMADO, Config::VIA_EN_CURSO],
+    ]);
+} catch (Throwable $e) {
+    error_log('[SGET][landing] ' . $e->getMessage());
+    $viajesPublicos = [];
+}
 
-$resultado_viajes = mysqli_query($conexion, $query_viajes);
-
-// Control de errores en la consulta
-if (!$resultado_viajes) {
-    die("Error en la consulta SQL: " . mysqli_error($conexion));
+/* Cifras de confianza del hero. Se calculan UNA vez y con tolerancia a fallo:
+   la portada es pública y no puede caerse porque falte un dato. */
+$totalRutas = 0;
+try {
+    $totalRutas = count(RutaService::todas(true));
+} catch (Throwable $e) {
+    error_log('[SGET][landing] rutas: ' . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>
@@ -85,6 +90,7 @@ if (!$resultado_viajes) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="SGET · Sistema Inteligente de Transporte. Consulta rutas, horarios y reserva tu cupo en línea.">
     <title>SGET - Sistema Inteligente de Transporte</title>
 
     <!-- Tema: se ejecuta ANTES del primer pintado para evitar el parpadeo -->
@@ -93,12 +99,12 @@ if (!$resultado_viajes) {
     <!-- Tailwind CSS & FontAwesome -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    
+
     <!-- CSS MODULAR DE LA LANDING PAGE (variables + reset + estilos propios) -->
     <link rel="stylesheet" href="assets/css/index.css?v=<?= @filemtime('assets/css/index.css') ?: '1' ?>">
 
     <!-- SDK de Google Identity Services -->
-    <script src="https://accounts.google.com/gsi/client?hl=en" async defer></script>
+    <script src="https://accounts.google.com/gsi/client?hl=es" async defer></script>
 
     <script>
         tailwind.config = {
@@ -113,26 +119,9 @@ if (!$resultado_viajes) {
             }
         };
 
-
-        // Manejador del Token devuelto por Google
-        function handleGoogleResponse(response) {
-            fetch('controllers/auth_google.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ token: response.credential })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success) {
-                    window.location.href = data.redirect;
-                } else {
-                    alert((window.SGET_I18N?.t('Error en inicio de sesión con Google:') || 'Google sign-in error:') + ' ' + data.message);
-                }
-            })
-            .catch(error => console.error('Error al comunicarse con el servidor:', error));
-        }
+        /* Token anti-CSRF para el login y el registro con Google.
+           Lo consume assets/js/sget-google.js al enviar el id_token. */
+        window.SGET_CSRF = <?= json_encode(Auth::token()) ?>;
     </script>
 </head>
 <body class="bg-slate-50 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen flex flex-col antialiased">
@@ -141,6 +130,7 @@ if (!$resultado_viajes) {
     <?php include 'includes/header_index.php'; ?>
 
     <main class="flex-grow pt-28">
+        <?= Flash::render() ?>
         
         <!-- HERO SECTION -->
         <section id="inicio" class="hero-section py-16 px-6 relative overflow-hidden">
@@ -158,6 +148,48 @@ if (!$resultado_viajes) {
                 <p class="text-base sm:text-lg max-w-2xl mx-auto font-medium leading-relaxed text-slate-600 dark:text-slate-300">
                     Consulta horarios, rutas disponibles y asegura tu desplazamiento con la tecnología integral de SGET.
                 </p>
+
+                <!--
+                    LLAMADAS A LA ACCIÓN
+                    El hero tenía un título y un párrafo, y nada más: no había forma
+                    de entrar al sistema desde el punto de entrada más visible de la
+                    página. Se añaden dos: la acción principal y la secundaria.
+
+                    Ambas abren el modal de acceso, que es la puerta real: el
+                    contenido de la landing es público y la reserva requiere
+                    sesión.
+                -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 pt-2">
+                    <button type="button" data-sget-ir-a="panelLogin"
+                            class="group inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-sm shadow-xl shadow-sky-500/25 hover:shadow-2xl hover:shadow-sky-500/35 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
+                        <i class="fas fa-right-to-bracket transition-transform group-hover:translate-x-0.5"></i>
+                        Iniciar sesión
+                    </button>
+                    <a href="#viajes-disponibles"
+                       class="inline-flex items-center justify-center gap-2.5 px-7 py-3.5 rounded-2xl bg-white/70 dark:bg-white/[0.06] border border-slate-200 dark:border-white/15 backdrop-blur-md text-slate-800 dark:text-slate-100 font-extrabold text-sm hover:bg-white dark:hover:bg-white/10 hover:-translate-y-0.5 transition-all duration-200">
+                        <i class="fas fa-bus text-sky-500 dark:text-sky-400"></i>
+                        Ver viajes disponibles
+                    </a>
+                </div>
+
+                <!-- PRUEBAS DE CONFIANZA: sin esto el hero promete sin respaldo -->
+                <dl class="grid grid-cols-3 gap-4 sm:gap-8 max-w-lg mx-auto pt-4">
+                    <?php foreach ([
+                        ['fa-route',        $totalRutas,               'Rutas activas'],
+                        ['fa-bus',          count($viajesPublicos),     'Viajes publicados'],
+                        ['fa-shield-halved', '24/7',                   'Monitoreo'],
+                    ] as [$icono, $valor, $rotulo]): ?>
+                        <div class="text-center">
+                            <dt class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">
+                                <i class="fas <?= $icono ?> text-sky-500/70"></i>
+                                <?= $rotulo ?>
+                            </dt>
+                            <dd class="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white mt-0.5">
+                                <?= htmlspecialchars((string)$valor, ENT_QUOTES, 'UTF-8') ?>
+                            </dd>
+                        </div>
+                    <?php endforeach; ?>
+                </dl>
 
             </div>
         </section>
@@ -209,19 +241,74 @@ if (!$resultado_viajes) {
                                         </p>
                                     <?php endif; ?>
 
-                                    <?php if ($href !== ''): ?>
-                                        <?php
-                                        // Un enlace interno se abre en la misma pestaña (el
-                                        // usuario va a reservar); uno externo, en otra.
-                                        $esInterno = !preg_match('~^https?://~i', $href);
+                                    <?php
+                                        /* EL BOTÓN SE PINT SIEMPRE
+                                         * ---------------------------------------------------------------------
+                                         * Antes todo este bloque estaba dentro de
+                                         * `if ($href !== '')`: si el anuncio no tenía enlace, la
+                                         * tarjeta se quedaba sin ningún botón. Eso convertía el
+                                         * módulo de anuncios en algo inconsistente —una promoción
+                                         * Depending de cómo se rellenara el formulario aparecía
+                                         * CTA y otra no— y además dejaba al visitante sin salida.
+                                         *
+                                         * Ahora el botón se pinta siempre, con el texto que haya
+                                         * puesto el administrador o «Más información» por defecto.
+                                         * Lo que cambia es el DESTINO, no su existencia.
+                                         */
+                                    ?>
+                                    <?php
+                                        /* DESTINO DEL BOTÓN DEL ANUNCIO
+                                         * ---------------------------------------------------------------------
+                                         * El botón SIEMPRE pasa por el acceso al sistema:
+                                         *
+                                         *   · Usuario NO autenticado  -> se abre el modal de INICIO DE
+                                         *     SESIÓN. Da igual a qué apunte el anuncio: el contenido
+                                         *     de la landing es público, así que el botón es siempre
+                                         *     la puerta de entrada, nunca un destino arbitrario.
+                                         *   · Usuario YA autenticado -> va al destino del anuncio.
+                                         *     Mandarle a un formulario de login a quien ya tiene
+                                         *     sesión sería un bucle sin salida.
+                                         *
+                                         * Antes cada anuncio enviaba a su `enlace` tal cual. Eso
+                                         * producía dos fallos:
+                                         *   1. Un visitante sin sesión llegaba a una URL interna,
+                                         *      la rebotaba a la portada y además AVISABA por
+                                         *      `aviso_portal`: tres navegaciones para nada.
+                                         *   2. El `enlace` sale de la base de datos, así que
+                                         *      aceptarlo sin filtrar convertía al módulo de
+                                         *      anuncios en un vector de redirección a sitios
+                                         *      externos.
+                                         *
+                                         * Aquí el destino solo se usa si es una ruta interna
+                                         * (empieza por «/» o es una ruta relativa simple). Cualquier
+                                         * URL absoluta externa se descarta.
+                                         */
+                                        $destino = '';
+                                        if (!preg_match('~^(?:https?:)?//~i', $href) && !str_contains($href, '\\')) {
+                                            $destino = $href;
+                                        }
+                                        $haySesion = Auth::estaLogueado();
                                         ?>
-                                        <a class="sget-anuncio-carrusel__boton"
-                                           href="<?= htmlspecialchars($href, ENT_QUOTES, 'UTF-8') ?>"
-                                           <?= $esInterno ? '' : 'target="_blank" rel="noopener"' ?>>
-                                            <?= htmlspecialchars((string)($an['boton_texto'] ?: 'Más información'), ENT_QUOTES, 'UTF-8') ?>
-                                            <i class="fas fa-arrow-right"></i>
-                                        </a>
-                                    <?php endif; ?>
+                                        <?php if (!$haySesion): ?>
+                                            <button type="button"
+                                                    class="sget-anuncio-carrusel__boton"
+                                                    data-sget-ir-a="panelLogin"
+                                                    aria-label="Iniciar sesión para ver más información">
+                                                <?= htmlspecialchars((string)($an['boton_texto'] ?: 'Más información'), ENT_QUOTES, 'UTF-8') ?>
+                                                <i class="fas fa-arrow-right"></i>
+                                            </button>
+                                        <?php elseif ($destino !== ''): ?>
+                                            <a class="sget-anuncio-carrusel__boton"
+                                               href="<?= htmlspecialchars($destino, ENT_QUOTES, 'UTF-8') ?>">
+                                                <?= htmlspecialchars((string)($an['boton_texto'] ?: 'Más información'), ENT_QUOTES, 'UTF-8') ?>
+                                                <i class="fas fa-arrow-right"></i>
+                                            </a>
+                                        <?php else: ?>
+                                            <span class="sget-anuncio-carrusel__boton" aria-disabled="true">
+                                                <?= htmlspecialchars((string)($an['boton_texto'] ?: 'Más información'), ENT_QUOTES, 'UTF-8') ?>
+                                                <i class="fas fa-arrow-right"></i>
+                                            </span>
+                                        <?php endif; ?>
                                 </div>
                             </article>
                         <?php endforeach; ?>
@@ -262,7 +349,10 @@ if (!$resultado_viajes) {
                   mira la portada tiene permiso para administrar anuncios, así que
                   el público nunca ve un mensaje de administration.
             -->
-            <section id="anuncios" class="px-6 pt-10" aria-label="Aviso de anuncios">
+            <?php /* ID DISTINTO al del carrusel: había dos `id="anuncios"` en el
+                   mismo documento. Un id duplicado es HTML inválido, rompe las
+                   anclas y hace que el CSS apunte al elemento equivocado. */ ?>
+            <section id="anuncios-admin" class="px-6 pt-10" aria-label="Aviso de anuncios">
                 <div class="max-w-7xl mx-auto">
                     <div class="sget-anuncio-vacio">
                         <span class="sget-anuncio-vacio__icono"><i class="fas fa-image"></i></span>
@@ -285,7 +375,7 @@ if (!$resultado_viajes) {
                             </p>
                         </div>
                         <a class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-900 text-sm font-extrabold transition-colors whitespace-nowrap"
-                           href="Admin/anuncios.php">
+                           href="<?= htmlspecialchars(Config::basePath(), ENT_QUOTES, 'UTF-8') ?>/Admin/anuncios.php">
                             <i class="fas fa-sliders"></i> Revisar anuncios
                         </a>
                     </div>
@@ -310,69 +400,73 @@ if (!$resultado_viajes) {
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                <?php if ($resultado_viajes && mysqli_num_rows($resultado_viajes) > 0): ?>
-                    <?php while ($viaje = mysqli_fetch_assoc($resultado_viajes)): ?>
-                        <?php 
-                            $nombreImagen = trim($viaje['img_rut'] ?? '');
-                            $rutaImagen = !empty($nombreImagen) ? "img/rutas/" . $nombreImagen : "";
+                <?php if (!empty($viajesPublicos)): ?>
+                    <?php foreach (array_slice($viajesPublicos, 0, 6) as $viaje): ?>
+                        <?php
+                            $nombreImagen = trim((string)($viaje['img_rut'] ?? ''));
+                            $rutaImagen   = $nombreImagen !== '' ? 'img/rutas/' . basename($nombreImagen) : '';
+                            $hayImagen    = $rutaImagen !== '' && is_file(__DIR__ . '/' . $rutaImagen);
+                            $tituloRuta   = trim((string)($viaje['nom_rut'] ?? ''))
+                                           ?: trim(($viaje['ori_rut'] ?? '') . ' → ' . ($viaje['des_rut'] ?? ''));
+                            $hora         = !empty($viaje['hor_sal_via']) ? substr((string)$viaje['hor_sal_via'], 0, 5) : '';
                         ?>
-                        <!-- Tarjeta Limpia Enfocada en la Imagen de Destino -->
-                        <div class="relative overflow-hidden rounded-3xl h-64 border border-slate-200 dark:border-white/10 shadow-xl group transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl flex flex-col justify-between p-5 bg-slate-950">
-                            
-                            <!-- Imagen de la ruta a pantalla completa con zoom suave al pasar el mouse -->
-                            <?php if (!empty($nombreImagen) && file_exists("img/rutas/" . $nombreImagen)): ?>
-                                <img src="<?php echo htmlspecialchars($rutaImagen); ?>" 
-                                     alt="<?php echo htmlspecialchars($viaje['nom_rut'] ?? 'Ruta'); ?>" 
+                        <!-- Tarjeta limpia, enfocada en la imagen de la ruta -->
+                        <article class="relative overflow-hidden rounded-3xl h-64 border border-slate-200 dark:border-white/10 shadow-xl group transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl flex flex-col justify-between p-5 bg-slate-950">
+
+                            <?php if ($hayImagen): ?>
+                                <img src="<?= htmlspecialchars($rutaImagen, ENT_QUOTES, 'UTF-8') ?>"
+                                     alt="<?= htmlspecialchars($tituloRuta, ENT_QUOTES, 'UTF-8') ?>"
+                                     loading="lazy"
                                      class="absolute inset-0 w-full h-full object-cover object-center z-0 transition-transform duration-700 group-hover:scale-110">
                             <?php endif; ?>
-                            
-                            <!-- Degradado suave en los extremos para legibilidad -->
+
+                            <!-- Degradado para que los textos siempre tengan contraste -->
                             <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/60 z-0"></div>
 
-                            <!-- Header: Hora y Estado Activo -->
                             <div class="relative z-10 flex items-center justify-between">
                                 <span class="text-[11px] font-mono font-bold text-white bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 shadow-sm">
                                     <i class="far fa-clock text-sky-400 mr-1"></i>
-                                    <?= !empty($viaje['hora_salida']) ? date('h:i A', strtotime($viaje['hora_salida'])) : 'En Breve'; ?>
+                                    <?= $hora !== '' ? htmlspecialchars($hora, ENT_QUOTES, 'UTF-8') : 'En breve' ?>
                                 </span>
                                 <span class="text-[10px] font-black uppercase tracking-wider text-emerald-300 bg-emerald-900/60 backdrop-blur-md px-3 py-1 rounded-full border border-emerald-500/40 flex items-center gap-1.5">
                                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                    ACTIVO
+                                    <?= (string)$viaje['est_via'] === Config::VIA_EN_CURSO ? 'En curso' : 'Activo' ?>
                                 </span>
                             </div>
 
-                            <!-- Bloque Inferior: Precio, Ruta y Botón Reservar -->
                             <div class="relative z-10 space-y-3 pt-4 border-t border-white/15">
                                 <div>
                                     <?php if (!empty($viaje['val_via'])): ?>
                                         <p class="text-xs font-black uppercase tracking-wider text-amber-300 drop-shadow-md">
-                                            $<?= number_format($viaje['val_via'], 0, ',', '.'); ?> COP
+                                            $<?= number_format((float)$viaje['val_via'], 0, ',', '.') ?> COP
                                         </p>
                                     <?php endif; ?>
 
-                                    <h3 class="font-black text-white text-xl sm:text-2xl tracking-tight leading-tight truncate drop-shadow-lg" title="<?= htmlspecialchars($viaje['nom_rut'] ?? ($viaje['origen'] . ' - ' . $viaje['destino'])); ?>">
-                                        <?= htmlspecialchars($viaje['nom_rut'] ?? ($viaje['origen'] . ' - ' . $viaje['destino'])); ?>
+                                    <h3 class="font-black text-white text-xl sm:text-2xl tracking-tight leading-tight truncate drop-shadow-lg"
+                                        title="<?= htmlspecialchars($tituloRuta, ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars($tituloRuta, ENT_QUOTES, 'UTF-8') ?>
                                     </h3>
                                     <p class="text-[11px] font-semibold text-slate-300 flex items-center gap-1 mt-0.5">
-                                        <i class="fas fa-bus-alt text-sky-400"></i> Placa: <span class="font-mono text-white"><?= htmlspecialchars($viaje['placa_veh'] ?? 'Sin Asignar'); ?></span>
+                                        <i class="fas fa-bus-alt text-sky-400"></i> Placa:
+                                        <span class="font-mono text-white"><?= htmlspecialchars((string)($viaje['pla_veh'] ?? 'Sin asignar'), ENT_QUOTES, 'UTF-8') ?></span>
                                     </p>
                                 </div>
 
-                                <!-- Botón Reservar -->
-                                <button data-sget-modal="panelLogin" class="w-full py-3 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-slate-950 font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer group-hover:shadow-sky-500/30">
-                                    <i class="fas fa-ticket-alt"></i> RESERVAR PASAJE
+                                <button type="button" data-sget-modal="panelLogin"
+                                        class="w-full py-3 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-slate-950 font-black text-xs uppercase tracking-widest rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer group-hover:shadow-sky-500/30">
+                                    <i class="fas fa-ticket-alt"></i> Reservar pasaje
                                 </button>
                             </div>
 
-                        </div>
-                    <?php endwhile; ?>
+                        </article>
+                    <?php endforeach; ?>
                 <?php else: ?>
                     <div class="col-span-full py-16 px-6 text-center card-glass rounded-3xl">
                         <div class="w-16 h-16 rounded-2xl bg-sky-500/10 text-sky-500 flex items-center justify-center mx-auto mb-4 text-2xl">
                             <i class="fas fa-route"></i>
                         </div>
                         <p class="text-base font-extrabold text-slate-800 dark:text-slate-200">No hay viajes activos programados en este momento</p>
-                        <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Las nuevas salidas aparecerán aquí automáticamente tan pronto sean asignadas por la administración.</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">Las nuevas salidas aparecerán aquí automáticamente tan pronto sean asignadas por la administración.</p>
                     </div>
                 <?php endif; ?>
             </div>
@@ -412,13 +506,110 @@ if (!$resultado_viajes) {
             </div>
         </section>
 
+        <div class="max-w-7xl mx-auto px-6"><div class="divider-glow"></div></div>
+
+        <!-- ================================================================== -->
+        <!-- SECCIÓN 4: NOSOTROS                                                -->
+        <!-- ================================================================== -->
+        <!--
+            ESTA SECCIÓN NO EXISTÍA Y EL MENÚ YA LA ENLAZABA.
+            El header declara cinco entradas — Inicio, Viaja con nosotros, Servicios,
+            Nosotros y Contacto — pero el documento solo tenía tres secciones.
+            Dos enlaces del menú principal eran enlaces MUERTOS: clic y no pasaba
+            nada. Aquí se crean con contenido real, no como relleno.
+        -->
+        <section id="nosotros" class="py-16 px-6 max-w-6xl mx-auto space-y-10 scroll-mt-28">
+            <div class="text-center space-y-2">
+                <span class="text-xs font-extrabold text-indigo-500 uppercase tracking-widest">Sobre el sistema</span>
+                <h2 class="text-3xl font-black text-slate-900 dark:text-white">Una plataforma pensada para operar</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
+                    SGET coordina la operación completa: disponibilidad real de flota y conductores,
+                    reservas sin sobreventa, cobros en terminal y avisos al pasajero en cada cambio.
+                </p>
+            </div>
+
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <?php foreach ([
+                    ['fa-clock-rotate-left', 'Reserva sin sobreventa',
+                     'El cupo se descuenta dentro de una transacción: dos pasajeros simultáneos nunca se pasan de la capacidad.'],
+                    ['fa-user-shield', 'Permisos por rol',
+                     'Cada módulo comprueba el permiso en el servidor, no solo que el botón esté oculto.'],
+                    ['fa-bell', 'Avisos en tiempo real',
+                     'Cada cambio de un viaje —cancelación, recordatorio, cierre— llega al buzón del pasajero.'],
+                    ['fa-chart-simple', 'Información para decidir',
+                     'Reportes de viajes, reservas, rutas y Conductores con datos reales de la operación.'],
+                ] as [$icono, $titulo, $texto]): ?>
+                    <article class="card-glass glow-hover rounded-3xl p-6 space-y-3 text-left group">
+                        <span class="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-sky-500 text-lg group-hover:scale-110 transition-transform">
+                            <i class="fas <?= $icono ?>"></i>
+                        </span>
+                        <h3 class="font-extrabold text-base text-slate-900 dark:text-white"><?= $titulo ?></h3>
+                        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed"><?= $texto ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <div class="max-w-7xl mx-auto px-6"><div class="divider-glow"></div></div>
+
+        <!-- ================================================================== -->
+        <!-- SECCIÓN 5: CONTACTO                                                  -->
+        <!-- ================================================================== -->
+        <!-- Misma razón que la anterior: el menú la enlazaba y no existía. -->
+        <section id="contacto" class="py-16 px-6 max-w-5xl mx-auto space-y-8 scroll-mt-28">
+            <div class="text-center space-y-2">
+                <span class="text-xs font-extrabold text-sky-500 uppercase tracking-widest">Contacto</span>
+                <h2 class="text-3xl font-black text-slate-900 dark:text-white">¿Necesitas ayuda?</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 max-w-2xl mx-auto leading-relaxed">
+                    Para consultas de reservas, incidencias de un viaje o información de rutas.
+                </p>
+            </div>
+
+            <div class="grid sm:grid-cols-2 gap-5">
+                <?php foreach ([
+                    ['fa-building',  'Terminal de transporte',
+                     'Av. Principal s/n · Lunes a sábado, 7:00 a 18:00', 'fa-clock'],
+                    ['fa-envelope',  'Correo electrónico',
+                     'soporte@sget.local · Respuesta en el día hábil', 'fa-paper-plane'],
+                    ['fa-phone',     'Teléfono',
+                     '+57 000 000 0000 · Línea de atención', 'fa-phone-volume'],
+                    ['fa-user-tie',  'Atención personalizada',
+                     'Preséntate en la terminal con tu documento', 'fa-id-card'],
+                ] as [$icono, $titulo, $texto, $iconoTexto]): ?>
+                    <article class="card-glass rounded-3xl p-6 flex items-start gap-4">
+                        <span class="inline-flex items-center justify-center w-11 h-11 shrink-0 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-lg">
+                            <i class="fas <?= $icono ?>"></i>
+                        </span>
+                        <div class="min-w-0">
+                            <h3 class="font-extrabold text-base text-slate-900 dark:text-white"><?= $titulo ?></h3>
+                            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed flex items-center gap-1.5 mt-0.5">
+                                <i class="fas <?= $iconoTexto ?> text-[10px] opacity-60"></i>
+                                <?= $texto ?>
+                            </p>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- CIERRE: llamada final a la acción -->
+            <div class="text-center pt-2">
+                <button type="button" data-sget-ir-a="panelLogin"
+                        class="inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-extrabold text-sm shadow-xl shadow-sky-500/25 hover:shadow-2xl hover:shadow-sky-500/35 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer">
+                    <i class="fas fa-right-to-bracket"></i>
+                    Entrar al sistema
+                </button>
+            </div>
+        </section>
+
     </main>
 
     <!-- FOOTER CON ENLACE LEGAL Y COOKIES -->
     <footer class="p-6 text-center text-slate-500 dark:text-slate-400 text-xs font-semibold border-t border-slate-200 dark:border-white/10 bg-white/80 dark:bg-[#0b0f19]/80 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between max-w-7xl mx-auto w-full gap-4">
         <p>&copy; 2026 SGET - Sistema de Gestión de Transporte. Todos los derechos reservados.</p>
         <div class="flex items-center gap-4">
-            <button data-sget-modal="panelConfigCookies" class="hover:text-amber-600 dark:hover:text-amber-400 underline transition-colors cursor-pointer flex items-center gap-1.5">
+            <button type="button" onclick="abrirConfiguracionCookies()"
+                    title="Ver y cambiar tus preferencias de cookies"
+                    class="hover:text-amber-600 dark:hover:text-amber-400 underline transition-colors cursor-pointer flex items-center gap-1.5">
                 <i class="fas fa-cookie-bite text-amber-700 dark:text-amber-500"></i> Configuración de Cookies
             </button>
             <span>•</span>
@@ -427,6 +618,13 @@ if (!$resultado_viajes) {
             </button>
         </div>
     </footer>
+
+    <!-- ================================================================== -->
+    <!-- ACCESO FLOTANTE A SGET                                             -->
+    <!-- ================================================================== -->
+    <!-- Sigue al scroll y refleja el estado real de la sesión. Se oculta      -->
+    <!-- mientras el aviso de cookies está abierto (misma esquina).            -->
+    <?php include 'views/partials/acceso_landing.php'; ?>
 
     <!-- INCLUSIÓN DEL MODAL AUTENTICACIÓN -->
     <?php include 'modal_auth.php'; ?>
@@ -455,7 +653,7 @@ if (!$resultado_viajes) {
                     <button onclick="aceptarTodasCookies()" class="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer shadow-lg shadow-sky-500/20">
                         Aceptar Todas
                     </button>
-                    <button data-sget-modal="panelConfigCookies" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white border border-slate-200 dark:border-white/10 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer">
+                    <button type="button" onclick="abrirConfiguracionCookies()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-800 dark:text-white border border-slate-200 dark:border-white/10 font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all cursor-pointer">
                         Configurar
                     </button>
                     <button onclick="rechazarCookiesOpcionales()" class="px-2.5 py-2 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-bold text-[10px] underline cursor-pointer">
@@ -487,38 +685,63 @@ if (!$resultado_viajes) {
                 </button>
             </div>
 
+            <!--
+                ESTADO REAL, MOSTRADO AL ABRIR EL PANEL
+                Se rellena con `sincronizarPanelCookies()` para que el usuario vea
+                lo que está guardado de verdad, no un estado supuesto.
+            -->
+            <div class="my-4 px-4 py-3 rounded-2xl bg-sky-500/10 border border-sky-500/20 flex items-start gap-2.5">
+                <i class="fas fa-circle-info text-sky-500 mt-0.5"></i>
+                <p class="text-[11px] text-slate-600 dark:text-slate-300">
+                    <span id="estadoConsentimientoCookies">Cargando estado…</span>
+                </p>
+            </div>
+
             <!-- OPCIONES DE CONFIGURACIÓN -->
             <div class="my-4 overflow-y-auto pr-2 space-y-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed text-left">
-                <!-- 1. Estrictamente Necesarias -->
+
+                <!-- 1. NECESARIAS · siempre activas, no se offering -->
                 <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 space-y-2">
-                    <div class="flex items-center justify-between">
-                        <span class="font-extrabold text-slate-900 dark:text-white text-sm">Cookies Estrictamente Necesarias</span>
-                        <span class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Siempre Activas</span>
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-extrabold text-slate-900 dark:text-white text-sm">Necesarias</span>
+                        <span class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 whitespace-nowrap">Siempre activas</span>
                     </div>
                     <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                        Indispensables para el inicio de sesión seguro, autenticación del usuario (`PHPSESSID`) y mantenimiento de la sesión activa en SGET. No se pueden desactivar.
+                        La cookie de sesión <code class="sget-mono">PHPSESSID</code> mantiene tu acceso
+                        abierto y protege el sistema frente a{seciones y ataques. Se crea al iniciar
+                        sesión, es <code class="sget-mono">HttpOnly</code> (el navegador no permite que
+                        JavaScript la lea) y usa <code class="sget-mono">SameSite=Lax</code>.
+                        No se puede desactivar porque sin ella no hay sesión ni seguridad posible.
                     </p>
                 </div>
 
-                <!-- 2. Preferencias / Funcionales -->
+                <!-- 2. PREFERENCIAS · tema -->
                 <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 space-y-2">
-                    <div class="flex items-center justify-between">
-                        <label for="chkCookiePreferencias" class="font-extrabold text-slate-900 dark:text-white text-sm cursor-pointer">Cookies de Preferencias</label>
-                        <input type="checkbox" id="chkCookiePreferencias" checked class="w-4 h-4 rounded text-sky-500 focus:ring-sky-400 dark:bg-slate-900 cursor-pointer">
+                    <div class="flex items-center justify-between gap-2">
+                        <label for="chkCookiePreferencias" class="font-extrabold text-slate-900 dark:text-white text-sm cursor-pointer">Preferencias</label>
+                        <input type="checkbox" id="chkCookiePreferencias" class="w-4 h-4 rounded text-sky-500 focus:ring-sky-400 dark:bg-slate-900 cursor-pointer shrink-0">
                     </div>
                     <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                        Permiten recordar tus selecciones personalizadas, como el idioma elegido (Español/Inglés) y el tema de la interfaz (Claro/Oscuro).
+                        Recuerdan el <strong>tema claro u oscuro</strong> de la interfaz para no tener que
+                        elegirlo en cada visita. Se guarda en la cookie
+                        <code class="sget-mono">sget_tema</code>.
+                    </p>
+                    <p class="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
+                        Si la desmarcas, la cookie <code class="sget-mono">sget_tema</code> se elimina
+                        y el tema deja de recordarse: volverá al de tu sistema en cada visita.
                     </p>
                 </div>
 
-                <!-- 3. Rendimiento / Analítica -->
+                <!-- 3. ANALÍTICA · se declara que NO se usa -->
                 <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 space-y-2">
-                    <div class="flex items-center justify-between">
-                        <label for="chkCookieAnalitica" class="font-extrabold text-slate-900 dark:text-white text-sm cursor-pointer">Cookies de Rendimiento y Analítica</label>
-                        <input type="checkbox" id="chkCookieAnalitica" class="w-4 h-4 rounded text-sky-500 focus:ring-sky-400 dark:bg-slate-900 cursor-pointer">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="font-extrabold text-slate-900 dark:text-white text-sm">Analítica</span>
+                        <span class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-500/10 text-slate-600 dark:text-slate-300 border border-slate-400/20 whitespace-nowrap">No utilizada</span>
                     </div>
                     <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                        Nos ayudan a recopilar información anónima sobre el uso del sistema para optimizar los tiempos de carga y mejorar el control de rutas.
+                        <strong>No utilizamos cookies analíticas actualmente.</strong> No hay Google
+                        Analytics ni ninguna herramienta externa de medición: SGET no envía datos de
+                        navegación a terceros.
                     </p>
                 </div>
             </div>
@@ -596,52 +819,96 @@ if (!$resultado_viajes) {
 
     <!-- SCRIPTS DE CONTROL DEL MODAL, COOKIES Y GOOGLE SIGN-IN -->
     <script>
-        // --- GESTIÓN DE COOKIES Y PREFERENCIAS ---
+        /* ------------------------------------------------------------------
+           GESTIÓN DE COOKIES Y PREFERENCIAS
+           ------------------------------------------------------------------
+           DELega TODO en `window.SGETCookies` (assets/js/theme-init.js), que es
+           el ÚNICO lugar del proyecto que escribe cookies.
+
+           Antes esta lógica vivía aquí y el escritor de la cookie estaba en el
+           theme-init, sin relación entre ambos. El resultado era la incoherencia
+           que había que eliminar: el panel decía «Preferencias: desactivadas» y
+           `sget_tema` se creaba igual en la siguiente carga.
+
+           La decisión de consentimiento se guarda en `localStorage` porque no es
+           una cookie: no la crea JavaScript sola ni viaja al servidor.
+        ------------------------------------------------------------------ */
+
+        function leerConsentimientoCookies() {
+            return (window.SGETCookies && window.SGETCookies.consentimiento)
+                ? window.SGETCookies.consentimiento()
+                : null;
+        }
+
+        /** Refleja en el panel lo que hay guardado AHORA MISMO. */
+        function sincronizarPanelCookies() {
+            const consent = leerConsentimientoCookies();
+            const chkPref = document.getElementById('chkCookiePreferencias');
+            const chkAnl  = document.getElementById('chkCookieAnalitica');
+            if (chkPref) chkPref.checked = !!(consent && consent.preferencias);
+            if (chkAnl)  chkAnl.checked  = !!(consent && consent.analitica);
+
+            const estado = document.getElementById('estadoConsentimientoCookies');
+            if (estado) {
+                if (!consent) {
+                    estado.textContent = 'Todavía no has guardado tus preferencias.';
+                } else if (consent.preferencias) {
+                    estado.textContent = 'Preferencias activas: el tema se recuerda entre visitas.';
+                } else {
+                    estado.textContent = 'Solo cookies necesarias: el tema no se recuerda.';
+                }
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
-            const consent = localStorage.getItem('sget_cookies_consent');
-            if (!consent) {
+            sincronizarPanelCookies();
+
+            // El aviso solo aparece si el usuario aún no ha decidido nada.
+            if (!leerConsentimientoCookies()) {
                 const banner = document.getElementById('cookieBanner');
                 if (banner) banner.classList.remove('hidden');
-            } else {
-                aplicarPreferenciasCookies(JSON.parse(consent));
             }
         });
 
+        /** Aplica el consentimiento: crea o borra `sget_tema` según corresponda. */
+        function aplicarPreferenciasCookies(prefs) {
+            if (window.SGETCookies && window.SGETCookies.guardar) {
+                window.SGETCookies.guardar(prefs);
+            }
+            sincronizarPanelCookies();
+        }
+
         function aceptarTodasCookies() {
-            const prefs = { necesarias: true, preferencias: true, analitica: true };
-            localStorage.setItem('sget_cookies_consent', JSON.stringify(prefs));
+            aplicarPreferenciasCookies({ necesarias: true, preferencias: true, analitica: false });
             ocultarBannerYModalesCookies();
-            aplicarPreferenciasCookies(prefs);
         }
 
         function rechazarCookiesOpcionales() {
-            const prefs = { necesarias: true, preferencias: false, analitica: false };
-            localStorage.setItem('sget_cookies_consent', JSON.stringify(prefs));
+            aplicarPreferenciasCookies({ necesarias: true, preferencias: false, analitica: false });
             ocultarBannerYModalesCookies();
-            aplicarPreferenciasCookies(prefs);
         }
 
         function guardarConfiguracionCookies() {
-            const prefs = {
-                necesarias: true,
-                preferencias: document.getElementById('chkCookiePreferencias')?.checked ?? true,
-                analitica: document.getElementById('chkCookieAnalitica')?.checked ?? false
-            };
-            localStorage.setItem('sget_cookies_consent', JSON.stringify(prefs));
+            aplicarPreferenciasCookies({
+                necesarias:   true,
+                preferencias: !!(document.getElementById('chkCookiePreferencias') && document.getElementById('chkCookiePreferencias').checked),
+                analitica:    !!(document.getElementById('chkCookieAnalitica') && document.getElementById('chkCookieAnalitica').checked)
+            });
             cerrarPanel('panelConfigCookies');
             ocultarBannerYModalesCookies();
-            aplicarPreferenciasCookies(prefs);
         }
 
         function ocultarBannerYModalesCookies() {
             const banner = document.getElementById('cookieBanner');
             if (banner) banner.classList.add('hidden');
+            document.dispatchEvent(new CustomEvent('sget:cookies-cerradas'));
         }
 
-        function aplicarPreferenciasCookies(prefs) {
-            if (!prefs.preferencias) {
-                // Si el usuario desactiva cookies de preferencias opcionales
-            }
+        /* Botón «Configuración de Cookies» del pie: abre el panel con el estado
+           real guardado, para poder cambiarlo en cualquier momento. */
+        function abrirConfiguracionCookies() {
+            sincronizarPanelCookies();
+            abrirPanel('panelConfigCookies');
         }
 
         // --- LÓGICA DE MODALES ---
@@ -716,6 +983,156 @@ if (!$resultado_viajes) {
         ------------------------------------------------------------------ */
         // Escape ya lo resuelve el motor común (cierra la capa superior).
 
+        /* Sombra de la cabecera al bajar: separa el fijo del contenido sin
+           necesitar una imagen ni un degradado. */
+        const cabecera = document.getElementById('landingHeader');
+        if (cabecera) {
+            const marcarScroll = () => {
+                cabecera.dataset.scroll = window.scrollY > 8 ? '1' : '0';
+            };
+            marcarScroll();
+            window.addEventListener('scroll', marcarScroll, { passive: true });
+        }
+
+        /* ------------------------------------------------------------------
+           NAVEGACIÓN DE LA PORTADA · desplazamiento suave + sección activa
+           ------------------------------------------------------------------
+           El menú usa anclas (`#seccion`). Sin este bloque el salto del
+           navegador es seco e instantáneo, y además el resaltado de la entrada
+           activa se quedaba siempre en «Inicio» por mucho que se bajara.
+
+           Se respeta `prefers-reduced-motion`: quien tiene el movimiento
+           reducidoACTIVADO recibe un salto directo, sin animación.
+           ------------------------------------------------------------------ */
+        (function () {
+            const enlaces = document.querySelectorAll('[data-sget-seccion]');
+            if (!enlaces.length) return;
+
+            const suave = !window.matchMedia
+                || !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+            /* --- Desplazamiento suave --- */
+            document.addEventListener('click', function (event) {
+                const enlace = event.target.closest('[data-sget-seccion]');
+                if (!enlace) return;
+
+                const seccion = document.getElementById(enlace.dataset.sgetSeccion);
+                if (!seccion) return;           // deja que el navegador haga su cosa
+
+                event.preventDefault();
+
+                /* UN SOLO SCROLL, DELEGANDO EL DESPLAZAMIENTO AL NAVEGADOR.
+                 *
+                 * El fallo que se corrige: se encadenaban DOS desplazamientos,
+                 *
+                 *     seccion.scrollIntoView({ behavior: 'smooth' });
+                 *     window.scrollBy({ top: -alto, behavior: 'smooth' });
+                 *
+                 * El primero arranca un scroll suave asíncrono y el segundo
+                 * lanza otro por encima mientras el primero sigue en curso: el
+                 * navegador cancela el primero y el destino queda a merced del
+                 * segundo. En la práctica la página no se movía y el clic en
+                 * «Nosotros» no hacía nada.
+                 *
+                 * Ahora es UNA sola llamada. El hueco que deja la cabecera fija
+                 * NO se calcula aquí a mano: lo declara el CSS con
+                 * `scroll-margin-top` en `section[id]` (ver assets/css/index.css).
+                 * Así el margen vive en un único sitio y no hay dos medidas de la
+                 * misma cabecera que puedan desincronizarse.
+                 */
+                seccion.scrollIntoView({
+                    behavior: suave ? 'smooth' : 'auto',
+                    block: 'start'
+                });
+
+                // Al navegar con teclado el foco debe viajar a la sección; si no,
+                // el siguiente Tab sigue en el menú y parece que no ha pasado nada.
+                if (!seccion.hasAttribute('tabindex')) {
+                    seccion.setAttribute('tabindex', '-1');
+                }
+                seccion.focus({ preventScroll: true });
+
+                // La URL debe reflejar la sección (compartir enlace, botón atrás).
+                if (history.replaceState) {
+                    history.replaceState(null, '', enlace.getAttribute('href') || ('#' + enlace.dataset.sgetSeccion));
+                }
+
+                marcarActivo(enlace.dataset.sgetSeccion);
+                cerrarMenuMovil();
+            });
+
+            /* --- Sección activa según la posición del scroll --- */
+            function marcarActivo(clave) {
+                enlaces.forEach(function (el) {
+                    const activo = el.dataset.sgetSeccion === clave;
+                    el.classList.toggle('es-activo', activo);
+                    if (activo) el.setAttribute('aria-current', 'true');
+                    else el.removeAttribute('aria-current');
+                });
+            }
+
+            function cerrarMenuMovil() {
+                const menu = document.querySelector('[data-abierto="1"]');
+                if (!menu) return;
+                menu.dataset.abierto = '0';
+                const boton = document.querySelector('[aria-controls="' + menu.id + '"]');
+                if (boton) boton.setAttribute('aria-expanded', 'false');
+            }
+
+            let pendiente = null;
+            function alDesplazar() {
+                if (pendiente) return;
+                pendiente = requestAnimationFrame(function () {
+                    pendiente = null;
+
+                    const referencia = window.scrollY + window.innerHeight * 0.35;
+                    let actual = null;
+                    document.querySelectorAll('section[id]').forEach(function (s) {
+                        if (s.offsetTop <= referencia) actual = s.id;
+                    });
+                    if (actual) marcarActivo(actual);
+                });
+            }
+
+            window.addEventListener('scroll', alDesplazar, { passive: true });
+            window.addEventListener('resize', alDesplazar, { passive: true });
+            alDesplazar();
+        })();
+
+        /* ------------------------------------------------------------------
+           ACCESO FLOTANTE · se aparta cuando el aviso de cookies está abierto
+           ------------------------------------------------------------------
+           El botón vive abajo a la izquierda y el aviso de cookies abajo a la
+           derecha; en móvil el aviso ocupa todo el ancho. Dos cajas apiladas en
+           la misma esquina tapan el contenido y hacen clic donde no toca, así
+           que el acceso flotante se oculta mientras el aviso siga abierto.
+
+           POR QUÉ UN OBSERVADOR Y NO UN EVENTO
+             La primera versión solo sincronizaba al cargar y al hacer clic, y
+             fallaba: en ese momento el aviso todavía tenía la clase `hidden`
+             (se quita en otro `DOMContentLoaded` posterior), así que el script
+             veía «cerrado», lo dejaba visible y no volvía a comprobar nada.
+             Con `MutationObserver` sobre el propio aviso se detecta cualquier
+             cambio de estado, venga de donde venga.
+           ------------------------------------------------------------------ */
+        (function () {
+            const acceso = document.getElementById('accesoFlotante');
+            const banner = document.getElementById('cookieBanner');
+            if (!acceso || !banner) return;
+
+            function sincronizar() {
+                const visible = !banner.classList.contains('hidden');
+                acceso.dataset.sgetOculto = visible ? '1' : '0';
+                acceso.setAttribute('aria-hidden', visible ? 'true' : 'false');
+            }
+
+            new MutationObserver(sincronizar)
+                .observe(banner, { attributes: true, attributeFilter: ['class'] });
+
+            sincronizar();
+            document.addEventListener('DOMContentLoaded', sincronizar);
+        })();
+
         // Navegación interna entre modales (login <-> registro, política)
         document.addEventListener('click', function (event) {
             const enlace = event.target.closest('[data-sget-ir-a]');
@@ -724,18 +1141,20 @@ if (!$resultado_viajes) {
             cambiarAPanel(enlace.dataset.sgetIrA);
         });
 
-        // Menú hamburguesa de la cabecera en móvil
-        document.addEventListener('click', function (event) {
-            const burger = event.target.closest('[data-sget-burger]');
-            if (!burger) return;
-            const nav = document.querySelector('.landing-nav');
-            if (nav) nav.dataset.abierto = nav.dataset.abierto === '1' ? '0' : '1';
-        });
-
         document.addEventListener("DOMContentLoaded", function () {
-            <?php if (!empty($_SESSION['abrir_login']) || !empty($_SESSION['msg_success_login'])): ?>
+            <?php
+            /* Reapertura automática del modal correspondiente tras un
+               POST/redirect (PRG). Antes solo se miraba `abrir_login`, así que
+               un error de REGISTRO (quepone `abrir_registro`) se mostraba en el
+               modal equivocado o directamente no se veía. */
+            $abrirLogin    = !empty($_SESSION['abrir_login']);
+            $abrirRegistro = !empty($_SESSION['abrir_registro']);
+            unset($_SESSION['abrir_login'], $_SESSION['abrir_registro']);
+            ?>
+            <?php if ($abrirRegistro): ?>
+                abrirPanel('panelRegistro');
+            <?php elseif ($abrirLogin): ?>
                 abrirPanel('panelLogin');
-                <?php unset($_SESSION['abrir_login'], $_SESSION['msg_success_login']); ?>
             <?php endif; ?>
         });
     </script>

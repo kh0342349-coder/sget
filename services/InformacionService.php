@@ -214,7 +214,7 @@ final class InformacionService
     {
         return Database::all(
             "SELECT est_veh, COUNT(*) total, COALESCE(SUM(cap_veh), 0) capacidad
-               FROM vehiculo GROUP BY est_veh ORDER BY total DESC"
+               FROM vehiculo GROUP BY est_veh"
         );
     }
 
@@ -323,6 +323,90 @@ final class InformacionService
         return Database::all(
             "SELECT id_usu, nom_usu FROM usuario WHERE id_rol_usu = ? ORDER BY nom_usu ASC",
             [Config::ROL_CONDUCTOR]
+        );
+    }
+
+    /**
+     * RESUMEN DE PASAJEROS DE UN VIAJE: quién viajó, quién faltaba, quién debe.
+     *
+     * Es la respuesta a «¿quiénes viajaron en este viaje y por qué no aparece
+     * este pasajero en el informe?». Se separa `embarco` del estado de pago a
+     * propósito, porque son dos hechos distintos: se puede haber pagado al
+     * abordar y sí viajar, o haber pagado antes y no presentarse.
+     *
+     * @return array{totales:array, pasajeros:array}
+     */
+    public static function pasajerosDeViaje(int $idViaje): array
+    {
+        $manifiesto = ReservaService::manifiesto($idViaje);
+
+        $totales = [
+            'puestos'      => 0, 'viajeros' => 0, 'no_presentados' => 0,
+            'sin_decidir'  => 0, 'cancelados' => 0,
+            'pagado'       => 0.0, 'por_cobrar' => 0.0, 'perdido' => 0.0,
+            'debe'         => 0.0,   // TODO lo que deben los puestos vivos
+        ];
+        $pasajeros = [];
+
+        foreach ($manifiesto as $m) {
+            $totales['puestos']      += $m['puestos'];
+            $totales['viajeros']     += $m['embarcaron'];
+            $totales['no_presentados'] += $m['no_embarcaron'];
+            $totales['sin_decidir']  += $m['sin_decidir'];
+            $totales['cancelados']   += $m['cancelados'];
+
+            if ($m['pagados'] > 0)   $totales['pagado'] += $m['debe'];
+            if ($m['pendientes'] > 0) $totales['por_cobrar'] += $m['debe'];
+
+            // `debe` es la suma de los puestos VIVOS (pagados y pendientes): es
+            // el total que la columna «Debe» muestra al final de la tabla.
+            if ($m['pagados'] + $m['pendientes'] > 0) $totales['debe'] += $m['debe'];
+            // Lo que se cobró de quien no subió al bus.
+            if ($m['embarcaron'] === 0 && $m['no_embarcaron'] > 0 && $m['pagados'] > 0) {
+                $totales['perdido'] += $m['debe'];
+            }
+
+            $pasajeros[] = $m;
+        }
+
+        return ['totales' => $totales, 'pasajeros' => $pasajeros];
+    }
+
+    /**
+     * Historial de no-presentaciones: quién se quedó en casa, en qué viaje y
+     * por qué. Es el informe que responde «los pasajeros que no subieron».
+     */
+    public static function noPresentaciones(array $filtros, int $limite = 100): array
+    {
+        $w = ['res.embarco = 0', 'res.estado_pago <> ?'];
+        $p = [Config::RES_CANCELADA];
+
+        if (($filtros['desde'] ?? '') !== '') { $w[] = 'DATE(v.fec_via) >= ?'; $p[] = $filtros['desde']; }
+        if (($filtros['hasta'] ?? '') !== '') { $w[] = 'DATE(v.fec_via) <= ?'; $p[] = $filtros['hasta']; }
+
+        $q = trim((string)($filtros['q'] ?? ''));
+        if ($q !== '') {
+            $w[] = '(u.nom_usu LIKE ? OR u.num_doc_usu LIKE ? OR res.motivo_cancelacion LIKE ?)';
+            $like = '%' . $q . '%';
+            array_push($p, $like, $like, $like);
+        }
+
+        $w[] = 'res.embarque_fec IS NOT NULL';   // solo marcas reales, no NULL
+
+        return Database::all(
+            "SELECT res.id_res, res.motivo_cancelacion, res.embarque_fec,
+                    res.estado_pago, res.valor_pagado, res.metodo_pago,
+                    v.id_via, v.fec_via, v.hor_sal_via,
+                    r.nom_rut, r.ori_rut, r.des_rut,
+                    u.nom_usu AS pasajero, u.num_doc_usu
+               FROM reserva res
+               INNER JOIN viaje v   ON v.id_via   = res.id_via_res
+               INNER JOIN usuario u ON u.id_usu   = res.id_usu_res
+               LEFT  JOIN rutas r   ON r.id_rut   = v.id_rut_via
+              WHERE " . implode(' AND ', $w) . "
+              ORDER BY v.fec_via DESC, v.hor_sal_via DESC, res.embarque_fec DESC
+              LIMIT " . (int)$limite,
+            $p
         );
     }
 

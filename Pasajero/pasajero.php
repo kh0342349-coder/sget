@@ -1,41 +1,59 @@
 <?php
-date_default_timezone_set('America/Bogota');
-session_start();
-include '../assets/conexion.php'; 
+/**
+ * Pasajero/pasajero.php
+ * -----------------------------------------------------------------------------
+ * PANEL DEL PASAJERO
+ * -----------------------------------------------------------------------------
+ * QUÉ CAMBIA EN ESTA SEGUNDA RONDA
+ *   · Las consultas iban por `mysqli` con `$documento` e `$id_pasajero`
+ *     concatenados dentro del SQL. El valor venía de la sesión, así que no era
+ *     inyección desde fuera, pero sí era SQL construido a mano con un patrón
+ *     que, copiado una vez más, sí lo sería. Ahora la identidad se toma de
+ *     `Auth::id()` (que es `int`) y todo va por PDO con sentencias preparadas.
+ *   · Se añade el flujo que faltaba: REPORTAR. Antes la acción `reporte.crear`
+ *     existía en la API pero quedaba detrás de `requerirAdmin()`, así que el
+ *     pasajero no tenía ninguna forma de crear un reporte.
+ *   · Se añade el enlace al COMPROBANTE en PDF de cada reserva, que existía
+ *     (`Pasajero/generar_ticket.php`) pero no estaba enlazado desde ninguna
+ *     página.
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
-    header("Location: ../index.php");
-    exit();
-}
+require_once __DIR__ . '/../core/bootstrap.php';
 
-$documento = $_SESSION['documento'];
-$nombreReal = $_SESSION['nombre_usuario'] ?? "Pasajero";
+Auth::requerirSesion();
+Auth::requerirRol(Config::ROL_PASAJERO);
 
-// Obtener ID del pasajero
-$query_user = $conexion->query("SELECT id_usu FROM usuario WHERE num_doc_usu = '$documento'");
-$id_pasajero = 0;
-if ($query_user && $query_user->num_rows > 0) {
-    $user_data = $query_user->fetch_assoc();
-    $id_pasajero = $user_data['id_usu'];
-}
+$nombreReal   = Auth::nombre();
+$idPasajero   = Auth::id();
 
-// 1. Contar viajes REALES del pasajero desde la tabla reserva
-$res_viajes = $conexion->query("SELECT COUNT(*) as total FROM reserva WHERE id_usu_res = '$id_pasajero'"); 
-$total_viajes = ($res_viajes) ? $res_viajes->fetch_assoc()['total'] : 0;
+/* 1. Reservas reales del pasajero (contadas por reserva, no por viaje). */
+$totalViajes = (int) Database::scalar(
+    'SELECT COUNT(*) FROM reserva WHERE id_usu_res = ?',
+    [$idPasajero]
+);
 
-// 2. Obtener los últimos 5 viajes
-$sql_historial = "SELECT v.*, r.nom_rut, res.fech_res, c.id_cal, v.id_usu_via, u.nom_usu as nombre_conductor
-                  FROM reserva res
-                  JOIN viaje v ON res.id_via_res = v.id_via
-                  JOIN rutas r ON v.id_rut_via = r.id_rut
-                  LEFT JOIN usuario u ON v.id_usu_via = u.id_usu
-                  LEFT JOIN calificacion c ON v.id_via = c.id_via_cal AND c.id_usu_rem = '$id_pasajero'
-                  WHERE res.id_usu_res = '$id_pasajero'
-                  ORDER BY res.fech_res DESC LIMIT 5";
-$historial = $conexion->query($sql_historial);
+/* 2. Últimos 5 viajes con su calificación, para poder mostrar el botón. */
+$historial = Database::all(
+    'SELECT v.*, rt.nom_rut, res.fech_res, res.id_res,
+            c.id_cal, v.id_usu_via, u.nom_usu AS nombre_conductor
+       FROM reserva res
+       INNER JOIN viaje v      ON res.id_via_res = v.id_via
+       INNER JOIN rutas rt     ON v.id_rut_via  = rt.id_rut
+       LEFT  JOIN usuario u    ON v.id_usu_via   = u.id_usu
+       LEFT  JOIN calificacion c ON c.id_via_cal = v.id_via AND c.id_usu_rem = ?
+      WHERE res.id_usu_res = ?
+      ORDER BY res.fech_res DESC, res.id_res DESC
+      LIMIT 5',
+    [$idPasajero, $idPasajero]
+);
 
-// Consultas para el Drawer de Buscar/Reservar (+)
-$rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER BY nom_rut ASC");
+/* 3. Rutas disponibles para el buscador de reserva. */
+$rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY nom_rut ASC');
+
+/* 4. Viajes sobre los que este pasajero puede abrir un reporte. */
+$viajesReportables = ReporteService::viajesReportables($idPasajero);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -129,36 +147,29 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">¡Hola, <?php echo explode(' ', $nombreReal)[0]; ?>!</h1>
                         
-                        <!-- 1. BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
-                        <div class="relative group">
-                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
-                                <i class="fas fa-question text-[10px]"></i>
-                            </button>
+                        <!--
+                             BOTÓN DE AYUDA DEL MÓDULO · RETIRADO
+                             Este «?» por pantalla se sustituyó por UNO SOLO global en la
+                             esquina inferior derecha (views/modals/ayuda.php), que además
+                             cambia de contenido según el rol y el módulo. Con estos botones
+                             repartidos, cada módulo llevaba su propia copia de la guía y se
+                             desincronizaban entre sí.
+                        -->
 
-                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
-                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
-                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía Panel del Pasajero
-                                </p>
-                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-plus-circle text-blue-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Book a Seat (＋):</b> Busca rutas activas y reserva tu transporte al instante.</span>
-                                    </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-star text-amber-400 mt-0.5 shrink-0"></i>
-                                        <span><b>Calificar Servicio:</b> Evalúa la experiencia de tu viaje una vez completado.</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Gestiona tus reservas de transporte y califica tus trayectos.</p>
                 </div>
 
-                <!-- BOTÓN PRINCIPAL ACCIÓN CON MODAL DRAWER (+) -->
-                <button onclick="abrirModalReserva()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto">
-                    <i class="fas fa-plus-circle text-sm"></i> Reservar Viaje
-                </button>
+                <!-- ACCIONES PRINCIPALES DEL PANEL -->
+                <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                    <button type="button" data-sget-modal="modalReporte"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-300 dark:border-white/10 bg-white dark:bg-white/5 text-slate-600 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/10 font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer whitespace-nowrap">
+                        <i class="fas fa-comment-dots text-sm"></i> Reportar
+                    </button>
+                    <button onclick="abrirModalReserva()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap">
+                        <i class="fas fa-plus-circle text-sm"></i> Reservar Viaje
+                    </button>
+                </div>
             </div>
 
             <!-- Grid de Tarjetas de Métricas -->
@@ -192,11 +203,13 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-200 dark:divide-white/5 text-slate-700 dark:text-slate-200">
-                            <?php if ($historial && $historial->num_rows > 0): ?>
-                                <?php while($v = $historial->fetch_assoc()): 
-                                    $sePuedeCalificar = ($v['est_via'] == 'Terminado' || $v['est_via'] == 'Finalizado');
-                                    $yaCalificado = !is_null($v['id_cal']);
-                                ?>
+                            <?php if (!empty($historial)): ?>
+                                <?php foreach ($historial as $v): ?>
+                                    <?php /* Solo un viaje FINALIZADO se puede calificar: la nota mide una
+                                         experiencia que ya ocurrió. El backend lo vuelve a comprobar
+                                         en `CalificacionService::puedeCalificar()`. */ ?>
+                                    $sePuedeCalificar = ((string)$v['est_via'] === Config::VIA_FINALIZADO);
+                                    $yaCalificado = !is_null($v['id_cal']); ?>
                                     <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                                         <td class="px-6 py-4">
                                             <div class="flex items-center gap-3">
@@ -206,8 +219,8 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                                 <span class="font-bold text-slate-900 dark:text-white capitalize text-xs"><?php echo htmlspecialchars($v['nom_rut']); ?></span>
                                             </div>
                                         </td>
-                                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs font-mono"><?php echo date('d/m/Y', strtotime($v['fech_res'])); ?></td>
-                                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs font-mono uppercase"><?php echo date('h:i A', strtotime($v['hor_sal_via'])); ?></td>
+                                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs font-mono"><?php echo date('d/m/Y', strtotime((string)$v['fech_res'])); ?></td>
+                                        <td class="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs font-mono uppercase"><?php echo date('h:i A', strtotime((string)$v['hor_sal_via'])); ?></td>
                                         <td class="px-6 py-4">
                                             <?php if ($sePuedeCalificar): ?>
                                                 <span class="px-2.5 py-1 rounded-md text-[9px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
@@ -220,11 +233,23 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                             <?php endif; ?>
                                         </td>
                                         <td class="px-6 py-4 text-center">
-                                            <?php if ($yaCalificado): ?>
-                                                <div class="flex items-center justify-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider">
-                                                    <i class="fas fa-check-double text-xs"></i> Calificado
-                                                </div>
-                                            <?php elseif ($sePuedeCalificar): ?>
+                                            <div class="inline-flex flex-wrap items-center justify-center gap-2">
+
+                                                <!-- Comprobante en PDF. El backend vuelve a comprobar que
+                                                     la reserva es de ESTE pasajero aunque alguien
+                                                     edite el id del enlace. -->
+                                                <a href="generar_ticket.php?id=<?= (int)$v['id_res'] ?>"
+                                                   target="_blank" rel="noopener"
+                                                   title="Comprobante de la reserva"
+                                                   class="p-2 bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-all shadow-sm">
+                                                    <i class="fas fa-receipt text-xs"></i>
+                                                </a>
+
+                                                <?php if ($yaCalificado): ?>
+                                                    <div class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider">
+                                                        <i class="fas fa-check-double text-xs"></i> Calificado
+                                                    </div>
+                                                <?php elseif ($sePuedeCalificar): ?>
                                                 <button type="button"
                                                             data-sget-modal="modalCalificar"
                                                             data-sget-calificar-viaje="<?= (int)$v['id_via'] ?>"
@@ -235,13 +260,14 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                                             ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'
                                                             class="inline-flex items-center gap-1.5 bg-yellow-500 hover:bg-yellow-400 text-slate-900 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-all duration-200 shadow-md shadow-yellow-500/10 cursor-pointer">
                                                         <i class="fas fa-star text-[9px]"></i> Calificar
-                                                    </button>
-                                            <?php else: ?>
-                                                <span class="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-tight italic">En trayecto...</span>
-                                            <?php endif; ?>
+                                                </button>
+                                                <?php else: ?>
+                                                    <span class="text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-tight italic">En trayecto...</span>
+                                                <?php endif; ?>
+                                            </div>
                                         </td>
                                     </tr>
-                                <?php endwhile; ?>
+                                <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
                                     <td colspan="5" class="px-6 py-12 text-center text-slate-400 dark:text-slate-500 italic">
@@ -357,5 +383,23 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
              Guardar la reseña por el API es lo que hace que funcione: el
              formulario heredado enviaba a guardar_calificacion.php, inexistente. */ ?>
     <?php include __DIR__ . '/../views/modals/calificar.php'; ?>
+
+    <?php /* Flujo de reporte del pasajero. La API valida, en el servidor, que el
+             viaje sea suyo y que la descripción tenga sentido: ocultar el botón
+             no es una medida de seguridad. */ ?>
+    <?php
+    $viajesParaReporte = [];
+    foreach ($viajesReportables as $v) {
+        $viajesParaReporte[] = [
+            'id'       => (int)$v['id_via'],
+            'etiqueta' => sprintf('%s · %s %s', (string)$v['nom_rut'],
+                Fecha::legible((string)$v['fec_via'], false),
+                Fecha::soloHora((string)$v['hor_sal_via'])),
+            'estado'   => (string)$v['est_via'],
+            'ya'       => (int)$v['ya_reportado'] > 0,
+        ];
+    }
+    ?>
+    <?php include __DIR__ . '/../views/modals/reporte.php'; ?>
 </body>
 </html>

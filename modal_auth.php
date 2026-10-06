@@ -4,23 +4,37 @@
  * -----------------------------------------------------------------------------
  * MODALES PÚBLICOS: Iniciar sesión y Crear cuenta
  * -----------------------------------------------------------------------------
- * ANTES: el modal de login traía colores oscuros FIJOS en línea
- *        (style="background:#111827; color:#f8fafc"). Con el tema claro activo
- *        se veía un cuadro negro dentro de una página blanca: ilegible y con
- *        la impresión de estar roto.
- * AHORA: todo sale de los tokens del tema (--sget-superficie, --sget-texto…),
- *        así que el modal es claro en tema claro y oscuro en tema oscuro.
- *
- * Ambos usan el motor común (assets/js/sget-modal.js):
- *     data-sget-capa / data-sget-panel / data-sget-cerrar
- * Las funciones abrirPanel()/cerrarPanel()/cambiarAPanel() siguen existiendo
- * (delegan en el motor) para no tocar los onclick ya escritos.
+ *   · Login y REGISTRO comparten el mismo componente de Google: separador
+ *     «o continúa con» + botón oficial al ancho del formulario. Antes solo
+ *     lo tenía el login y además mal dimensionado (un botón estrecho y
+ *     centrado dentro de una caja del 100 %), lo que lo hacía parecer un
+ *     pegado ajeno al diseño.
+ *   · Ambos formularios llevan token anti-CSRF (`Auth::campoToken()`), que el
+ *     backend exige antes de mirar ningún dato.
+ *   · Los mensajes llegan por `Flash` (PRG), no por variables sueltas de sesión:
+ *     así se muestran una sola vez y con el mismo estilo en todo el sistema.
+ *   · Todo sale de los tokens del tema: el modal es claro en tema claro y
+ *     oscuro en tema oscuro (nada de colores fijos en línea).
  * -----------------------------------------------------------------------------
  */
+if (!class_exists('Auth')) {
+    require_once __DIR__ . '/core/bootstrap.php';
+}
+if (!isset($lang) || !is_array($lang)) {
+    $lang = [];
+}
+$__sgetCsrf = Auth::campoToken();
 ?>
 
-<!-- SDK Oficial de Google reCAPTCHA v2 -->
+<?php
+/* SDK de reCAPTCHA: se carga cuando el control está activo.
+   Con las claves de prueba de Google se sigue pintando el widget (es el
+   comportamiento esperado del formulario) y la advertencia de «modo
+   desarrollo» la pone el propio markup, debajo del captcha. */
+if (Config::recaptchaHabilitado() && Config::recaptchaSiteKey() !== ''): ?>
+<!-- SDK Oficial de Google reCAPTCHA v2 (protección del login contra bots) -->
 <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<?php endif; ?>
 
 <!-- ======================================================================= -->
 <!-- MODAL · INICIAR SESIÓN                                                   -->
@@ -51,23 +65,10 @@
         </header>
 
         <div class="sget-modal__body sget-scroll">
-            <?php if (!empty($_SESSION['msg'])): ?>
-                <div class="sget-flash sget-flash--error" style="margin:0 0 1.25rem">
-                    <i class="fas fa-triangle-exclamation"></i>
-                    <span><?= htmlspecialchars($_SESSION['msg'], ENT_QUOTES, 'UTF-8') ?></span>
-                </div>
-                <?php unset($_SESSION['msg']); ?>
-            <?php endif; ?>
+            <?= Flash::render() ?>
 
-            <?php if (!empty($_SESSION['msg_success_login'])): ?>
-                <div class="sget-flash sget-flash--exito" style="margin:0 0 1.25rem">
-                    <i class="fas fa-check-circle"></i>
-                    <span><?= htmlspecialchars($_SESSION['msg_success_login'], ENT_QUOTES, 'UTF-8') ?></span>
-                </div>
-                <?php unset($_SESSION['msg_success_login']); ?>
-            <?php endif; ?>
-
-            <form action="validar.php" method="POST" id="formLogin" novalidate class="space-y-4">
+            <form action="<?= htmlspecialchars(Config::basePath(), ENT_QUOTES, 'UTF-8') ?>/validar.php" method="POST" id="formLogin" novalidate class="space-y-4">
+                <?= $__sgetCsrf ?>
                 <div class="sget-field" data-campo="documento">
                     <label class="sget-label" for="loginDocumento">
                         <?= $lang['mdl_doc'] ?? 'N° DOCUMENTO' ?><span class="sget-label__req">*</span>
@@ -94,10 +95,38 @@
                     <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
                 </div>
 
-                <!-- reCAPTCHA v2 (clave oficial de prueba para localhost) -->
-                <div class="flex justify-center py-1">
-                    <div class="g-recaptcha" data-sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI" data-theme="light"></div>
+                <!--
+                    reCAPTCHA v2
+
+                    El control está ACTIVO por defecto y se pinta siempre que lo
+                    esté. En una revisión anterior se dejó apagado por defecto
+                    («opt-in»), y el efecto fue que el captcha DESAPARECÍA de la
+                    pantalla de acceso: la protección quitada, no la configurada.
+
+                    Lo que sí se corrigió entonces, y sigue corregido:
+                      · antes el backend solo verificaba el token «si venía»:
+                        sin `g-recaptcha-response` se entraba igual. El widget
+                        estaba en pantalla y no bloqueaba NADA.
+                      · ahora la ausencia de token es un rechazo, siempre.
+
+                    Y para no caer en la otra trampa —un captcha decorativo que
+                    aparenta proteger—, cuando se están usando las claves
+                    públicas de PRUEBA de Google se muestra un aviso explícito
+                    debajo: con esas claves Google valida cualquier token, así
+                    que el usuario sabe que ahí NO hay protección antirobot real.
+
+                    Con claves reales configuradas
+                    (SGET_RECAPTCHA_SITEKEY / SGET_RECAPTCHA_SECRET) el aviso
+                    desaparece y el control sí bloquea.
+                -->
+                <?php if (Config::recaptchaHabilitado()): ?>
+                <div class="sget-recaptcha" data-sget-recaptcha>
+                    <div class="g-recaptcha"
+                         data-sitekey="<?= htmlspecialchars(Config::recaptchaSiteKey(), ENT_QUOTES, 'UTF-8') ?>"
+                         data-theme="light"
+                         data-sget-tema-actual="light"></div>
                 </div>
+                <?php endif; ?>
 
                 <button type="submit" class="sget-btn sget-btn--primario sget-btn--bloque sget-btn--lg">
                     <i class="fas fa-right-to-bracket"></i>
@@ -110,15 +139,23 @@
             <!-- =================================================================== -->
             <!--
                 El contenedor NO lleva la clase `g_id_signin`: esa clase la
-                genera Google DENTRO del propio contenedor, y reutilizarla como
+                genera Google DENTRO del propio contenedor y reutilizarla como
                 marca del hueco vacío impedía distinguir el nodo original del
                 botón ya montado (y se perdía al repintar por tema).
-                El montaje lo hace assets/js/sget-google.js al abrirse el panel.
+
+                `data-sget-google-zona` es lo que hace que
+                assets/js/sget-google.js monte aquí el botón oficial, sea este
+                panel el que se abra primero.
             -->
             <div class="sget-sep-google" data-sget-google-zona>
-                <span class="sget-sep-google__linea" aria-hidden="true"></span>
-                <span class="sget-sep-google__texto">o continúa con</span>
-                <span class="sget-sep-google__linea" aria-hidden="true"></span>
+                <input type="hidden" data-sget-google-endpoint
+                       value="<?= htmlspecialchars(Config::basePath(), ENT_QUOTES, 'UTF-8') ?>/controllers/auth_google.php">
+
+                <div class="sget-sep-google__fila" aria-hidden="true">
+                    <span class="sget-sep-google__linea"></span>
+                    <span class="sget-sep-google__texto">o continúa con</span>
+                    <span class="sget-sep-google__linea"></span>
+                </div>
 
                 <!-- Marcador de carga: se sustituye por el botón oficial -->
                 <div class="sget-google-montaje" data-sget-google>
@@ -134,7 +171,7 @@
                     <i class="fas fa-circle-info"></i>
                     <span data-sget-google-texto>
                         El acceso con Google no está disponible en este momento.
-                        Ingresa con tu número de documento y contraseña.
+                        Continúa con tu número de documento y contraseña.
                     </span>
                 </p>
             </div>
@@ -165,8 +202,7 @@
 
         <header class="sget-modal__head">
             <div style="display:flex;align-items:center;gap:.875rem">
-                <span class="sget-modal__icono"
-                      style="background:color-mix(in srgb,#10b981 14%,transparent);color:#10b981">
+                <span class="sget-modal__icono" style="background:color-mix(in srgb,#10b981 14%,transparent);color:#10b981">
                     <i class="fas fa-user-plus"></i>
                 </span>
                 <div>
@@ -183,15 +219,10 @@
 
         <div class="sget-modal__body sget-scroll">
 
-            <?php if (!empty($_SESSION['msg_registro'])): ?>
-                <div class="sget-flash sget-flash--error" style="margin:0 0 1.25rem">
-                    <i class="fas fa-triangle-exclamation"></i>
-                    <span><?= htmlspecialchars($_SESSION['msg_registro'], ENT_QUOTES, 'UTF-8') ?></span>
-                </div>
-                <?php unset($_SESSION['msg_registro']); ?>
-            <?php endif; ?>
+            <?= Flash::render() ?>
 
-            <form action="nuevo_usuario.php" method="POST" id="formRegistro" novalidate class="space-y-4">
+            <form action="<?= htmlspecialchars(Config::basePath(), ENT_QUOTES, 'UTF-8') ?>/nuevo_usuario.php" method="POST" id="formRegistro" novalidate class="space-y-4">
+                <?= $__sgetCsrf ?>
 
                 <!-- TIPO DE DOCUMENTO -->
                 <div class="sget-field" data-campo="tipo_doc">
@@ -249,7 +280,8 @@
                     </label>
                     <div style="position:relative">
                         <input type="password" id="reg_pass" name="clave_usu"
-                               placeholder="Mínimo 6 caracteres" autocomplete="new-password" minlength="6"
+                               placeholder="Mínimo <?= Password::MIN ?> caracteres" autocomplete="new-password"
+                               minlength="<?= Password::MIN ?>" maxlength="<?= Password::MAX ?>"
                                class="sget-input" style="padding-right:2.75rem">
                         <button type="button" data-ver-clave="#reg_pass" aria-label="Mostrar contraseña"
                                 style="position:absolute;top:0;right:0;height:100%;width:2.75rem;display:grid;place-items:center;color:var(--sget-texto-suave);border-radius:0 var(--sget-radio) var(--sget-radio) 0">
@@ -265,7 +297,8 @@
                         <?= $lang['mdl_confirm_pass'] ?? 'Confirmar Contraseña' ?><span class="sget-label__req">*</span>
                     </label>
                     <input type="password" id="reg_pass_confirm" name="confirmar_clave"
-                           placeholder="Repite tu contraseña" autocomplete="new-password" minlength="6"
+                           placeholder="Repite tu contraseña" autocomplete="new-password"
+                           minlength="<?= Password::MIN ?>" maxlength="<?= Password::MAX ?>"
                            class="sget-input">
                     <span class="sget-error" id="error_pass_match">
                         <i class="fas fa-circle-exclamation"></i><span>Las contraseñas no coinciden.</span>
@@ -294,6 +327,44 @@
                 </button>
             </form>
 
+            <!-- =================================================================== -->
+            <!-- MISMA ZONA DE GOOGLE QUE EN EL LOGIN                                -->
+            <!-- =================================================================== -->
+            <!--
+                El registro con Google es EXACTAMENTE el mismo componente que el
+                login: mismos estilos, mismo separador, mismo botón oficial y
+                mismo endpoint. Si el correo de Google no está en SGET, el
+                backend crea la cuenta como Pasajero con una contraseña
+                aleatoria inutilizable, y desde ese momento se entra con el
+                mismo rol y los mismos permisos que cualquier otro pasajero.
+            -->
+            <div class="sget-sep-google" data-sget-google-zona>
+                <input type="hidden" data-sget-google-endpoint
+                       value="<?= htmlspecialchars(Config::basePath(), ENT_QUOTES, 'UTF-8') ?>/controllers/auth_google.php">
+
+                <div class="sget-sep-google__fila" aria-hidden="true">
+                    <span class="sget-sep-google__linea"></span>
+                    <span class="sget-sep-google__texto">o regístrate con</span>
+                    <span class="sget-sep-google__linea"></span>
+                </div>
+
+                <div class="sget-google-montaje" data-sget-google>
+                    <span class="sget-google-cargando" data-sget-google-cargando>
+                        <span class="sget-google-cargando__barra"></span>
+                        <span class="sget-google-cargando__barra"></span>
+                        <span class="sget-google-cargando__barra"></span>
+                    </span>
+                </div>
+
+                <p class="sget-help sget-google-aviso" data-sget-google-aviso hidden>
+                    <i class="fas fa-circle-info"></i>
+                    <span data-sget-google-texto>
+                        El registro con Google no está disponible en este momento.
+                        Completa el formulario con tu documento y contraseña.
+                    </span>
+                </p>
+            </div>
+
             <div style="margin-top:1.5rem;padding-top:1.25rem;text-align:center" class="sget-help">
                 <?= $lang['mdl_ya_cuenta'] ?? '¿Ya tienes una cuenta?' ?>
                 <button type="button" data-sget-ir-a="panelLogin"
@@ -304,6 +375,13 @@
         </div>
     </div>
 </div>
+
+<script>
+/* El botón "Registrarse" valida con el mismo sistema de errores. */
+document.getElementById('formRegistro').addEventListener('submit', function (e) {
+    if (!validarRegistro(e)) e.preventDefault();
+});
+</script>
 
 <script>
 /* ==========================================================================
@@ -349,8 +427,8 @@ function validarRegistro(event) {
     var form    = document.getElementById('formRegistro');
     var errores = {};
 
-    if (pass.value && pass.value.length < 6) {
-        errores.clave_usu = 'La contraseña debe tener al menos 6 caracteres.';
+    if (pass.value && pass.value.length < <?= Password::MIN ?>) {
+        errores.clave_usu = 'La contraseña debe tener al menos <?= Password::MIN ?> caracteres.';
     }
     if (pass.value !== confirm.value) {
         errores.confirmar_clave = 'Las contraseñas no coinciden.';
@@ -403,12 +481,19 @@ document.addEventListener('click', function (e) {
     btn.setAttribute('aria-label', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
 });
 
-/* El reCAPTCHA debe seguir al tema, o se ve blanco sobre un modal oscuro. */
-function pintarRecaptcha() {
-    document.querySelectorAll('.g-recaptcha').forEach(function (el) {
-        el.setAttribute('data-theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-    });
-}
+/* -------------------------------------------------------------------------
+   reCAPTCHA
+   -------------------------------------------------------------------------
+   El widget, si está activo, va siempre en modo claro sobre una tarjeta
+   clara: el modo oscuro de Google pinta el fondo oscuro pero deja el texto de
+   la casilla en negro, y el atributo no se puede corregir después porque Google
+   ya dibujó el recuadro (habría que rehacer el nodo entero en cada cambio de
+   tema).
+
+   Aquí no hay nada que repintar; se conservan los enganches por si algún día se
+   decide otra cosa. */
+function pintarRecaptcha() {}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', pintarRecaptcha);
 } else {

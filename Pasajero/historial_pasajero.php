@@ -1,37 +1,45 @@
 <?php
-date_default_timezone_set('America/Bogota');
-session_start();
-include '../assets/conexion.php'; 
+/**
+ * Pasajero/historial_pasajero.php
+ * -----------------------------------------------------------------------------
+ * HISTORIAL DE RESERVAS DEL PASAJERO
+ * -----------------------------------------------------------------------------
+ * QUÉ CAMBIA EN ESTA SEGUNDA RONDA
+ *   · Las consultas concatenaban `$documento` y `$id_pasajero` en el SQL. Ahora
+ *     la identidad se toma de `Auth::id()` (entero) y todo va por PDO con
+ *     sentencias preparadas.
+ *   · Se añade el enlace al COMPROBANTE en PDF de cada reserva, que existía
+ *     (`generar_ticket.php`) pero no estaba enlazado desde ninguna pantalla.
+ *   · El botón «Calificar» solo aparece en viajes FINALIZADOS, igual que ahora
+ *     decide el backend.
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
-    header("Location: ../index.php");
-    exit();
-}
+require_once __DIR__ . '/../core/bootstrap.php';
 
-$documento = $_SESSION['documento'];
-$nombreReal = $_SESSION['nombre_usuario'] ?? "Pasajero";
+Auth::requerirSesion();
+Auth::requerirRol(Config::ROL_PASAJERO);
 
-// Obtener ID del pasajero
-$query_user = $conexion->query("SELECT id_usu FROM usuario WHERE num_doc_usu = '$documento'");
-$id_pasajero = 0;
-if ($query_user && $query_user->num_rows > 0) {
-    $user_data = $query_user->fetch_assoc();
-    $id_pasajero = $user_data['id_usu'];
-}
+$nombreReal = Auth::nombre();
+$idPasajero = Auth::id();
 
-// Consulta del historial de viajes
-$sql_historial = "SELECT v.*, r.nom_rut, res.fech_res, res.valor_pagado, res.metodo_pago, res.estado_pago, c.id_cal, v.id_usu_via, u.nom_usu as nombre_conductor
-                  FROM reserva res
-                  JOIN viaje v ON res.id_via_res = v.id_via
-                  JOIN rutas r ON v.id_rut_via = r.id_rut
-                  LEFT JOIN usuario u ON v.id_usu_via = u.id_usu
-                  LEFT JOIN calificacion c ON v.id_via = c.id_via_cal AND c.id_usu_rem = '$id_pasajero'
-                  WHERE res.id_usu_res = '$id_pasajero'
-                  ORDER BY res.fech_res DESC";
-$historial = $conexion->query($sql_historial);
+$historial = Database::all(
+    'SELECT v.*, rt.nom_rut, res.fech_res, res.id_res, res.valor_pagado, res.metodo_pago,
+            res.estado_pago, c.id_cal, v.id_usu_via, u.nom_usu AS nombre_conductor
+       FROM reserva res
+       INNER JOIN viaje v   ON res.id_via_res = v.id_via
+       INNER JOIN rutas rt  ON v.id_rut_via  = rt.id_rut
+       LEFT  JOIN usuario u ON v.id_usu_via   = u.id_usu
+       LEFT  JOIN calificacion c
+              ON c.id_via_cal = v.id_via AND c.id_usu_rem = ?
+      WHERE res.id_usu_res = ?
+      ORDER BY res.fech_res DESC, res.id_res DESC',
+    [$idPasajero, $idPasajero]
+);
 
-// Consulta de rutas para el Drawer (+)
-$rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER BY nom_rut ASC");
+// Rutas para el buscador de reserva.
+$rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY nom_rut ASC');
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -104,28 +112,15 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Historial de Viajes</h1>
                         
-                        <!-- 1. BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
-                        <div class="relative group">
-                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
-                                <i class="fas fa-question text-[10px]"></i>
-                            </button>
+                        <!--
+                             BOTÓN DE AYUDA DEL MÓDULO · RETIRADO
+                             Este «?» por pantalla se sustituyó por UNO SOLO global en la
+                             esquina inferior derecha (views/modals/ayuda.php), que además
+                             cambia de contenido según el rol y el módulo. Con estos botones
+                             repartidos, cada módulo llevaba su propia copia de la guía y se
+                             desincronizaban entre sí.
+                        -->
 
-                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
-                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
-                                    <i class="fas fa-info-circle text-neon-azul"></i> Control de Historial
-                                </p>
-                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-search text-blue-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Buscador:</b> Filtra tus reservas al instante escribiendo la ruta, estado o fecha.</span>
-                                    </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-star text-amber-400 mt-0.5 shrink-0"></i>
-                                        <span><b>Calificar:</b> Los viajes marcados como completados habilitan la reseña del servicio.</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Revisa el listado completo de tus desplazamientos y pagos realizados.</p>
                 </div>
@@ -149,7 +144,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                             <i class="fas fa-search text-xs"></i>
                         </span>
                         <input type="text" id="inputBuscador" placeholder="Buscar por ruta, estado o fecha..." data-i18n-placeholder-es="Buscar por ruta, estado o fecha..." data-i18n-placeholder-en="Search by route, status, or date..." 
-                               class="w-full pl-9 pr-4 py-2 text-xs bg-slate-100 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                               class="w-full pl-9 pr-4 py-2 text-xs bg-slate-100 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" autocomplete="off" spellcheck="false">
                     </div>
                 </div>
 
@@ -166,9 +161,9 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-200 dark:divide-white/5 text-slate-700 dark:text-slate-200">
-                            <?php if ($historial && $historial->num_rows > 0): ?>
-                                <?php while($v = $historial->fetch_assoc()): 
-                                    $sePuedeCalificar = ($v['est_via'] == 'Terminado' || $v['est_via'] == 'Finalizado');
+                            <?php if (!empty($historial)): ?>
+                                <?php foreach ($historial as $v):
+                                    $sePuedeCalificar = ((string)$v['est_via'] === Config::VIA_FINALIZADO);
                                     $yaCalificado = !is_null($v['id_cal']);
                                     $jsonViaje = htmlspecialchars(json_encode($v, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
                                 ?>
@@ -200,7 +195,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
 
                                         <!-- Valor Pagado -->
                                         <td class="px-6 py-4 text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                                            $<?php echo number_format($v['valor_pagado'], 2); ?>
+                                            $<?php echo number_format((float)$v['valor_pagado'], 2, ',', '.'); ?>
                                         </td>
 
                                         <!-- Estado -->
@@ -228,6 +223,16 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                                     <i class="fas fa-eye text-xs"></i>
                                                 </button>
 
+                                                <!-- Comprobante en PDF. El backend comprueba que la
+                                                     reserva pertenece a este pasajero, aunque se
+                                                     edite el id del enlace. -->
+                                                <a href="generar_ticket.php?id=<?= (int)$v['id_res'] ?>"
+                                                   target="_blank" rel="noopener"
+                                                   title="Comprobante de la reserva"
+                                                   class="p-2 bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 rounded-xl transition-all shadow-sm">
+                                                    <i class="fas fa-receipt text-xs"></i>
+                                                </a>
+
                                                 <?php if ($yaCalificado): ?>
                                                     <div class="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] uppercase tracking-wider">
                                                         <i class="fas fa-check-double text-xs"></i> Calificado
@@ -253,7 +258,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                             </div>
                                         </td>
                                     </tr>
-                                <?php endwhile; ?>
+                                <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
                                     <td colspan="5" class="px-6 py-12 text-center text-slate-400 dark:text-slate-500 italic">

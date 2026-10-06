@@ -1,4 +1,5 @@
 <?php
+
 /**
  * pruebas/_sesion_admin.php
  * -----------------------------------------------------------------------------
@@ -11,6 +12,8 @@
  */
 declare(strict_types=1);
 
+
+require_once __DIR__ . '/_guardia.php';
 require_once __DIR__ . '/../core/bootstrap.php';
 
 if (!in_array(getenv('SGET_DEBUG'), ['1', 'true', 'on'], true) && getenv('SGET_SONDA') !== '1') {

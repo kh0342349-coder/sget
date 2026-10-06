@@ -28,14 +28,28 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 /** Token anti-CSRF (se emite en la sesión y viaja en _token). */
-if (empty($_POST['_token']) || !hash_equals($_SESSION['sget_csrf'] ?? '', (string)$_POST['_token'])) {
-    Auth::json(['status' => 'error', 'mensaje' => 'La sesión expiró o el formulario no es válido. Recarga la página.'], 419);
+if (!Auth::validarToken((string)($_POST['_token'] ?? ''))) {
+    // 403 y no 419: Apache rechaza los códigos no estándar y devolvía un 500
+    // que el navegador mostraba como «error del servidor» en vez de «tu sesión
+    // caducó», que es lo que había que arreglar.
+    Auth::json(['status' => 'error', 'mensaje' => 'La sesión expiró o el formulario no es válido. Recarga la página.'], 403);
 }
 
 $modulo = (string)($_POST['modulo'] ?? $_GET['modulo'] ?? '');
 $accion = (string)($_POST['accion'] ?? $_GET['accion'] ?? '');
 
-/** Permiso requerido por módulo. */
+if ($modulo === '' || $accion === '') {
+    Auth::json(['status' => 'error', 'mensaje' => 'Falta el módulo o la acción solicitada.'], 400);
+}
+
+/**
+ * Permiso de ENTRADA a cada módulo.
+ *
+ * Solo es la puerta general: la autorización fina vive en `Auth::exigir()`
+ * dentro de cada `case`, que además puede exigir la propiedad del recurso
+ * (que el conductor sea el dueño del viaje, que el usuario sea el dueño de la
+ * notificación…). Ocultar el botón en el frontend NO cuenta como seguridad.
+ */
 $permisos = [
     'ruta'         => 'rutas',
     'vehiculo'     => 'vehiculos',
@@ -43,17 +57,74 @@ $permisos = [
     'viaje'        => 'viajes',
     'notificacion' => null,   // el buzón es de todos los roles
     'anuncio'      => 'anuncios',
-    'reserva'      => 'asignaciones',
+    'reserva'      => null,   // cada acción exige SU permiso (ver más abajo)
     'calificacion' => 'calificar',
-    'reporte'      => 'reportes_pasajeros',
+    // El módulo de reportes NO tiene permiso único: `crear` es del pasajero y
+    // el resto es del administrador (ver `Auth::PERMISOS_ACCION`).
+    'reporte'      => null,
 ];
-if (!empty($permisos[$modulo]) && !Auth::tieneAcceso($permisos[$modulo])) {
-    Auth::json(['status' => 'error', 'mensaje' => 'No tienes permisos para gestionar ' . $modulo . '.'], 403);
+
+// El CONDUCTOR no administra la flota: entra al módulo de viajes solo para
+// sus propios despachos, y eso se comprueba acción por acción más abajo.
+$esConductorEnViajes = ($modulo === 'viaje' && Auth::rol() === Config::ROL_CONDUCTOR);
+
+/* El conductor tampoco gestiona el recaudo, pero sí necesita el manifiesto y
+   el registro de embarque de SUS viajes. Esas acciones llevan su propia
+   comprobación de propiedad (`ViajeService::puedeVerManifiesto`), así que se
+   deja pasar el módulo y se filtra dentro. */
+$esConductorEnReservas = ($modulo === 'reserva' && Auth::rol() === Config::ROL_CONDUCTOR);
+
+if (!empty($permisos[$modulo])
+    && !$esConductorEnViajes
+    && !$esConductorEnReservas
+    && !Auth::tieneAcceso($permisos[$modulo])) {
+    Auth::json(['status' => 'error',
+                'mensaje' => 'No tienes permisos para gestionar ' . str_replace('_', ' ', $modulo) . '.'], 403);
 }
 
-if ($modulo === '' || $accion === '') {
-    Auth::json(['status' => 'error', 'mensaje' => 'Falta el módulo o la acción solicitada.'], 400);
-}
+/**
+ * Resuelve a qué reserva apunta una petición de cobro o cancelación.
+ *
+ * Acepta las dos formas que usan las pantallas:
+ *   · `id`        -> el id de UNA fila de reserva (un puesto suelto).
+ *   · `id_grupo`  -> "idPasajero:idViaje", que es como el recaudo y el
+ *                    manifiesto trabajan: POR PERSONA, no por fila. Como un
+ *                    puesto es una fila, cobrar o cancelar por filas obligaba
+ *                    al cajero a repetir la operación por cada asiento.
+ *
+ * @return array{0:int, 1:array{id:int,viaje:int}|null}  [idReserva, grupo]
+ */
+$destinoReserva = static function (string $id, string $grupo): array {
+    $id = (int)$id;
+    if ($id > 0) return [$id, null];
+
+    if (preg_match('/^(\d+):(\d+)$/', $grupo, $m) === 1) {
+        $pasajero = (int)$m[1];
+        $viaje    = (int)$m[2];
+
+        // Se agarra un puesto PENDIENTE del grupo: si el pasajero ya pagó
+        // entero, la búsqueda no encuentra nada y el servicio lo explica con
+        // un mensaje claro en vez de devolver un id equivocado.
+        $fila = Database::one(
+            "SELECT id_res FROM reserva
+              WHERE id_usu_res = ? AND id_via_res = ? AND estado_pago = ?
+              ORDER BY id_res ASC LIMIT 1",
+            [$pasajero, $viaje, Config::RES_PENDIENTE]
+        );
+        if (!$fila) {
+            $fila = Database::one(
+                "SELECT id_res FROM reserva
+                  WHERE id_usu_res = ? AND id_via_res = ?
+                  ORDER BY id_res DESC LIMIT 1",
+                [$pasajero, $viaje]
+            );
+        }
+
+        return [(int)($fila['id_res'] ?? 0), ['id' => $pasajero, 'viaje' => $viaje]];
+    }
+
+    return [0, null];
+};
 
 // ---------------------------------------------------------------- Despacho
 try {
@@ -61,6 +132,7 @@ try {
 
         /* ============================================================== */
         case 'ruta': {
+            Auth::exigir('ruta', $accion);
             switch ($accion) {
                 case 'guardar':
                     Auth::requerirAdmin();
@@ -92,6 +164,7 @@ try {
 
         /* ============================================================== */
         case 'vehiculo': {
+            Auth::exigir('vehiculo', $accion);
             switch ($accion) {
                 case 'guardar':
                     Auth::requerirAdmin();
@@ -124,6 +197,7 @@ try {
 
         /* ============================================================== */
         case 'usuario': {
+            Auth::exigir('usuario', $accion);
             switch ($accion) {
                 case 'guardar':
                     Auth::requerirAdmin();
@@ -161,6 +235,40 @@ try {
         /* ============================================================== */
         case 'viaje': {
             switch ($accion) {
+                /* ------------------------------------------------------------------
+                 * DISPONIBILIDAD EN VIVO
+                 * ------------------------------------------------------------------
+                 * Alimenta los selectores del modal de viaje. Devuelve TODOS los
+                 * conductores y vehículos con un indicador `disponible` calculado
+                 * por `DisponibilidadService` — la MISMA función que valida al
+                 * guardar. Así lo que el administrador ve y lo que el backend
+                 * acepta no pueden discrepar. Solo lectura; no cambia nada.
+                 */
+                case 'disponibles': {
+                    Auth::requerirAdmin();
+
+                    $fec = trim((string)($_POST['fec_via'] ?? ''));
+                    $hor = trim((string)($_POST['hor_sal_via'] ?? ''));
+                    if ($fec === '') $fec = date('Y-m-d');
+                    if ($hor === '') $hor = date('H:i:s');
+
+                    try {
+                        $fec = Fecha::fecha($fec);
+                        $hor = (string)Fecha::hora($hor, 'hora de salida', true);
+                    } catch (ValueError $e) {
+                        Auth::json(['status' => 'error', 'mensaje' => 'Fecha u hora no válidas.'], 422);
+                    }
+
+                    $excepto = (int)($_POST['id_via'] ?? 0);
+
+                    Auth::json(['status' => 'ok', 'datos' => [
+                        'conductores' => DisponibilidadService::conductores($fec, $hor, $excepto),
+                        'vehiculos'   => DisponibilidadService::vehiculos($fec, $hor, $excepto),
+                        'margen_min'  => Config::MARGEN_DISPONIBILIDAD_MIN,
+                    ]]);
+                    break;
+                }
+
                 case 'guardar':
                     /* El conductor también puede programar SU propio viaje: es el
                        botón «Iniciar Despacho», que antes enviaba a
@@ -194,22 +302,27 @@ try {
                                 'redirect' => $destino . '?ok=' . urlencode($r['mensaje'])]);
                     break;
 
-                case 'finalizar':
+                case 'finalizar': {
+                    Auth::exigirViaje($accion, (int)($_POST['id'] ?? 0));
                     $r = ViajeService::finalizar((int)($_POST['id'] ?? 0));
                     Auth::json($r['ok']
                         ? ['status' => 'ok', 'mensaje' => $r['mensaje'], 'redirect' => 'viajes.php?ok=' . urlencode($r['mensaje'])]
                         : ['status' => 'error', 'mensaje' => $r['mensaje']], $r['ok'] ? 200 : 409);
                     break;
+                }
 
-                case 'enCurso':
+                case 'enCurso': {
+                    Auth::exigirViaje($accion, (int)($_POST['id'] ?? 0));
                     $r = ViajeService::marcarEnCurso((int)($_POST['id'] ?? 0));
                     Auth::json($r['ok']
                         ? ['status' => 'ok', 'mensaje' => $r['mensaje'], 'redirect' => 'viajes.php?ok=' . urlencode($r['mensaje'])]
                         : ['status' => 'error', 'mensaje' => $r['mensaje']], $r['ok'] ? 200 : 409);
                     break;
+                }
 
                 /** CANCELACIÓN · con anotación obligatoria si aún no salió */
                 case 'cancelar': {
+                    Auth::exigirViaje($accion, (int)($_POST['id'] ?? 0));
                     $r = ViajeService::cancelar(
                         (int)($_POST['id'] ?? 0),
                         (string)($_POST['motivo'] ?? ''),
@@ -359,12 +472,45 @@ try {
 
         /* ============================================================== */
         case 'reporte': {
-            // Reportes/quejas de los pasajeros sobre un viaje.
-            Auth::requerirAdmin();
+            /* Reportes y quejas de pasajeros.
+               ACCIONES SEPARADAS (antestodas caían bajo un `requerirAdmin()`
+               que hacía inalcanzable `crear` para el pasajero):
+
+                   reporte.crear      → PASAJERO    (permiso `crear_reporte`)
+                   reporte.consultar  → ADMIN       (`gestionar_reportes_pasajeros`)
+                   reporte.actualizar → ADMIN       (`gestionar_reportes_pasajeros`)
+                   reporte.eliminar   → ADMIN       (`gestionar_reportes_pasajeros`)
+            */
+            Auth::exigir('reporte', $accion);
+
+            if ($accion === 'crear') {
+                // Solo un pasajero de verdad abre reportes. Si el administrador
+                // quiere registrar uno, se hace desde la interfaz de soporte.
+                if (Auth::rol() !== Config::ROL_PASAJERO) {
+                    Auth::json(['status' => 'error',
+                                'mensaje' => 'Solo los pasajeros pueden crear reportes desde su panel.'], 403);
+                }
+                $r = ReporteService::crear(
+                    Auth::id(),
+                    (int)($_POST['id_via'] ?? 0),
+                    (string)($_POST['descripcion'] ?? '')
+                );
+                Auth::json($r['ok']
+                    ? ['status' => 'ok', 'mensaje' => $r['mensaje'], 'datos' => ['id' => $r['id']]]
+                    : ['status' => 'error', 'mensaje' => $r['mensaje'], 'errores' => ['descripcion' => $r['mensaje']]],
+                    $r['ok'] ? 200 : 422);
+            }
+
+            if ($accion === 'misReportes') {
+                Auth::json(['status' => 'ok', 'datos' => [
+                    'reportes' => ReporteService::porPasajero(Auth::id()),
+                ]]);
+            }
 
             if ($accion === 'actualizar') {
+                Auth::requerirAdmin();
                 $id     = (int)($_POST['id'] ?? 0);
-                $estado = (string)($_POST['estado'] ?? 'pendiente');
+                $estado = (string)($_POST['estado'] ?? ReporteService::ESTADO_PENDIENTE);
                 $idVia  = (int)($_POST['id_via'] ?? 0);
 
                 if (!in_array($estado, ReporteService::ESTADOS, true)) {
@@ -377,20 +523,8 @@ try {
                     : ['status' => 'error', 'mensaje' => $r['mensaje']], $r['ok'] ? 200 : 404);
             }
 
-            if ($accion === 'crear') {
-                // Lo crea el propio pasajero desde su módulo de reportes.
-                $r = ReporteService::crear(
-                    Auth::id(),
-                    (int)($_POST['id_via'] ?? 0),
-                    (string)($_POST['descripcion'] ?? '')
-                );
-                Auth::json($r['ok']
-                    ? ['status' => 'ok', 'mensaje' => $r['mensaje'], 'datos' => ['id' => $r['id']]]
-                    : ['status' => 'error', 'mensaje' => $r['mensaje'], 'errores' => ['descripcion' => $r['mensaje']]],
-                    $r['ok'] ? 200 : 422);
-            }
-
             if ($accion === 'eliminar') {
+                Auth::requerirAdmin();
                 $r = ReporteService::eliminar((int)($_POST['id'] ?? 0));
                 Auth::json($r['ok']
                     ? ['status' => 'ok', 'mensaje' => $r['mensaje']]
@@ -403,6 +537,7 @@ try {
         case 'anuncio': {
             // El módulo de anuncios es 100% del administrador.
             Auth::requerirAdmin();
+            Auth::exigir('anuncio', $accion);
 
             switch ($accion) {
                 case 'guardar':
@@ -440,6 +575,12 @@ try {
 
         /* ============================================================== */
         case 'reserva': {
+            /* Cada acción vuelve a exigir SU permiso. El conductor solo llega
+               hasta las tres que se comprueban por propiedad (manifiesto,
+               embarque y no-presentación). */
+            if ($accion !== 'manifiesto' && $accion !== 'embarcar' && $accion !== 'noPresente') {
+                Auth::exigir('reserva', $accion);
+            }
             switch ($accion) {
                 /* Pasajero que paga en mostrador sin tener cuenta: se le crea una
                    ficha mínima para que la reserva y el cobro queden trazables. */
@@ -458,16 +599,32 @@ try {
                     break;
                 }
 
-                case 'crear':
-                    Auth::requerirAcceso('asignaciones');
+                case 'crear': {
+                    /* El pasajero solo puede reservar PARA SÍ MISMO: el id de
+                       usuario lo pone el servidor, nunca el formulario. El
+                       administrador (recaudo en terminal) sí puede registrar
+                       la reserva de otra persona. */
+                    $esAdmin = Auth::rol() === Config::ROL_ADMIN;
+                    $idPasajero = $esAdmin
+                        ? (int)($_POST['id_usu'] ?? Auth::id())
+                        : Auth::id();
+
+                    if ($idPasajero <= 0) {
+                        Auth::json(['status' => 'error',
+                                    'mensaje' => 'Debes iniciar sesión para reservar un puesto.'], 401);
+                    }
+
                     $r = ReservaService::crear(
                         (int)($_POST['id_via'] ?? 0),
-                        (int)($_POST['id_usu'] ?? 0),
-                        max(1, (int)($_POST['puestos'] ?? 1)),
+                        $idPasajero,
+                        max(1, min(20, (int)($_POST['puestos'] ?? 1))),
                         [
                             'metodo'   => (string)($_POST['metodo_pago'] ?? 'Efectivo'),
                             'valor'    => (float)($_POST['valor_pagado'] ?? 0),
-                            'confirmar' => !empty($_POST['confirmar']),
+                            // Solo el administrador confirma el pago en el
+                            // momento; el pasajero deja la reserva pendiente
+                            // para cobrar en terminal.
+                            'confirmar' => $esAdmin && !empty($_POST['confirmar']),
                         ]
                     );
                     Auth::json($r['ok']
@@ -475,32 +632,140 @@ try {
                         : ['status' => 'error', 'mensaje' => $r['mensaje'], 'errores' => ['general' => $r['mensaje']]],
                         $r['ok'] ? 200 : 409);
                     break;
+                }
 
                 case 'cobrar':
                     Auth::requerirAcceso('asignaciones');
+                    // El id puede venir como fila (id) o como grupo pasajero+viaje
+                    // (id_grupo = "pasajero:viaje"). El grupo es lo que usa el
+                    // recaudo: un puesto es una fila, así que cobrar por filas
+                    // obligaba a repetir el cobro por cada asiento.
+                    [$idFila, $idGrupo] = $destinoReserva((string)($_POST['id'] ?? ''), (string)($_POST['id_grupo'] ?? ''));
                     $r = ReservaService::confirmarPago(
-                        (int)($_POST['id'] ?? 0),
+                        $idFila,
                         (float)($_POST['valor'] ?? 0),
-                        (string)($_POST['metodo'] ?? 'Efectivo')
+                        (string)($_POST['metodo'] ?? 'Efectivo'),
+                        !empty($_POST['todos_puestos'])
+                    );
+                    Auth::json($r['ok']
+                        ? ['status' => 'ok', 'mensaje' => $r['mensaje'],
+                           'datos' => ['cobradas' => $r['cobradas'] ?? 1]]
+                        : ['status' => 'error', 'mensaje' => $r['mensaje'],
+                           'errores' => ['valor' => $r['mensaje']]], $r['ok'] ? 200 : 409);
+                    break;
+
+                /* --- Manifestación: quién tiene puesto en cada viaje --- */
+                case 'manifiesto': {
+                    $idViaje = (int)($_POST['id'] ?? 0);
+                    if (!ViajeService::puedeVerManifiesto($idViaje)) {
+                        Auth::json(['status' => 'error',
+                                    'mensaje' => 'Solo puedes ver los pasajeros de los viajes que conduces.'], 403);
+                    }
+                    Auth::json(['status' => 'ok', 'datos' => [
+                        'manifiesto' => ReservaService::manifiesto($idViaje),
+                    ]]);
+                    break;
+                }
+
+                /* --- El conductor marca quién embarcó y quién no se presentó --- */
+                case 'embarcar': {
+                    $idViaje = (int)($_POST['id_via'] ?? 0);
+                    if (!ViajeService::puedeVerManifiesto($idViaje)) {
+                        Auth::json(['status' => 'error',
+                                    'mensaje' => 'Solo puedes marcar pasajeros de los viajes que conduces.'], 403);
+                    }
+                    $r = ReservaService::marcarEmbarque(
+                        (int)($_POST['id'] ?? 0),
+                        !empty($_POST['embarco']),
+                        (string)($_POST['motivo'] ?? '')
                     );
                     Auth::json($r['ok']
                         ? ['status' => 'ok', 'mensaje' => $r['mensaje']]
-                        : ['status' => 'error', 'mensaje' => $r['mensaje']], $r['ok'] ? 200 : 409);
+                        : ['status' => 'error', 'mensaje' => $r['mensaje'],
+                           'errores' => ['motivo' => $r['mensaje']]], $r['ok'] ? 200 : 409);
                     break;
+                }
 
-                case 'cancelar':
-                    Auth::requerirAcceso('asignaciones');
-                    $r = ReservaService::cancelar((int)($_POST['id'] ?? 0), (string)($_POST['motivo'] ?? ''));
+                case 'noPresente': {
+                    $idViaje = (int)($_POST['id_via'] ?? 0);
+                    if (!ViajeService::puedeVerManifiesto($idViaje)) {
+                        Auth::json(['status' => 'error',
+                                    'mensaje' => 'Solo puedes marcar pasajeros de los viajes que conduces.'], 403);
+                    }
+                    $r = ReservaService::marcarNoPresente(
+                        $idViaje,
+                        (int)($_POST['id_usu'] ?? 0),
+                        (string)($_POST['motivo'] ?? '')
+                    );
                     Auth::json($r['ok']
-                        ? ['status' => 'ok', 'mensaje' => $r['mensaje']]
+                        ? ['status' => 'ok', 'mensaje' => $r['mensaje'],
+                           'datos' => ['marcadas' => $r['marcadas'] ?? 0]]
+                        : ['status' => 'error', 'mensaje' => $r['mensaje'],
+                           'errores' => ['motivo' => $r['mensaje']]], $r['ok'] ? 200 : 409);
+                    break;
+                }
+
+                /* --- Avisar a quien se quedó en casa de que su viaje salió --- */
+                case 'avisarPerdidos': {
+                    Auth::requerirAcceso('asignaciones');
+                    $r = ReservaService::avisarViajePerdido((int)($_POST['id'] ?? 0));
+                    Auth::json($r['ok']
+                        ? ['status' => 'ok', 'mensaje' => $r['mensaje'],
+                           'datos' => ['avisados' => $r['avisados'] ?? 0]]
                         : ['status' => 'error', 'mensaje' => $r['mensaje']], $r['ok'] ? 200 : 409);
                     break;
+                }
+
+                case 'cancelar': {
+                    /* Dos formas, según lo que mande la pantalla:
+                         · `id`                -> un puesto suelto.
+                         · `id_pasajero`+`id_via` -> TODOS los puestos vivos de esa
+                           persona en ese viaje, que es como trabaja el manifiesto.
+                       Se decide por lo que VIENE, no por si se resolvió una fila:
+                       un pasajero que ya pagó tiene fila pero su grupo sigue
+                       siendo lo que hay que anular entero. */
+                    $esGrupo = (string)($_POST['id_pasajero'] ?? '') !== '';
+                    [$idFila, $idGrupo] = $destinoReserva((string)($_POST['id'] ?? ''), (string)($_POST['id_pasajero'] ?? '') . ':' . (string)($_POST['id_via'] ?? ''));
+
+                    /* Un pasajero sin permiso de recaudo solo puede cancelar
+                       lo SUYO. Sin esta comprobación, cancelar por fila le
+                       permitía anular el puesto de cualquier otro pasajero con
+                       solo conocer el id de la reserva. */
+                    if (!Auth::tieneAcceso('gestionar_asignaciones')) {
+                        $duenio = (int) Database::scalar(
+                            'SELECT id_usu_res FROM reserva WHERE id_res = ?',
+                            [$idFila]
+                        );
+                        if ($idFila <= 0 || $duenio !== Auth::id()) {
+                            Auth::json(['status' => 'error',
+                                        'mensaje' => 'Solo puedes cancelar tus propias reservas.'], 403);
+                        }
+                    }
+
+                    $r = $esGrupo && $idGrupo !== null
+                        ? ReservaService::cancelarPuestosDe($idGrupo['viaje'], $idGrupo['id'], (string)($_POST['motivo'] ?? 'Cancelación en terminal'))
+                        : ReservaService::cancelar($idFila, (string)($_POST['motivo'] ?? ''));
+                    Auth::json($r['ok']
+                        ? ['status' => 'ok', 'mensaje' => $r['mensaje'],
+                           'datos' => ['canceladas' => $r['canceladas'] ?? 1]]
+                        : ['status' => 'error', 'mensaje' => $r['mensaje']], $r['ok'] ? 200 : 409);
+                    break;
+                }
 
                 case 'porViaje':
                     // Listado de reservas de un viaje (modal de abordaje).
-                    Auth::requerirAcceso('asignaciones');
+                    // El admin lo ve siempre; el conductor, solo los suyos:
+                    // la lista contiene documentos y teléfonos de pasajeros.
+                    $idViaje = (int)($_POST['id'] ?? 0);
+                    if (Auth::rol() === Config::ROL_ADMIN) {
+                        Auth::requerirAcceso('asignaciones');
+                    } elseif (!ViajeService::esConductorDelViaje($idViaje)) {
+                        Auth::json(['status' => 'error',
+                                    'mensaje' => 'Solo puedes ver los pasajeros de los viajes que conduces.'], 403);
+                    }
                     Auth::json(['status' => 'ok', 'datos' => [
-                        'reservas' => ReservaService::porViaje((int)($_POST['id'] ?? 0)),
+                        'reservas' => ReservaService::porViaje($idViaje),
+                        'manifiesto' => ReservaService::manifiesto($idViaje),
                     ]]);
                     break;
             }

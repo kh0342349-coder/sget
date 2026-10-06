@@ -1,25 +1,52 @@
 <?php
-date_default_timezone_set('America/Bogota');
-session_start();
-include '../assets/conexion.php'; 
+/**
+ * Pasajero/procesar_reserva.php
+ * -----------------------------------------------------------------------------
+ * Reserva en línea del pasajero.
+ * -----------------------------------------------------------------------------
+ * Solo orquesta: la transacción, el bloqueo de cupos y la notificación viven en
+ * `services/ReservaService::crear()` (con `SELECT … FOR UPDATE` sobre el viaje,
+ * para que dos pasajeros simultáneos no puedan agotar el mismo último cupo).
+ *
+ * Lo que este archivo añade es la GUARDIA de la acción:
+ *   · sesión abierta y rol Pasajero (`Auth`, no `$_SESSION['rol'] != 3`);
+ *   · método POST obligatorio;
+ *   · token anti-CSRF —antes faltaba, así que una página externa podía
+ *    Apartar puestos en nombre de quien tuviera la sesión abierta.
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-// 1. Validar que el usuario sea un pasajero autenticado (rol 3)
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
-    header("Location: ../index.php");
-    exit();
+require_once dirname(__DIR__) . '/core/bootstrap.php';
+
+// 1. Solo un pasajero autenticado puede reservar.
+Auth::requerirRol(Config::ROL_PASAJERO);
+
+// 2. POST obligatorio: una recarga suelta no debe crear reservas.
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    sget_redirigir(Config::basePath() . '/Pasajero/viajes_pasajero.php');
 }
 
-// 2. Verificar que la petición sea por el método POST y vengan los datos necesarios
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $id_via = $_POST['id_via'] ?? null;
-    $puestos_solicitados = intval($_POST['puestos'] ?? 0);
-    $id_usuario = $_SESSION['id_usu'] ?? null;
+// 3. Token anti-CSRF.
+if (!Auth::validarToken((string)($_POST['_token'] ?? ''))) {
+    http_response_code(419);
+    Flash::error('La sesión del formulario caducó. Vuelve a intentarlo.');
+    sget_redirigir(Config::basePath() . '/Pasajero/viajes_pasajero.php');
+}
 
-    if (!$id_via || $puestos_solicitados <= 0 || !$id_usuario) {
-        $_SESSION['error'] = "Los datos de la reserva no son válidos.";
-        header("Location: viajes_pasajero.php");
-        exit();
+// 4. El pasajero es SIEMPRE el de la sesión: el `id_usu` del formulario se
+//    ignora a propósito (si se aceptara, bastaría mandar otro id para reservar
+//    en nombre de otra persona).
+{
+    $id_via = (int)($_POST['id_via'] ?? 0);
+    $puestos_solicitados = (int)($_POST['puestos'] ?? 1);
+    $id_usuario = Auth::id();
+
+    if ($id_via <= 0 || $puestos_solicitados <= 0) {
+        Flash::error('Los datos de la reserva no son válidos.');
+        sget_redirigir(Config::basePath() . '/Pasajero/viajes_pasajero.php');
     }
+    $puestos_solicitados = min(20, $puestos_solicitados);
 
     // 3. La reserva la crea services/ReservaService.php
 // ANTES: esta página tenía su propio INSERT, con la cuenta de cupos calculada a
@@ -37,9 +64,8 @@ try {
 }
 
 if (!$resultado['ok']) {
-    $_SESSION['error'] = $resultado['mensaje'];
-    header("Location: viajes_pasajero.php");
-    exit();
+    Flash::error((string)$resultado['mensaje']);
+    sget_redirigir(Config::basePath() . '/Pasajero/viajes_pasajero.php');
 }
 
 // Comprobante de la reserva
@@ -61,7 +87,7 @@ $valor_unitario  = (float)$viaje['val_via'];
 $total_pagar     = $valor_unitario * $puestos_solicitados;
 
 {
-    $nombre_pasajero = $_SESSION['nombre_usuario'] ?? 'Pasajero';
+    $nombre_pasajero = Auth::nombre();
     $exito = true;
 ?>
 <!DOCTYPE html>
@@ -72,7 +98,7 @@ $total_pagar     = $valor_unitario * $puestos_solicitados;
             <title>Comprobante de Reserva - SGET</title>
             <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
-    <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="<?= Config::basePath() ?>/assets/css/01-base.css?v=<?= @filemtime(Config::raiz('assets/css/01-base.css')) ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
@@ -134,7 +160,7 @@ $total_pagar     = $valor_unitario * $puestos_solicitados;
                     <button onclick="window.print()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3.5 rounded-xl text-xs font-black tracking-widest uppercase transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center gap-2">
                         <i class="fas fa-file-pdf text-base"></i> Descargar / Imprimir Comprobante
                     </button>
-                    <a href="viajes_pasajero.php" class="block text-center w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors">
+                    <a href="<?= Config::basePath() ?>/Pasajero/viajes_pasajero.php" class="block text-center w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors">
                         Regresar a Viajes
                     </a>
                 </div>
@@ -145,10 +171,4 @@ $total_pagar     = $valor_unitario * $puestos_solicitados;
         <?php
     exit();
 }
-
-} else {
-    // Solo se acepta POST: una recarga suelta no debe crear reservas.
-    header("Location: viajes_pasajero.php");
-    exit();
 }
-?>

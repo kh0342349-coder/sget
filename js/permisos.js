@@ -2,6 +2,7 @@
 
 function abrirModalPermisos(idUsuario, nombreUsuario) {
     // 1. Asignar datos del usuario al modal
+    /* textContent, no innerHTML: el nombre viene de la base de datos. */
     document.getElementById('modalNombreUsuario').textContent = nombreUsuario;
     document.getElementById('modalIdUsuario').value = idUsuario;
     
@@ -25,7 +26,7 @@ function abrirModalPermisos(idUsuario, nombreUsuario) {
     fetch(`../api/obtener_permisos.php?id_usu=${idUsuario}`)
         .then(res => res.json())
         .then(res => {
-            if (res.status === 'success') {
+            if (res.status === 'ok') {
                 if (!res.data || res.data.length === 0) {
                     contenedor.innerHTML = '<p class="text-center text-color-mutado py-6 italic">No existen permisos registrados en la base de datos.</p>';
                 } else {
@@ -52,6 +53,17 @@ function cerrarModalPermisos() {
     }
 }
 
+/**
+ * Escapa texto antes de meterlo en `innerHTML`.
+ * Los permisos vienen de la base de datos y su descripción es texto libre:
+ * sin esto, una descripción con `<` rompería el marcado del formulario.
+ */
+function escaparTexto(valor) {
+    const d = document.createElement('div');
+    d.textContent = valor == null ? '' : String(valor);
+    return d.innerHTML;
+}
+
 function renderizarSwitchesPermisos(permisos) {
     const contenedor = document.getElementById('contenedorPermisos');
     contenedor.innerHTML = '';
@@ -74,14 +86,23 @@ function renderizarSwitchesPermisos(permisos) {
         `;
 
         listaPermisos.forEach(p => {
-            const isChecked = parseInt(p.permitido) === 1 ? 'checked' : '';
+            /* `permitido` llega como booleo del backend. `por_rol` indica que el
+               permiso se lo concede el ROL, no esta cuenta: si se desmarca, el
+               módulo seguirá abierto hasta que se le quite el permiso al rol,
+               así que se dice explícitamente en vez de dejar la sorpresa. */
+            const isChecked = p.permitido ? 'checked' : '';
+            const avisoRol = (p.efectivo && !p.permitido)
+                ? '<span class="text-[9px] uppercase tracking-wider text-amber-400 font-bold block mt-1">Concedido por su rol</span>'
+                : '';
+
             htmlModulo += `
                 <label class="flex items-start gap-3 p-3 bg-[#0b0f19] rounded-xl border border-white/5 cursor-pointer hover:border-neon-azul/50 transition-all">
-                    <input type="checkbox" name="permisos[]" value="${p.id_permiso}" ${isChecked} 
+                    <input type="checkbox" name="permisos[]" value="${Number(p.id_permiso)}" ${isChecked}
                            class="mt-1 w-4 h-4 rounded text-neon-azul focus:ring-neon-azul border-white/20 bg-slate-800">
                     <div>
-                        <span class="text-xs font-bold text-slate-200 block">${p.nombre_permiso}</span>
-                        <span class="text-[10px] text-color-mutado block leading-tight mt-0.5">${p.descripcion || (window.SGET_I18N?.t('Sin descripción') || 'No description')}</span>
+                        <span class="text-xs font-bold text-slate-200 block">${escaparTexto(p.nombre_permiso)}</span>
+                        <span class="text-[10px] text-color-mutado block leading-tight mt-0.5">${escaparTexto(p.descripcion || 'Sin descripción')}</span>
+                        ${avisoRol}
                     </div>
                 </label>
             `;
@@ -104,20 +125,35 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const formData = new FormData(this);
 
+            /* El backend exige el token anti-CSRF; se añade explícitamente porque
+               este formulario se envía por fetch y no lleva el campo oculto de
+               la página por defecto. */
+            if (window.SGET_CSRF) formData.set('_token', window.SGET_CSRF);
+
             fetch('../api/guardar_permisos.php', {
                 method: 'POST',
+                credentials: 'same-origin',
                 body: formData
             })
-            .then(r => r.json())
+            .then(r => r.json().catch(() => ({
+                status: 'error',
+                mensaje: 'El servidor no devolvió una respuesta válida.'
+            })))
             .then(res => {
-                if (res.status === 'success') {
-                    alert(window.SGET_I18N?.t('Permisos actualizados correctamente.') || 'Permissions updated successfully.');
+                if (res.status === 'ok') {
+                    if (window.SGETModal) SGETModal.toast(res.mensaje, 'exito');
                     cerrarModalPermisos();
                 } else {
-                    alert((window.SGET_I18N?.t('Error al guardar:') || 'Save error:') + ' ' + res.mensaje);
+                    if (window.SGETModal) SGETModal.toast(res.mensaje, 'error');
+                    else alert(res.mensaje);
                 }
             })
-            .catch(err => console.error('Error al guardar permisos:', err));
+            .catch(err => {
+                console.error('Error al guardar permisos:', err);
+                const msg = 'No se pudo comunicar con el servidor. Revisa tu conexión.';
+                if (window.SGETModal) SGETModal.toast(msg, 'error');
+                else alert(msg);
+            });
         });
     }
 });

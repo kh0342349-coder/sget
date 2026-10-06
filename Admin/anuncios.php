@@ -52,8 +52,9 @@ include __DIR__ . '/../views/partials/head.php';
                 </p>
             </div>
             <div class="sget-page-actions">
-                <a class="sget-btn sget-btn--neutro" href="../index.php" target="_blank" rel="noopener">
-                    <i class="fas fa-eye"></i> Ver la landing
+                <a class="sget-btn sget-btn--neutro" href="<?= Config::basePath() ?>/index.php"
+                   target="_blank" rel="noopener">
+                    <i class="fas fa-up-right-from-square"></i> Ver la landing
                 </a>
                 <button type="button" class="sget-btn sget-btn--primario" data-sget-modal="modalAnuncio"
                         data-sget-nuevo="Subir nuevo anuncio">
@@ -135,7 +136,7 @@ include __DIR__ . '/../views/partials/head.php';
                 <div class="sget-search">
                     <i class="fas fa-magnifying-glass"></i>
                     <input type="search" id="buscarAnuncio" class="sget-input" data-sget-buscar
-                           placeholder="Buscar por título o enlace… (Ctrl+K)">
+                           placeholder="Buscar por título o enlace… (Ctrl+K)" autocomplete="off" spellcheck="false">
                 </div>
                 <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="*" aria-pressed="true">Todos</button>
                 <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="1">Visibles</button>
@@ -260,6 +261,20 @@ include __DIR__ . '/../views/partials/head.php';
                                 <i class="fas fa-pen"></i> Editar
                             </button>
 
+                            <!--
+                                «Ver landing» abre una VISTA PREVIA del anuncio en
+                                un modal, no la portada real: así el administrador
+                                comprueba el resultado sin salir del listado ni
+                                perder el contexto. El botón abre el modal de
+                                edición para poder cambiar el `src` del iframe.
+                            -->
+                            <button type="button" class="sget-icon-btn"
+                                    title="Ver cómo se verá en la landing"
+                                    aria-label="Ver vista previa del anuncio en la landing"
+                                    data-sget-preview-anuncio="<?= $id ?>">
+                                <i class="fas fa-eye"></i>
+                            </button>
+
                             <button type="button" class="sget-icon-btn sget-icon-btn--editar"
                                     title="<?= $destac ? 'Quitar destacado' : 'Destacar (aparece primero)' ?>"
                                     aria-label="Destacar anuncio"
@@ -296,5 +311,24 @@ include __DIR__ . '/../views/partials/head.php';
 <?php include __DIR__ . '/../views/modals/anuncio.php'; ?>
 
 <?php
-$jsExtra = ['sget-page.js'];
+/* Vista previa por anuncio: se reutiliza el MISMO modal para todos, cambiando
+   solo el `src` del iframe. Se implementa aquí, junto al listado, porque solo
+   este módulo la usa (no es lógica compartida y no merece un archivo aparte). */
+?>
+<script>
+document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-sget-preview-anuncio]');
+    if (!btn) return;
+    e.preventDefault();
+
+    var id    = btn.getAttribute('data-sget-preview-anuncio');
+    var marco = document.getElementById('iframePreviewAnuncio');
+    if (marco) {
+        marco.src = <?= json_encode(Config::basePath()) ?> + '/procesos/anuncio_vista.php?id=' + encodeURIComponent(id);
+    }
+    SGETModal.abrir('modalPreviewAnuncio');
+});
+</script>
+
+<?php $jsExtra = ['sget-page.js'];
 include __DIR__ . '/../views/partials/foot.php';

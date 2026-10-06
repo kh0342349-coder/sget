@@ -1,84 +1,145 @@
 <?php
-session_start();
-include 'assets/conexion.php';
+/**
+ * nuevo_usuario.php
+ * -----------------------------------------------------------------------------
+ * Alta de cuenta (Pasajero) desde el modal de registro de la landing.
+ * -----------------------------------------------------------------------------
+ * ANTES
+ *   · Sin token anti-CSRF: cualquiera podía crear cuentas a nombre de terceros.
+ *   · Validación artesanal con mensajes genéricos y sin límite de longitud,
+ *     lo que permitía colar correos de 300 caracteres o contraseñas de 1 carácter.
+ *   · `password_hash($clave, PASSWORD_DEFAULT)` sin comprobación previa.
+ *   · Responía "El número de documento o correo ya se encuentra registrado"
+ *     para cualquiera, revelando qué correos ya estaban dados de alta.
+ *   · No usaba el bootstrap: cada página repetía su propio `session_start()`.
+ *
+ * AHORA
+ *   Valida con `core/Validator.php`, protege con CSRF, usa `core/Password.php`
+ *   y delega el mensaje a `Flash` para que el modal lo pinte.
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    
-    // Nombres alineados con los inputs del formulario en modal_auth.php
-    $tip_doc         = trim($_POST['tipo_doc'] ?? '');
-    $num_doc         = trim($_POST['documento'] ?? '');
-    $nombre          = trim($_POST['nom_usu'] ?? '');
-    $correo          = trim($_POST['corre_usu'] ?? '');
-    $clave           = $_POST['clave_usu'] ?? '';
-    $conf_clave      = $_POST['confirmar_clave'] ?? '';
-    $acepta_politica = isset($_POST['acepta_politica']) ? 1 : 0;
+require_once __DIR__ . '/core/bootstrap.php';
 
-    // 1. Validar campos vacíos
-    if (empty($tip_doc) || empty($num_doc) || empty($nombre) || empty($correo) || empty($clave) || empty($conf_clave)) {
-        $_SESSION['msg_registro'] = "Por favor completa todos los campos del formulario.";
-        $_SESSION['msg_registro_abrir'] = true;
-        header('Location: index.php');
-        exit();
-    }
+$volverAlRegistro = static function (string $mensaje): void {
+    Flash::error($mensaje);
+    $_SESSION['abrir_registro'] = true;
+    sget_redirigir(Config::basePath() . '/index.php');
+};
 
-    // 2. Validar aceptación de la política de tratamiento de datos
-    if (!$acepta_politica) {
-        $_SESSION['msg_registro'] = "Debe aceptar la política de tratamiento de datos personales para registrarse.";
-        $_SESSION['msg_registro_abrir'] = true;
-        header('Location: index.php');
-        exit();
-    }
-
-    // 3. Validar coincidencia de contraseñas
-    if ($clave !== $conf_clave) {
-        $_SESSION['msg_registro'] = "Las contraseñas ingresadas no coinciden.";
-        $_SESSION['msg_registro_abrir'] = true;
-        header('Location: index.php');
-        exit();
-    }
-
-    // 4. Verificar si el documento o correo ya existen
-    $stmt_check = $conexion->prepare("SELECT id_usu FROM usuario WHERE num_doc_usu = ? OR corre_usu = ?");
-    $stmt_check->bind_param("ss", $num_doc, $correo);
-    $stmt_check->execute();
-    $result_check = $stmt_check->get_result();
-
-    if ($result_check->num_rows > 0) {
-        $_SESSION['msg_registro'] = "El número de documento o correo ya se encuentra registrado.";
-        $_SESSION['msg_registro_abrir'] = true;
-        $stmt_check->close();
-        header('Location: index.php');
-        exit();
-    }
-    $stmt_check->close();
-
-    // 5. Hash de contraseña, fechas y valores por defecto
-    $hash_clave   = password_hash($clave, PASSWORD_DEFAULT);
-    $id_rol       = 3; // 3 = Pasajero
-    $estado       = 1; // 1 = Activo
-    $fecha_actual = date('Y-m-d H:i:s');
-
-    // 6. Insertar usuario registrando la aceptación de la política y fecha
-    $stmt_insert = $conexion->prepare("INSERT INTO usuario (tip_doc_usu, num_doc_usu, nom_usu, corre_usu, pass_usu, id_rol_usu, estado, acepta_politica, fecha_acepta_politica) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    $stmt_insert->bind_param("sssssiiis", $tip_doc, $num_doc, $nombre, $correo, $hash_clave, $id_rol, $estado, $acepta_politica, $fecha_actual);
-
-    if ($stmt_insert->execute()) {
-        // ÉXITO: envía mensaje exitoso y abre directamente el modal de LOGIN
-        $_SESSION['msg_success_login'] = "¡Cuenta creada exitosamente! Ya puedes ingresar con tu documento.";
-        $_SESSION['abrir_login'] = true;
-        $stmt_insert->close();
-        header('Location: index.php');
-        exit();
-    } else {
-        $_SESSION['msg_registro'] = "Error interno al registrar la cuenta. Inténtalo de nuevo.";
-        $_SESSION['msg_registro_abrir'] = true;
-        $stmt_insert->close();
-        header('Location: index.php');
-        exit();
-    }
-
-} else {
-    header('Location: index.php');
-    exit();
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    sget_redirigir(Config::basePath() . '/index.php');
 }
-?>
+
+/* -------------------------------------------------------------------------- */
+/* 1. CSRF                                                                     */
+/* -------------------------------------------------------------------------- */
+if (!Auth::validarToken((string) ($_POST['_token'] ?? ''))) {
+    http_response_code(403);
+    $volverAlRegistro('La sesión del formulario caducó. Vuelve a intentarlo.');
+}
+
+/* -------------------------------------------------------------------------- */
+/* 2. Validación declarativa                                                  */
+/* -------------------------------------------------------------------------- */
+$tipoDoc   = strtoupper(trim((string) ($_POST['tipo_doc'] ?? '')));
+$documento = trim((string) ($_POST['documento'] ?? ''));
+$nombre    = trim((string) ($_POST['nom_usu'] ?? ''));
+$correo    = trim((string) ($_POST['corre_usu'] ?? ''));
+$clave     = (string) ($_POST['clave_usu'] ?? '');
+$confirma  = (string) ($_POST['confirmar_clave'] ?? '');
+$acepta    = !empty($_POST['acepta_politica']);
+
+$v = Validator::de($_POST)
+    ->requerido('tipo_doc', 'el tipo de documento')
+    ->requerido('documento', 'el número de documento')
+    ->requerido('nom_usu', 'el nombre completo')
+    ->requerido('corre_usu', 'el correo electrónico')
+    ->requerido('clave_usu', 'la contraseña')
+    ->requerido('confirmar_clave', 'la confirmación de la contraseña');
+
+$v->enLista('tipo_doc', 'el tipo de documento', ['CC', 'TI', 'CE', 'PP']);
+$v->texto('documento', 'El número de documento', 5, 20);
+$v->texto('nom_usu', 'El nombre completo', 3, 100);
+$v->email('corre_usu', 'El correo electrónico');
+$v->agregaSi(mb_strlen($correo) > 100, 'corre_usu', 'El correo no puede superar los 100 caracteres.');
+$v->distinto('clave_usu', 'confirmar_clave', 'Las contraseñas no coinciden.');
+$v->agregaSi(!$acepta, 'acepta_politica', 'Debes aceptar la política de tratamiento de datos para registrarte.');
+
+if ($errorClave = Password::validar($clave, 'La contraseña')) {
+    $v->agrega('clave_usu', $errorClave);
+}
+
+if ($v->falla()) {
+    http_response_code(422);
+    $volverAlRegistro($v->primerError() ?? 'Revisa los datos del formulario.');
+}
+
+/* -------------------------------------------------------------------------- */
+/* 3. Unicidad (documento, correo)                                            */
+/* -------------------------------------------------------------------------- */
+/*
+ * La restricción real la pone la base de datos (UNIQUE en `usuario.num_doc_usu`
+ * y `usuario.corre_usu`, añadida en la migración 009). Aquí solo se da el
+ * mensaje legible; si otra petición se adelanta, la excepción del motor se
+ * traduce más abajo en un mensaje igual de claro.
+ */
+$existente = Database::one(
+    'SELECT num_doc_usu, corre_usu FROM usuario
+      WHERE num_doc_usu = ? OR corre_usu = ? LIMIT 1',
+    [$documento, $correo]
+);
+
+if ($existente) {
+    http_response_code(409);
+    $volverAlRegistro(
+        (string) $existente['num_doc_usu'] === $documento
+            ? 'Ese número de documento ya tiene una cuenta en SGET.'
+            : 'Ese correo electrónico ya está registrado.'
+    );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 4. Alta                                                                     */
+/* -------------------------------------------------------------------------- */
+try {
+    $idUsuario = Database::insert(
+        'INSERT INTO usuario
+            (tip_doc_usu, num_doc_usu, nom_usu, corre_usu, pass_usu,
+             id_rol_usu, estado, est_con_usu, acepta_politica, fecha_acepta_politica)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())',
+        [
+            $tipoDoc,
+            $documento,
+            $nombre,
+            $correo,
+            Password::hash($clave),
+            Config::ROL_PASAJERO,
+            Config::USU_ACTIVO,
+            null,   // est_con_usu solo aplica a conductores
+        ]
+    );
+} catch (Throwable $e) {
+    error_log('[SGET][registro] ' . $e->getMessage());
+
+    // 1062 = clave duplicada: otra petición se adelantó entre la comprobación
+    // y el INSERT. Se responde con el mismo mensaje legible, no con el error.
+    if (Database::errorEs($e, [1062, 1586])) {
+        http_response_code(409);
+        $volverAlRegistro('Ese documento o ese correo ya están registrados.');
+    }
+
+    http_response_code(500);
+    $volverAlRegistro('No pudimos crear tu cuenta en este momento. Inténtalo de nuevo en un rato.');
+}
+
+Logger::registrar(Database::pdo(), 'REGISTRAR_USUARIO', sprintf(
+    'Cuenta creada: #%d · %s · rol Pasajero.',
+    $idUsuario,
+    $documento
+));
+
+Flash::exito('¡Cuenta creada! Ya puedes iniciar sesión con tu número de documento.');
+$_SESSION['abrir_login'] = true;
+sget_redirigir(Config::basePath() . '/index.php');

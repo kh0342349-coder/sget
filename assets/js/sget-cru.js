@@ -18,6 +18,26 @@
         /* Búsqueda en vivo                                                    */
         /* ------------------------------------------------------------------ */
         /**
+         * Vacía los buscadores SIEMPRE al entrar en la página.
+         *
+         * La IMPLEMENTACIÓN vive en `assets/js/sget-modal.js`
+         * (`SGETModal.limpiarBuscadores`), porque es el único script que cargan
+         * TODAS las pantallas. Si el vaciado se quedara solo en este archivo, las
+         * páginas heredadas de `Conductor/` y `Pasajero/` —que no lo cargan—
+         * seguirían viendo el buscador «rellenado», que es justo lo que se
+         * quería corregir.
+         *
+         * @see SGETModal.limpiarBuscadores() — explica los tres motivos del
+         *      relleno: autocompletado del navegador, BFCache al volver atrás
+         *      y que `autocomplete="off"` no basta en campos con `name`.
+         */
+        limpiarBuscadores: function () {
+            if (window.SGETModal && typeof window.SGETModal.limpiarBuscadores === 'function') {
+                window.SGETModal.limpiarBuscadores();
+            }
+        },
+
+        /**
          * @param {string} inputId  id del campo de búsqueda
          * @param {string} filaSel  selector de las filas
          * @param {string} [textoSel] selector de los textos a comparar
@@ -45,6 +65,11 @@
             }
 
             input.addEventListener('input', aplicar);
+
+            // `search` dispara con la lupa del navegador al borrar: sin esto,
+            // limpiar con la «x» dejaba la tabla filtrada a medias.
+            input.addEventListener('search', aplicar);
+
             aplicar();
         },
 
@@ -159,4 +184,15 @@
     };
 
     window.SGETCRUD = CRUD;
+
+    /* Refuerzo por si se cargara el CRUD sin el motor de modales. */
+    function limpiarBuscadores() {
+        try { CRUD.limpiarBuscadores(); } catch (e) { /* nunca romper la página */ }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', limpiarBuscadores);
+    } else {
+        limpiarBuscadores();
+    }
+    window.addEventListener('pageshow', limpiarBuscadores);
 })(window, document);

@@ -1,26 +1,63 @@
 <?php
 date_default_timezone_set('America/Bogota');
-session_start();
+if (!class_exists('Auth')) {
+    require_once __DIR__ . '/../core/bootstrap.php';
+}
 include '../assets/conexion.php'; 
 
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
-    header("Location: ../index.php");
-    exit();
-}
+/* La guardia vive en `Auth`: una sola política de autorización para toda
+   la aplicación. Antes cada página repetía su propio
+   `if (!isset($_SESSION['documento']) || $_SESSION['rol'] != N)`. */
+Auth::requerirSesion();
+Auth::requerirRol(Config::ROL_PASAJERO);
 
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Pasajero";
+$idPasajero = (int)($_SESSION['id_usu'] ?? 0);
+
+// Avisos de la reserva anterior. SIN ESTE BLOQUE el pasajero no se enteraba de
+// nada: `procesar_reserva.php` redirigía aquí con el motivo en la sesión y esta
+// página lo ignoraba, así que una reserva rechazada (sin cupos, viaje lleno,
+// apartado duplicado…) se veía como si no hubiera pasado.
+$avisoError   = trim((string)($_SESSION['error'] ?? ''));
+$avisoOk      = trim((string)($_SESSION['exito'] ?? ''));
+unset($_SESSION['error'], $_SESSION['exito']);
 
 // 1. Filtramos por est_via IN ('Programado', 'En curso')
 // 2. Calculamos los cupos en tiempo real: (capacidad del vehículo - reservas hechas)
-$sql = "SELECT v.*, r.nom_rut, u.nom_usu, ve.cap_veh,
-               (SELECT COUNT(*) FROM reserva WHERE id_via_res = v.id_via) as ocupados
-        FROM viaje v
-        LEFT JOIN rutas r ON v.id_rut_via = r.id_rut
-        LEFT JOIN usuario u ON v.id_usu_via = u.id_usu
-        LEFT JOIN vehiculo ve ON v.id_veh = ve.id_veh
-        WHERE v.est_via IN ('Programado', 'En curso')
-        HAVING ocupados < ve.cap_veh
-        ORDER BY v.fec_via ASC, v.hor_sal_via ASC";
+//
+// OJO con `ocupados`: antes contaba TODAS las filas de `reserva`, incluidas las
+// canceladas, de modo que un viaje con 10 puestos y 6 reservas ya canceladas
+// seguía pareciendo lleno y desaparecía del listado del pasajero. Ahora se
+// cuentan solo las vivas, que es lo que `cuposDisponibles()` ya hacía bien.
+//
+// Va como TABLA DERIVADA y no como alias en el WHERE porque MySQL no permite
+// usar una columna del SELECT dentro del WHERE de la misma consulta: con
+// `HAVING ocupados < …` funcionaba, pero al pasarlo a WHERE (`ocupados` no
+// existe todavía) la consulta reventaba con «Unknown column».
+$sql = "SELECT b.*,
+               (b.cap_veh - b.ocupados) AS disponibles,
+               (SELECT COUNT(*) FROM reserva
+                 WHERE id_via_res = b.id_via AND id_usu_res = " . (int)$idPasajero . "
+                   AND estado_pago <> 'Cancelada') AS mios,
+               EXISTS (SELECT 1 FROM reserva o
+                         INNER JOIN viaje ov ON ov.id_via = o.id_via_res
+                        WHERE o.id_usu_res = " . (int)$idPasajero . "
+                          AND o.estado_pago <> 'Cancelada'
+                          AND ov.id_via <> b.id_via
+                          AND DATE(ov.fec_via) = DATE(b.fec_via)
+                          AND ov.hor_sal_via = b.hor_sal_via) AS choca_hora
+        FROM (
+            SELECT v.*, r.nom_rut, u.nom_usu, ve.cap_veh,
+                   (SELECT COUNT(*) FROM reserva
+                     WHERE id_via_res = v.id_via AND estado_pago <> 'Cancelada') AS ocupados
+              FROM viaje v
+              LEFT JOIN rutas r     ON v.id_rut_via = r.id_rut
+              LEFT JOIN usuario u   ON v.id_usu_via = u.id_usu
+              LEFT JOIN vehiculo ve ON v.id_veh = ve.id_veh
+             WHERE v.est_via IN ('Programado', 'En curso')
+        ) b
+        WHERE b.cap_veh IS NULL OR b.ocupados < b.cap_veh
+        ORDER BY b.fec_via ASC, b.hor_sal_via ASC";
 
 $res = $conexion->query($sql);
 ?>
@@ -90,32 +127,41 @@ $res = $conexion->query($sql);
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Reserva tu cupo</h1>
                         
-                        <!-- 1. MODAL GUÍA GENERAL EN BOTÓN DE AYUDA (?) -->
-                        <div class="relative group">
-                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
-                                <i class="fas fa-question text-[10px]"></i>
-                            </button>
+                        <!--
+                             BOTÓN DE AYUDA DEL MÓDULO · RETIRADO
+                             Este «?» por pantalla se sustituyó por UNO SOLO global en la
+                             esquina inferior derecha (views/modals/ayuda.php), que además
+                             cambia de contenido según el rol y el módulo. Con estos botones
+                             repartidos, cada módulo llevaba su propia copia de la guía y se
+                             desincronizaban entre sí.
+                        -->
 
-                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
-                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
-                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía de Búsqueda y Reserva
-                                </p>
-                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-eye text-amber-400 mt-0.5 shrink-0"></i>
-                                        <span><b>Ficha de Ruta:</b> Pulsa en el ojo para consultar la hora, vehículo y conductor asignado.</span>
-                                    </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-ticket-alt text-blue-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Reservar (+):</b> Despliega el panel de compra lateral para elegir cuántos puestos necesitas.</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Selecciona una de nuestras rutas activas para iniciar tu viaje.</p>
                 </div>
             </div>
+
+            <!--
+                AVISO DE LA RESERVA ANTERIOR
+
+                `procesar_reserva.php` deja el motivo en `$_SESSION['error']` y
+                redirige aqui. Esta pagina lo leia de memoria, asi que una
+                reserva rechazada (sin cupos, viaje ya cerrado, apartado
+                duplicado) se perdia en silencio y el pasajero volvia a pulsar
+                «RESERVAR» sin entender por que no pasaba nada.
+            -->
+            <?php if ($avisoError !== ''): ?>
+                <div role="alert" class="flex items-start gap-3 bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 rounded-2xl p-4">
+                    <i class="fas fa-circle-exclamation mt-0.5"></i>
+                    <p class="text-xs font-bold leading-relaxed"><?php echo htmlspecialchars($avisoError, ENT_QUOTES, 'UTF-8'); ?></p>
+                </div>
+            <?php endif; ?>
+            <?php if ($avisoOk !== ''): ?>
+                <div role="status" class="flex items-start gap-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 rounded-2xl p-4">
+                    <i class="fas fa-circle-check mt-0.5"></i>
+                    <p class="text-xs font-bold leading-relaxed"><?php echo htmlspecialchars($avisoOk, ENT_QUOTES, 'UTF-8'); ?></p>
+                </div>
+            <?php endif; ?>
 
             <!-- GRID DE VIAJES -->
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl">
@@ -125,6 +171,15 @@ $res = $conexion->query($sql);
                         $ocupados = $v['ocupados'] ?? 0;
                         $disponibles = $cupos_totales - $ocupados;
                         $jsonViaje = htmlspecialchars(json_encode($v, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
+
+                        /* Estado de ESTE pasajero en ESTE viaje.
+                           Se calcula en SQL en la consulta de arriba y no al
+                           pulsar el boton, para que la tarjeta diga la verdad
+                           antes de que el pasajero intente nada. Si solo se
+                           avisa al fallar, cada intento es un error. */
+                        $mios       = (int)($v['mios'] ?? 0);
+                        $choca_hora = (int)($v['choca_hora'] ?? 0) === 1;
+                        $yaApartado = $mios > 0;
                     ?>
                         <div class="bg-white dark:bg-[#1e293b] rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm hover:shadow-md hover:border-slate-300 dark:hover:border-white/10 transition-all duration-300 p-6 group relative overflow-hidden flex flex-col justify-between">
                             
@@ -134,9 +189,20 @@ $res = $conexion->query($sql);
                                         <i class="fas fa-route"></i>
                                     </div>
                                     <div class="flex flex-col items-end gap-1.5">
-                                        <span class="text-[9px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-md uppercase tracking-wider">
-                                            Activo
-                                        </span>
+                                        <?php if ($yaApartado): ?>
+                                            <span class="text-[9px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-md uppercase tracking-wider">
+                                                <?php echo $mios === 1 ? 'Tienes 1 puesto' : 'Tienes ' . $mios . ' puestos'; ?>
+                                            </span>
+                                        <?php elseif ($choca_hora): ?>
+                                            <span class="text-[9px] font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-md uppercase tracking-wider"
+                                                  title="Ya tienes un puesto en otro viaje que sale a esta misma fecha y hora.">
+                                                Choca con otra salida
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-[9px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-md uppercase tracking-wider">
+                                                Activo
+                                            </span>
+                                        <?php endif; ?>
                                         <span class="text-[10px] font-black <?php echo ($disponibles <= 2) ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'; ?> px-2.5 py-0.5 rounded-md uppercase tracking-tight">
                                             <?php echo $disponibles; ?> Available Seats
                                         </span>
@@ -177,10 +243,22 @@ $res = $conexion->query($sql);
                                     </button>
 
                                     <!-- Botón Reservar -->
-                                    <button type="button" onclick="abrirPanelReserva(<?php echo $v['id_via']; ?>, '<?php echo htmlspecialchars($v['nom_rut'], ENT_QUOTES); ?>', <?php echo $v['val_via']; ?>, <?php echo $disponibles; ?>, '<?php echo $v['fec_via']; ?>', '<?php echo date("h:i A", strtotime($v['hor_sal_via'])); ?>')"
-                                       class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all duration-200 shadow-md shadow-blue-600/10 cursor-pointer">
-                                        RESERVAR
-                                    </button>
+                                    <?php if ($yaApartado): ?>
+                                        <span class="px-4 py-3 rounded-xl text-[10px] font-black tracking-widest uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 cursor-not-allowed"
+                                              title="Ya tienes un puesto en este viaje. No se puede volver a apartar en el mismo viaje; para anadir mas puestos, pidelos al administrador.">
+                                            YA APARTADO
+                                        </span>
+                                    <?php elseif ($choca_hora): ?>
+                                        <span class="px-4 py-3 rounded-xl text-[10px] font-black tracking-widest uppercase bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 cursor-not-allowed"
+                                              title="Ya tienes un puesto en otro viaje que sale a esta misma fecha y hora.">
+                                            MISMA HORA
+                                        </span>
+                                    <?php else: ?>
+                                        <button type="button" onclick="abrirPanelReserva(<?php echo $v['id_via']; ?>, '<?php echo htmlspecialchars($v['nom_rut'], ENT_QUOTES); ?>', <?php echo $v['val_via']; ?>, <?php echo $disponibles; ?>, '<?php echo $v['fec_via']; ?>', '<?php echo date("h:i A", strtotime($v['hor_sal_via'])); ?>')"
+                                               class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl text-[10px] font-black tracking-widest uppercase transition-all duration-200 shadow-md shadow-blue-600/10 cursor-pointer">
+                                            RESERVAR
+                                        </button>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
@@ -266,6 +344,7 @@ $res = $conexion->query($sql);
                 </div>
 
                 <form action="procesar_reserva.php" method="POST" class="flex-1 overflow-y-auto p-6 space-y-6 flex flex-col justify-between">
+                    <?= Auth::campoToken() ?>
                     <input type="hidden" name="id_via" id="modal_id_via">
 
                     <div class="space-y-6">

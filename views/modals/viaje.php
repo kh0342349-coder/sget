@@ -75,9 +75,13 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
                         <select id="viaje_conductor" name="id_usu_via" class="sget-select" required>
                             <option value="">Selecciona un conductor…</option>
                             <?php foreach ($__conductores as $c): ?>
-                                <option value="<?= (int)$c['id_usu'] ?>" <?= (string)(int)($__viaje['id_usu_via'] ?? '') === (string)(int)$c['id_usu'] ? 'selected' : '' ?>>
+                                <option value="<?= (int)$c['id_usu'] ?>"
+                                        <?= (string)(int)($__viaje['id_usu_via'] ?? '') === (string)(int)$c['id_usu'] ? 'selected' : '' ?>
+                                        data-disponible="<?= $c['disponible'] ? '1' : '0' ?>"
+                                        data-motivo="<?= htmlspecialchars((string)$c['motivo'], ENT_QUOTES, 'UTF-8') ?>">
                                     <?= htmlspecialchars($c['nom_usu'], ENT_QUOTES, 'UTF-8') ?>
                                     <?= $c['tel_usu'] ? ' · ' . htmlspecialchars($c['tel_usu'], ENT_QUOTES, 'UTF-8') : '' ?>
+                                    <?= $c['disponible'] ? '' : ' · ocupado en ese horario' ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -91,14 +95,21 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
                         <select id="viaje_veh" name="id_veh" class="sget-select" required>
                             <option value="">Selecciona una placa…</option>
                             <?php foreach ($__vehiculos as $ve): ?>
-                                <option value="<?= (int)$ve['id_veh'] ?>" <?= (string)(int)($__viaje['id_veh'] ?? '') === (string)(int)$ve['id_veh'] ? 'selected' : '' ?>>
+                                <option value="<?= (int)$ve['id_veh'] ?>"
+                                        <?= (string)(int)($__viaje['id_veh'] ?? '') === (string)(int)$ve['id_veh'] ? 'selected' : '' ?>
+                                        data-disponible="<?= $ve['disponible'] ? '1' : '0' ?>"
+                                        data-motivo="<?= htmlspecialchars((string)$ve['motivo'], ENT_QUOTES, 'UTF-8') ?>">
                                     <?= htmlspecialchars($ve['pla_veh'], ENT_QUOTES, 'UTF-8') ?>
                                     · <?= htmlspecialchars($ve['mode_veh'], ENT_QUOTES, 'UTF-8') ?>
                                     · <?= (int)$ve['cap_veh'] ?> puestos
+                                    <?= $ve['disponible'] ? '' : ' · no disponible' ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
                         <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
+                        <span class="sget-help" data-sget-help-disponibilidad>
+                            Cambia la fecha o la hora y la lista se recalcula con los horarios reales.
+                        </span>
                     </div>
                 </div>
 
@@ -161,3 +172,116 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
             </footer>
     </form>
 </div>
+
+<script>
+(function () {
+    'use strict';
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
+    else iniciar();
+
+    /* =====================================================================
+       DISPONIBILIDAD EN VIVO
+       ---------------------------------------------------------------------
+       Los selectores se recalculan al cambiar la fecha o la hora consultando
+       `DisponibilidadService` por el API. Es la MISMA función que valida al
+       guardar, así que el administrador nunca elige una opción que el backend
+       vaya a rechazar dos segundos después.
+
+       Las opciones que chocan NO se eliminan del <select>: se muestran con el
+       motivo. Ocultarlas haría imposible entender por qué un conductor que
+       «está disponible» hoy no aparece para un viaje de mañana.
+       ===================================================================== */
+    function iniciar() {
+        var modal = document.getElementById('modalViaje');
+        if (!modal) return;
+
+        var form     = modal.querySelector('[data-sget-panel]');
+        var fecha    = modal.querySelector('#viaje_fecha');
+        var hora     = modal.querySelector('#viaje_hora');
+        var selCond  = modal.querySelector('#viaje_conductor');
+        var selVeh   = modal.querySelector('#viaje_veh');
+        var ayuda    = modal.querySelector('[data-sget-help-disponibilidad]');
+        if (!form || !fecha || !hora || !selCond || !selVeh) return;
+
+        var idViajeEnEdicion = modal.querySelector('[name="id_via"]');
+        var pendientes = null;
+
+        function pedir() {
+            if (pendientes) return;
+            pendientes = setTimeout(function () {
+                pendientes = null;
+                refrescar();
+            }, 220);
+        }
+
+        function refrescar() {
+            var cuerpo = new FormData();
+            cuerpo.append('_token', window.SGETModal.__token);
+            cuerpo.append('modulo', 'viaje');
+            cuerpo.append('accion', 'disponibles');
+            cuerpo.append('fec_via', fecha.value);
+            cuerpo.append('hor_sal_via', hora.value);
+            if (idViajeEnEdicion && idViajeEnEdicion.value) {
+                cuerpo.append('id_via', idViajeEnEdicion.value);
+            }
+
+            fetch('../api/index.php', {
+                method: 'POST',
+                body: cuerpo,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    if (j.status !== 'ok') return;
+                    pintar(selCond, j.datos.conductores || [], 'id_usu');
+                    pintar(selVeh,  j.datos.vehiculos   || [], 'id_veh');
+                    if (ayuda && j.datos.margen_min) {
+                        ayuda.textContent = 'Margen operativo entre viajes: ' + j.datos.margen_min +
+                            ' min. Un recurso solo queda libre pasado ese margen.';
+                    }
+                })
+                .catch(function () { /* si falla, el backend volverá a validar al guardar */ });
+        }
+
+        /* Reconstruye un <select> conservando la selección actual.
+           `textContent` para todo el texto: los nombres vienen de la BD. */
+        function pintar(select, filas, campo) {
+            var previo = select.value;
+            var vacio = select.querySelector('option[value=""]');
+
+            Array.prototype.slice.call(select.options).forEach(function (o) {
+                if (o !== vacio) select.removeChild(o);
+            });
+
+            filas.forEach(function (fila) {
+                var op = document.createElement('option');
+                op.value = String(fila[campo]);
+                op.dataset.disponible = fila.disponible ? '1' : '0';
+                op.dataset.motivo = fila.motivo || '';
+                op.textContent = fila.nom_usu
+                    ? fila.nom_usu + (fila.tel_usu ? ' · ' + fila.tel_usu : '')
+                    : fila.pla_veh + ' · ' + fila.mode_veh + ' · ' + fila.cap_veh + ' puestos';
+
+                if (!fila.disponible) {
+                    op.textContent += ' — ' + (fila.motivo || 'no disponible en ese horario');
+                    op.disabled = true;
+                }
+                select.appendChild(op);
+            });
+
+            if (previo) {
+                var existe = Array.prototype.some.call(select.options, function (o) { return o.value === previo; });
+                if (existe) select.value = previo;
+            }
+        }
+
+        fecha.addEventListener('change', pedir);
+        hora.addEventListener('change', pedir);
+
+        modal.addEventListener('sget:modal-abierto', function () {
+            if (fecha.value && hora.value) refrescar();
+        });
+    }
+})();
+</script>

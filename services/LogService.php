@@ -307,6 +307,21 @@ final class LogService
         if ($fechaIso === $hoy)                             return 'Hoy';
         if ($fechaIso === date('Y-m-d', strtotime('-1 day'))) return 'Ayer';
 
-        return ucfirst((string)strftime('%A %d de %B', $ts)) . ', ' . date('H:i', $ts);
+        // `strftime()` está obsoleto desde PHP 8.1 y su comportamiento depende
+        // de la configuración regional del sistema, así que una fecha podia
+        // salir en inglés un día y en español al siguiente. Se formatea con
+        // `DateTimeImmutable`, que además respeta el idioma de la app.
+        $meses = ['enero','febrero','marzo','abril','mayo','junio','julio',
+                  'agosto','septiembre','octubre','noviembre','diciembre'];
+        $dow   = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo'];
+
+        $d = new DateTimeImmutable('@' . $ts);
+        return sprintf(
+            '%s %d de %s, %s',
+            $dow[(int) $d->format('N') - 1],
+            (int) $d->format('j'),
+            $meses[(int) $d->format('n') - 1],
+            $d->format('H:i')
+        );
     }
 }

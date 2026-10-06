@@ -248,8 +248,53 @@ html.dark .sget-confirm__titulo-caja { color: #fbbf24; }
     border-radius: inherit;
 }
 
-/* Bloquea el scroll del <body> mientras hay un overlay abierto */
-body.sget-modal-abierto { overflow: hidden; }
+/* -------------------------------------------------------------------------
+   BLOQUEO REAL DE LA PÁGINA CON UN MODAL ABIERTO
+   -------------------------------------------------------------------------
+   `overflow: hidden` solo para el scroll: el SIDEBAR, la cabecera y cualquier
+   enlace seguían siendo clicables por detrás del velo, así que se podía navegar
+   a otro módulo con el modal todavía en pantalla (y el modal se quedaba ahí,
+   colgado sobre la página nueva).
+
+   Aquí se corta la interacción de TODO lo que no sea la capa modal abierta:
+   el puntero deja de llegar a los elementos y el teclado deja de recorrerlos
+   con el Tab. La salida siempre es el botón X o «Cancelar» del propio diálogo,
+   más la tecla Escape. */
+body.sget-modal-abierto {
+    overflow: hidden;
+    /* `pointer-events: none` sobre el contenido, no sobre <body>: los modales
+       se cuelgan de <body> y seguirían respondiendo. */
+    cursor: default;
+}
+
+body.sget-modal-abierto .sget-shell,
+body.sget-modal-abierto .header-floating,
+body.sget-modal-abierto #sidebar-menu,
+body.sget-modal-abierto #main-content-wrapper,
+body.sget-modal-abierto .landing-header {
+    pointer-events: none;
+    user-select: none;
+    /* Velo tenue adicional sobre el contenido: refuerza visualmente que la
+       página está inactiva y no es solo un «detalle» de transparencia. */
+    filter: saturate(.9);
+}
+
+/* El sidebar móvil se cierra al abrir un diálogo: si no, se quedaba
+   desplazado sobre el velo y parecía un segundo panel. */
+body.sget-modal-abierto #sidebar-menu { box-shadow: none; }
+
+/* Los diálogos anidados siguen respondiendo (p. ej. la confirmación de borrar
+   se abre encima de un modal de edición). */
+body.sget-modal-abierto .sget-modal-wrap[data-abierto="1"],
+body.sget-modal-abierto .sget-modal-wrap[data-abierto="1"] * {
+    pointer-events: auto;
+    user-select: auto;
+    filter: none;
+}
+
+/* El botón global de ayuda se aparta cuando hay un diálogo abierto (ya lo
+   hace opacity en su hoja, aquí se garantiza el puntero). */
+body.sget-modal-abierto .sget-ayuda-fab { pointer-events: none; }
 
 /* Las capas no heredan color de nada: cada una es explícita. */
 .sget-overlay { color: inherit; }

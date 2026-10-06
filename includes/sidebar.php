@@ -1,10 +1,20 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-if (!isset($conexion)) {
-    include_once __DIR__ . '/../assets/conexion.php';
+/**
+ * includes/sidebar.php
+ * -----------------------------------------------------------------------------
+ * MENÚ LATERAL DEL PANEL INTERNO
+ * -----------------------------------------------------------------------------
+ * Carga por el bootstrap: la sesión, la base de datos y la autorización ya
+ * están listas cuando este partial se incluye. Antes abría su propia sesión y
+ *aba Conexión mysqli, lo que obligaba a que todas las páginas hicieran lo
+ * mismo y hacía imposible tener UNA sola política de seguridad.
+ *
+ * La visibilidad de cada enlace la decide `Auth::tieneAcceso()`, la MISMA
+ * función que protegen los endpoints: el menú y el backend nunca discrepan.
+ * -----------------------------------------------------------------------------
+ */
+if (!class_exists('Auth')) {
+    require_once dirname(__DIR__) . '/core/bootstrap.php';
 }
 
 // Mismo partial que header.php: se define una sola vez aunque se incluya dos veces.
@@ -25,37 +35,20 @@ function verificarIconoActivo($archivos, $paginaActual) {
     return $esActivo ? 'text-sky-500 dark:text-sky-400' : 'text-slate-400 dark:text-slate-500 group-hover:text-slate-900 group-hover:dark:text-white';
 }
 
-// --- SISTEMA DE RESTRICCIONES DE ADMIN ---
-$permisos_denegados_array = [];
-
-if (isset($_SESSION['id_usu'])) {
-    $idUsuSession = intval($_SESSION['id_usu']);
-    
-    $sql_perm = "SELECT p.nombre_permiso, p.modulo 
-                 FROM usuario_permisos up
-                 INNER JOIN permisos p ON up.id_permiso = p.id_permiso
-                 WHERE up.id_usu = ? AND up.permitido = 0";
-                 
-    if (isset($conexion) && $conexion) {
-        $stmt_perm = $conexion->prepare($sql_perm);
-        if ($stmt_perm) {
-            $stmt_perm->bind_param("i", $idUsuSession);
-            $stmt_perm->execute();
-            $res_perm = $stmt_perm->get_result();
-            while ($row = $res_perm->fetch_assoc()) {
-                $permisos_denegados_array[] = $row['nombre_permiso'];
-                $permisos_denegados_array[] = $row['modulo'];
-            }
-            $stmt_perm->close();
-        }
-    }
-}
-
-if (!function_exists('tiene_acceso_sb')) {
-    function tiene_acceso_sb($permiso, $permisos_denegados) {
-        return !in_array($permiso, $permisos_denegados);
-    }
-}
+// --- Sistema de acceso: la MISMA decisión que en el backend ----------------
+//
+// ANTES: `tiene_acceso_sb($permiso, $permisos_denegados_array)` era una lista
+// de DENEGADOS calculada con una consulta propia sobre `usuario_permisos`. Eso
+// tiempos que `Auth::tieneAcceso()` y, sobre todo, daba la OPPINIÓN: si el
+// permiso no aparecía en la lista de denegados, el enlace se mostraba. Un
+// menú lleno de enlaces visibles no es una medida de seguridad, y cualquier
+// diferencia con el backend se traducía en pantallas a las que se entraba y
+// luego salía con «Acceso restringido».
+//
+// AHORA: una sola fuente de verdad (`core/Auth.php`, mínimo privilegio) para
+// el menú Y para los endpoints. Lo que no está concedido, no se muestra; y si
+// alguien teclea la URL, el endpoint lo vuelve a comprobar.
+$moduloActual = basename($_SERVER['PHP_SELF'], '.php');
 ?>
 
 <?php /* i18n.php ya emitted data-language, SGET_LANGUAGE_URL e i18n.js */ ?>
@@ -119,91 +112,91 @@ if (!function_exists('tiene_acceso_sb')) {
         
         <?php if ($rolUsuario == 1): // ROL ADMINISTRADOR ?>
             
-            <?php if (tiene_acceso_sb('admin', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('admin')): ?>
             <a href="admin.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('admin.php', $pagina_actual); ?>">
                 <i class="fas fa-chart-pie text-sm shrink-0 <?php echo verificarIconoActivo('admin.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['dashboard'] ?? 'Dashboard'; ?></span>
             </a>
             <?php endif; ?>
             
-            <?php if (tiene_acceso_sb('usuarios', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('usuarios')): ?>
             <a href="usuarios.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('usuarios.php', $pagina_actual); ?>">
                 <i class="fas fa-users-cog text-sm shrink-0 <?php echo verificarIconoActivo('usuarios.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['usuarios'] ?? 'Usuarios & Roles'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('asignaciones', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('asignaciones')): ?>
             <a href="asignaciones.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('asignaciones.php', $pagina_actual); ?>">
                 <i class="fas fa-cash-register text-sm shrink-0 <?php echo verificarIconoActivo('asignaciones.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['recaudo'] ?? 'Recaudo & Abordaje'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('rutas', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('rutas')): ?>
             <a href="rutas.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('rutas.php', $pagina_actual); ?>">
                 <i class="fas fa-route text-sm shrink-0 <?php echo verificarIconoActivo('rutas.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['rutas'] ?? 'Gestión de Rutas'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('viajes', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('viajes')): ?>
             <a href="viajes.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('viajes.php', $pagina_actual); ?>">
                 <i class="fas fa-calendar-alt text-sm shrink-0 <?php echo verificarIconoActivo('viajes.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['viajes'] ?? 'Programación Viajes'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('vehiculos', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('vehiculos')): ?>
             <a href="vehiculos.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('vehiculos.php', $pagina_actual); ?>">
                 <i class="fas fa-bus text-sm shrink-0 <?php echo verificarIconoActivo('vehiculos.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['vehiculos'] ?? 'Flota de Vehículos'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('gestion_permisos', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('gestion_permisos')): ?>
             <a href="gestion_permisos.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('gestion_permisos.php', $pagina_actual); ?>">
                 <i class="fas fa-key text-sm shrink-0 <?php echo verificarIconoActivo('gestion_permisos.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['permisos'] ?? 'Permisos'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('ranking_conductores', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('ranking_conductores')): ?>
             <a href="ranking_conductores.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('ranking_conductores.php', $pagina_actual); ?>">
                 <i class="fas fa-star text-sm shrink-0 <?php echo verificarIconoActivo('ranking_conductores.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['calificaciones'] ?? 'Calificaciones'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('logs', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('logs')): ?>
             <a href="logs.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('logs.php', $pagina_actual); ?>">
                 <i class="fas fa-file-alt text-sm shrink-0 <?php echo verificarIconoActivo('logs.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['logs'] ?? 'Logs de Auditoría'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('reportes_pasajeros', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('reportes_pasajeros')): ?>
             <a href="reportes_pasajeros.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('reportes_pasajeros.php', $pagina_actual); ?>">
                 <i class="fas fa-comment-dots text-sm shrink-0 <?php echo verificarIconoActivo('reportes_pasajeros.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['reportes_pasajeros'] ?? 'Reportes de Pasajeros'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('anuncios', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('anuncios')): ?>
             <a href="anuncios.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('anuncios.php', $pagina_actual); ?>">
                 <i class="fas fa-images text-sm shrink-0 <?php echo verificarIconoActivo('anuncios.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['anuncios'] ?? 'Anuncios'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('comunicados', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('comunicados')): ?>
             <a href="comunicados.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('comunicados.php', $pagina_actual); ?>">
                 <i class="fas fa-bullhorn text-sm shrink-0 <?php echo verificarIconoActivo('comunicados.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['comunicados'] ?? 'Comunicados'; ?></span>
             </a>
             <?php endif; ?>
 
-            <?php if (tiene_acceso_sb('reportes', $permisos_denegados_array)): ?>
+            <?php if (Auth::tieneAcceso('reportes')): ?>
             <a href="reportes.php" class="sidebar-link flex items-center space-x-3.5 px-4 py-3 rounded-2xl transition-all duration-200 group <?php echo verificarClaseActiva('reportes.php', $pagina_actual); ?>">
                 <i class="fas fa-chart-pie text-sm shrink-0 <?php echo verificarIconoActivo('reportes.php', $pagina_actual); ?>"></i>
                 <span class="sidebar-text truncate"><?php echo $lang['reportes'] ?? 'Panel de Información'; ?></span>
@@ -257,13 +250,14 @@ if (!function_exists('tiene_acceso_sb')) {
         <?php endif; ?>
     </nav>
 
-    <!-- SOPORTE Y AYUDA -->
-    <div class="p-3 border-t border-slate-200/80 dark:border-white/10 shrink-0">
-        <button type="button" data-sget-modal="modalAyuda" data-tooltip="Ayuda del Módulo" class="sidebar-link w-full flex items-center justify-center gap-2.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 py-3 rounded-2xl text-xs font-bold transition-all border border-sky-500/20 cursor-pointer">
-            <i class="fas fa-question-circle text-sm shrink-0"></i>
-            <span class="sidebar-text truncate"><?php echo $lang['soporte'] ?? 'Soporte y Ayuda'; ?></span>
-        </button>
-    </div>
+    <!--
+        SOPORTE Y AYUDA
+        El botón «?» que vivía aquí se retiró a propósito: ahora hay UN solo
+        acceso global, el botón flotante «Ayudas del sistema» de la esquina
+        inferior derecha (views/modals/ayuda.php), que además cambia de contenido
+        según el módulo. Un «?» por pantalla obligaba a duplicar el modal y
+        acababa teniendo cuatro modales de ayuda distintos con el mismo id.
+    -->
 </aside>
 
 <!-- SCRIPT ROBUSTO DE CONTROL DEL SIDEBAR -->

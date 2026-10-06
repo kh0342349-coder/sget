@@ -72,12 +72,18 @@ function obtenerRutaCs(string $ruta): string
         <div id="contenedorTemporizadorInactividad" style="display:none;margin-top:1rem"></div>
         <span id="temporizadorRegresivoModal" style="display:none"></span>
 
-        <p style="margin:1.25rem 0 0">
-            <a id="enlaceCerrarSesionInactividad" class="sget-help"
-               href="<?= htmlspecialchars(obtenerRutaCs('assets/cerrar.php'), ENT_QUOTES, 'UTF-8') ?>">
+        <!--
+            El cierre es POST con token: un enlace GET permitiría que cualquier
+            sitio cerrara la sesión del usuario con una imagen.
+            `obtenerRutaCs()` devuelve la ruta con la base ya resuelta.
+        -->
+        <form method="POST" action="<?= htmlspecialchars(obtenerRutaCs('assets/cerrar.php'), ENT_QUOTES, 'UTF-8') ?>"
+              style="margin:1.25rem 0 0">
+            <?= Auth::campoToken() ?>
+            <button type="submit" id="enlaceCerrarSesionInactividad" class="sget-help cursor-pointer">
                 Cerrar sesión
-            </a>
-        </p>
+            </button>
+        </form>
     </div>
 </div>
 

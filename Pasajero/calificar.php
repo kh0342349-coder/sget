@@ -1,95 +1,85 @@
 <?php
-date_default_timezone_set('America/Bogota');
-session_start();
-include '../assets/conexion.php'; 
+/**
+ * Pasajero/calificar.php
+ * -----------------------------------------------------------------------------
+ * CALIFICAR SERVICIO  (Pasajero)
+ * -----------------------------------------------------------------------------
+ * QUÉ CAMBIA EN ESTA SEGUNDA RONDA
+ *   · Las tres consultas iban por mysqli con `$documento_sesion` en el SQL y
+ *     repetían la búsqueda del usuario por documento. Ahora la identidad se
+ *     toma de `Auth::id()` y todo se resuelve con `CalificacionService`, que
+ *     además ya aplica la regla correcta: SOLO se puede calificar un viaje
+ *     FINALIZADO y con reserva viva. Antes esta página listaba como «pendientes»
+ *     viajes que ni siquiera habían salido, y el backend lo aceptaba.
+ *   · `?id_via=…&id_cond=…` ya no permite mostrar el nombre de un conductor
+ *     cualquiera: el nombre se resuelve desde el viaje REAL de la persona.
+ * -----------------------------------------------------------------------------
+ */
+declare(strict_types=1);
 
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 3) {
-    header("Location: ../index.php");
-    exit();
-}
+require_once __DIR__ . '/../core/bootstrap.php';
 
-$documento_sesion = $_SESSION['documento'];
-$nombreReal = $_SESSION['nombre_usuario'] ?? "Pasajero";
+Auth::requerirSesion();
+Auth::requerirRol(Config::ROL_PASAJERO);
+Auth::requerirAcceso('calificar');
 
-// 1. OBTENER ID REAL DEL USUARIO (PASAJERO)
-$id_pasajero = 0;
-$stmt_user = $conexion->prepare("SELECT id_usu FROM usuario WHERE num_doc_usu = ?");
-$stmt_user->bind_param("s", $documento_sesion);
-$stmt_user->execute();
-$res_user = $stmt_user->get_result();
-if ($res_user && $res_user->num_rows > 0) {
-    $id_pasajero = $res_user->fetch_assoc()['id_usu'];
-}
-$stmt_user->close();
+$nombreReal   = Auth::nombre();
+$idPasajero   = Auth::id();
 
-// Capturamos los datos que vienen por la URL (GET)
-$id_via = $_GET['id_via'] ?? null;
-$id_cond = $_GET['id_cond'] ?? null;
+/* Los ids de la URL se normalizan a entero: nada de lo que venga por GET debe
+   tocar la base de datos sin pasar por un tipo. */
+$idViaje   = (int)($_GET['id_via'] ?? 0);
+$idConductor = (int)($_GET['id_cond'] ?? 0);
 
-// Bandera para saber si los datos vienen por parámetro
-$parametros_validos = ($id_via && $id_cond);
-$conductor = "Conductor";
+$parametrosValidos = ($idViaje > 0 && $idConductor > 0);
+$conductor = 'Conductor';
 
-if ($parametros_validos) {
-    // Consultar nombre del conductor si existen los parámetros
-    $stmt_cond = $conexion->prepare("SELECT nom_usu FROM usuario WHERE id_usu = ?");
-    $stmt_cond->bind_param("i", $id_cond);
-    $stmt_cond->execute();
-    $query_cond = $stmt_cond->get_result();
-    if ($query_cond && $query_cond->num_rows > 0) {
-        $conductor = $query_cond->fetch_assoc()['nom_usu'];
-    }
-    $stmt_cond->close();
-}
-
-// 2. VIAJES PENDIENTES POR CALIFICAR
-$viajes_pendientes = [];
-if ($id_pasajero > 0 && !$parametros_validos) {
-    // Consulta sin la columna v.fech_via para evitar errores SQL
-    $sql_pendientes = "SELECT v.id_via, v.id_usu_via AS id_cond, u.nom_usu AS nombre_conductor, r.nom_rut
-                       FROM reserva res
-                       INNER JOIN viaje v ON res.id_via_res = v.id_via
-                       INNER JOIN usuario u ON v.id_usu_via = u.id_usu
-                       LEFT JOIN rutas r ON v.id_rut_via = r.id_rut
-                       LEFT JOIN calificacion c ON (c.id_via_cal = v.id_via AND c.id_usu_rem = res.id_usu_res)
-                       WHERE res.id_usu_res = ? 
-                         AND c.id_cal IS NULL
-                       ORDER BY v.id_via DESC";
-
-    if ($stmt_pend = $conexion->prepare($sql_pendientes)) {
-        $stmt_pend->bind_param("i", $id_pasajero);
-        $stmt_pend->execute();
-        $res_pend = $stmt_pend->get_result();
-        while ($row = $res_pend->fetch_assoc()) {
-            $viajes_pendientes[] = $row;
-        }
-        $stmt_pend->close();
+if ($parametrosValidos) {
+    /* El nombre del conductor sale del viaje indicado, no del parámetro: así no
+       se puede «poner» el nombre de otra persona en la pantalla. */
+    $fila = Database::one(
+        'SELECT u.nom_usu
+           FROM viaje v
+           INNER JOIN usuario u ON u.id_usu = v.id_usu_via
+          WHERE v.id_via = ?',
+        [$idViaje]
+    );
+    if ($fila) {
+        $conductor = (string)$fila['nom_usu'];
     }
 }
 
-// 3. HISTORIAL DE RESEÑAS REALIZADAS POR ESTE PASAJERO
-$historial_resenas = [];
-if ($id_pasajero > 0) {
-    $sql_historial = "SELECT c.*, u.nom_usu AS nombre_conductor 
-                      FROM calificacion c 
-                      JOIN viaje v ON c.id_via_cal = v.id_via 
-                      LEFT JOIN usuario u ON v.id_usu_via = u.id_usu 
-                      WHERE c.id_usu_rem = ?
-                      ORDER BY c.id_cal DESC";
-
-    if ($stmt_hist = $conexion->prepare($sql_historial)) {
-        $stmt_hist->bind_param("i", $id_pasajero);
-        $stmt_hist->execute();
-        $res_hist = $stmt_hist->get_result();
-        while ($row = $res_hist->fetch_assoc()) {
-            $historial_resenas[] = $row;
-        }
-        $stmt_hist->close();
+/* 2. Viajes pendientes de calificar: FINALIZADOS, con reserva viva y sin nota
+      previa. Es la lista que devuelve el servicio, no una consulta local. */
+$viajesPendientes = [];
+foreach (CalificacionService::pendientes($idPasajero) as $fila) {
+    if ($fila['pun_cal'] !== null) {
+        continue;   // ya calificado
     }
+    $viajesPendientes[] = [
+        'id_via'          => (int)$fila['id_via'],
+        'id_cond'         => (int)$fila['id_usu_via'],
+        'nombre_conductor'=> (string)$fila['conductor'],
+        'nom_rut'         => (string)$fila['nom_rut'],
+        'fec_via'         => (string)$fila['fec_via'],
+        'hor_sal_via'     => (string)$fila['hor_sal_via'],
+    ];
 }
 
-// Consulta de rutas para el Drawer (+)
-$rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER BY nom_rut ASC");
+/* 3. Historial de reseñas de este pasajero. */
+$historialResenas = Database::all(
+    'SELECT c.id_cal, c.id_via_cal, c.pun_cal, c.com_cal, c.fec_cal,
+            u.nom_usu AS nombre_conductor
+       FROM calificacion c
+       LEFT JOIN viaje v   ON v.id_via  = c.id_via_cal
+       LEFT JOIN usuario u ON u.id_usu  = v.id_usu_via
+      WHERE c.id_usu_rem = ?
+      ORDER BY c.fec_cal DESC, c.id_cal DESC',
+    [$idPasajero]
+);
+
+// Rutas para el buscador de reserva.
+$rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY nom_rut ASC');
 ?>
 
 <!DOCTYPE html>
@@ -149,23 +139,15 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Calificación de Servicio</h1>
                         
-                        <div class="relative group">
-                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold cursor-pointer">
-                                <i class="fas fa-question text-[10px]"></i>
-                            </button>
+                        <!--
+                             BOTÓN DE AYUDA DEL MÓDULO · RETIRADO
+                             Este «?» por pantalla se sustituyó por UNO SOLO global en la
+                             esquina inferior derecha (views/modals/ayuda.php), que además
+                             cambia de contenido según el rol y el módulo. Con estos botones
+                             repartidos, cada módulo llevaba su propia copia de la guía y se
+                             desincronizaban entre sí.
+                        -->
 
-                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
-                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
-                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía de Calificaciónes
-                                </p>
-                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-star text-amber-400 mt-0.5 shrink-0"></i>
-                                        <span><b>Evaluación:</b> Selecciona tus estrellas y deja un comentario del trayecto.</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Registra tu opinión del trayecto y consulta el historial enviado.</p>
                 </div>
@@ -189,8 +171,12 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                         </div>
 
                         <form action="../procesos/guardar_calificacion.php" method="POST" class="space-y-5">
-                            <input type="hidden" name="id_via" value="<?php echo htmlspecialchars($id_via, ENT_QUOTES, 'UTF-8'); ?>">
-                            <input type="hidden" name="id_cond" value="<?php echo htmlspecialchars($id_cond, ENT_QUOTES, 'UTF-8'); ?>">
+                            <?php /* Token anti-CSRF: sin él el endpoint devuelve
+                                     «La sesión del formulario caducó» y la
+                                     calificación NUNCA se guarda. */ ?>
+                            <?= Auth::campoToken() ?>
+                            <input type="hidden" name="id_via" value="<?= (int)$idViaje ?>">
+                            <input type="hidden" name="id_cond" value="<?= (int)$idConductor ?>">
 
                             <div>
                                 <label class="text-[10px] font-black uppercase text-slate-400 mb-2 ml-2 block tracking-widest">Puntuación</label>
@@ -236,18 +222,18 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                 </div>
                             </div>
                             <span class="text-xs font-bold px-3 py-1 bg-amber-500/10 text-amber-500 rounded-full">
-                                Pendientes: <?php echo count($viajes_pendientes); ?>
+                                Pendientes: <?php echo count($viajesPendientes); ?>
                             </span>
                         </div>
 
-                        <?php if (empty($viajes_pendientes)): ?>
+                        <?php if (empty($viajesPendientes)): ?>
                             <div class="text-center py-8 text-slate-400 dark:text-slate-500">
                                 <i class="fas fa-check-circle text-3xl mb-2 block text-emerald-500"></i>
                                 <p class="text-xs font-medium">¡Todo en orden! No tienes viajes pendientes por calificar.</p>
                             </div>
                         <?php else: ?>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <?php foreach ($viajes_pendientes as $vp): ?>
+                                <?php foreach ($viajesPendientes as $vp): ?>
                                     <div class="p-5 rounded-2xl bg-slate-50 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
                                         <div>
                                             <p class="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
@@ -284,18 +270,18 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                         </div>
                     </div>
                     <span class="text-xs font-bold px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full">
-                        Total: <?php echo count($historial_resenas); ?>
+                        Total: <?php echo count($historialResenas); ?>
                     </span>
                 </div>
 
-                <?php if (empty($historial_resenas)): ?>
+                <?php if (empty($historialResenas)): ?>
                     <div class="text-center py-8 text-slate-400 dark:text-slate-500">
                         <i class="fas fa-comment-slash text-3xl mb-2 block"></i>
                         <p class="text-xs font-medium">Aún no has dejado opiniones registradas en el sistema.</p>
                     </div>
                 <?php else: ?>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <?php foreach ($historial_resenas as $resena): ?>
+                        <?php foreach ($historialResenas as $resena): ?>
                             <?php $jsonRes = htmlspecialchars(json_encode($resena, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8'); ?>
                             <div class="p-5 rounded-2xl bg-slate-50 dark:bg-[#161e2e] border border-slate-200 dark:border-slate-800 flex flex-col justify-between gap-3">
                                 <div>
@@ -310,8 +296,12 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                             </span>
                                         </div>
                                         <div class="flex text-yellow-400 text-xs">
-                                            <?php 
-                                                $pts = (int)($resena['puntos_cal'] ?? 5);
+                                            <?php
+                                                /* `puntos_cal` / `coment_cal` no existen: las columnas
+                                                   reales son `pun_cal` y `com_cal`. Con los nombres
+                                                   equivocados, todas las reseñas del historial se
+                                                   veían como «5 estrellas, sin comentario». */
+                                                $pts = (int)($resena['pun_cal'] ?? 0);
                                                 for ($i = 1; $i <= 5; $i++) {
                                                     echo ($i <= $pts) ? '<i class="fas fa-star"></i>' : '<i class="far fa-star text-slate-300 dark:text-slate-700"></i>';
                                                 }
@@ -319,7 +309,7 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                                         </div>
                                     </div>
                                     <p class="text-xs text-slate-600 dark:text-slate-300 italic bg-white dark:bg-[#1e293b] p-3 rounded-xl border border-slate-100 dark:border-slate-800/50 line-clamp-2">
-                                        "<?php echo htmlspecialchars(!empty($resena['coment_cal']) ? $resena['coment_cal'] : 'Sin comentario escrito.', ENT_QUOTES, 'UTF-8'); ?>"
+                                        "<?php echo htmlspecialchars(!empty($resena['com_cal']) ? $resena['com_cal'] : 'Sin comentario escrito.', ENT_QUOTES, 'UTF-8'); ?>"
                                     </p>
                                 </div>
 
@@ -406,14 +396,9 @@ $rutas_disponibles = $conexion->query("SELECT id_rut, nom_rut FROM rutas ORDER B
                     <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Destino Deseado</label>
                     <select name="ruta" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b0f19]/60 border border-slate-200 dark:border-white/5 rounded-xl outline-none focus:border-neon-azul text-slate-800 dark:text-white text-sm transition-all">
                         <option value="">Selecciona tu ruta...</option>
-                        <?php 
-                        if($rutas_disponibles) {
-                            $rutas_disponibles->data_seek(0);
-                            while($r = $rutas_disponibles->fetch_assoc()) {
-                                echo '<option value="'.$r['id_rut'].'">'.htmlspecialchars($r['nom_rut']).'</option>';
-                            }
-                        }
-                        ?>
+                        <?php foreach ($rutasDisponibles as $r): ?>
+                            <option value="<?= (int)$r['id_rut'] ?>"><?= htmlspecialchars((string)$r['nom_rut'], ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
                     </select>
                 </div>
 

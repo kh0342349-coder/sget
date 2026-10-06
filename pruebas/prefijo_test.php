@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/_guardia.php';
+
 /**
  * Prueba aislada del cálculo del prefijo de rutas (includes/i18n.php).
  * El proyecto se simula instalado en /sget (como en Apache con XAMPP).

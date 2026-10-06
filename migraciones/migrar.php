@@ -51,11 +51,48 @@ function descripcionDe(string $archivo): string
 {
     $lineas = @file(SGET_MIGRACIONES . '/' . $archivo, FILE_IGNORE_NEW_LINES) ?: [];
     foreach ($lineas as $l) {
-        if (str_starts_with(trim($l), 'DESC:')) {
-            return trim(substr(trim($l), 5));
+        // Se admite `DESC:` y ` * DESC:` / `// DESC:`: lo normal es que la
+        // etiqueta esté dentro del bloque de comentario de la cabecera.
+        $linea = trim($l);
+        $linea = preg_replace('~^(?:\*+|//+|#+)\s*~', '', $linea) ?? $linea;
+
+        if (str_starts_with($linea, 'DESC:')) {
+            return trim(substr($linea, 5));
         }
     }
     return pathinfo($archivo, PATHINFO_FILENAME);
+}
+
+/**
+ * Carga y ejecuta UNA migración en un ÁMBITO AISLADO.
+ *
+ * POR QUÉ ES UNA FUNCIÓN Y NO UN `require` SUELTO
+ *   Con `require $archivo;` la migración se ejecuta en el ÁMBITO GLOBAL del
+ *   runner: cualquier variable que use se come las del runner. Pasó de verdad:
+ *   la 009 hace
+ *
+ *       foreach ($cuentas as [$tipo, $documento, $nombre, $rol, $clave]) { … }
+ *
+ *   y `$nombre` también es la variable del bucle principal, así que después de
+ *   ejecutarla el runner registraba la migración con el nombre del último
+ *   usuario de prueba:
+ *
+ *       INSERT INTO migracion (archivo, …) VALUES ('Pasajero de Prueba', …)
+ *
+ *   Es un fallo silencioso y peligroso: la migración queda mal registrada (o no
+ *   queda) y la siguiente ejecución la vuelve a aplicar.
+ *
+ *   Aquí el `require` ocurre DENTRO de una función, así que las variables de
+ *   la migración viven solo en su ámbito.
+ */
+function aplicarMigracion(string $ruta): void
+{
+    $migrar = null;
+    require $ruta;
+
+    if (is_callable($migrar)) {
+        $migrar();
+    }
 }
 
 function prepararTablaMigraciones(): void
@@ -87,6 +124,11 @@ function imprimir(string $texto): void
 }
 
 /* -------------------------------------------------------------------------- */
+
+/* Limpieza defensiva: si una ejecución anterior dejó filas corruptas
+   (por el choque de variables descrito en aplicarMigracion()), se borran para
+   que no bloqueen la clave única `uk_migracion_archivo`. */
+Database::query("DELETE FROM migracion WHERE archivo NOT LIKE '%.php'");
 
 try {
     // Motor permisivo SOLO para poder leer los valores "cero" heredados
@@ -129,22 +171,18 @@ if (empty($pendientes)) {
 imprimir('Aplicando ' . count($pendientes) . ' migración(es)...');
 imprimir('');
 
-foreach ($pendientes as $archivo) {
-    $nombre = basename($archivo);
-    imprimir(' -> ' . $nombre . ' : ' . descripcionDe($nombre));
+foreach ($pendientes as $rutaMigracion) {
+    $migArchivo = basename($rutaMigracion);
+    imprimir(' -> ' . $migArchivo . ' : ' . descripcionDe($migArchivo));
     $inicio = microtime(true);
 
     // Modo estricto ya normalizado por la migración de datos
     Database::pdo()->exec("SET SESSION sql_mode = 'STRICT_ALL_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'");
 
-    require $archivo;   // la migración debe devolver laclosure $migrar
-
-    if (isset($migrar) && is_callable($migrar)) {
-        $migrar();
-    }
+    aplicarMigracion($rutaMigracion);
 
     Database::pdo()->exec("SET SESSION sql_mode = 'NO_ENGINE_SUBSTITUTION'");
-    registrarMigracion($nombre);
+    registrarMigracion($migArchivo);
     imprimir(sprintf('    OK (%.2fs)', microtime(true) - $inicio));
     imprimir('');
 }

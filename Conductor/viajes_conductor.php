@@ -1,27 +1,49 @@
 <?php
 date_default_timezone_set('America/Bogota');
-session_start();
-
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 2) {
-    header("Location: ../index.php");
-    exit();
+if (!class_exists('Auth')) {
+    require_once __DIR__ . '/../core/bootstrap.php';
 }
+/* La guardia vive en `Auth`: una sola política de autorización para toda
+   la aplicación. Antes cada página repetía su propio
+   `if (!isset($_SESSION['documento']) || $_SESSION['rol'] != N)`. */
+Auth::requerirSesion();
+Auth::requerirRol(Config::ROL_CONDUCTOR);
 
 include '../assets/conexion.php'; 
 
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Conductor";
 $documento  = $_SESSION['documento'];
 
-// Lógica para finalizar viaje
+/* --------------------------------------------------------------------------
+ * FINALIZAR VIAJE
+ * --------------------------------------------------------------------------
+ * ANTES: aquí mismo se hacía `UPDATE viaje SET est_via = 'Finalizado'` sin
+ * comprobar nada más: sin token anti-CSRF (cualquier página externa podía
+ * cerrarlo con un POST) y sin verificar que el viaje fuera de este conductor
+ * (bastaba conocer el id). De hecho, el formulario NO llevaba el campo
+ * `finalizar_viaje` que este bloque exigía, así que la ruta ni siquiera se
+ * ejecutaba y el conductor no tenía forma de cerrar su viaje desde aquí.
+ *
+ * AHORA: token anti-CSRF + propiedad del viaje + `ViajeService::finalizar()`,
+ * que además libera conductor y vehículo, avisa a los pasajeros y deja rastro.
+ * -------------------------------------------------------------------------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['finalizar_viaje'])) {
-    $id_viaje_fin = (int)$_POST['id_viaje'];
-    
-    $stmt_fin = $conexion->prepare("UPDATE viaje SET est_via = 'Finalizado' WHERE id_via = ?");
-    $stmt_fin->bind_param("i", $id_viaje_fin);
-    $stmt_fin->execute();
-    $stmt_fin->close();
+    $id_viaje_fin = (int)($_POST['id_viaje'] ?? 0);
 
-    header("Location: " . $_SERVER['PHP_SELF']);
+    if (!Auth::validarToken((string)($_POST['_token'] ?? ''))) {
+        Flash::error('La sesión del formulario caducó. Vuelve a intentarlo.');
+        header('Location: ' . $_SERVER['PHP_SELF']);
+        exit();
+    }
+
+    // Permiso + propiedad: solo sobre los viajes de este conductor.
+    Auth::exigirViaje('finalizar', $id_viaje_fin);
+
+    $r = ViajeService::finalizar($id_viaje_fin);
+    Flash::set(!empty($r['ok']) ? 'exito' : 'error',
+        (string)($r['mensaje'] ?? 'No se pudo finalizar el viaje.'));
+
+    header('Location: ' . $_SERVER['PHP_SELF']);
     exit();
 }
 
@@ -73,7 +95,13 @@ if ($rutas_select) {
     }
     $rutas_select->data_seek(0);
 }
-$vehiculos_select = $conexion->query("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = 1 ORDER BY pla_veh ASC");
+$stmt_vehiculos = $conexion->prepare("SELECT id_veh, pla_veh FROM vehiculo WHERE est_veh = ? ORDER BY pla_veh ASC");
+// `bind_param` exige variables POR REFERENCIA: pasar la constante directamente
+// es un error fatal (`Argument #2 cannot be passed by reference`).
+$stmt_vehiculos_estado = Config::VEH_DISPONIBLE;
+$stmt_vehiculos->bind_param("s", $stmt_vehiculos_estado);
+$stmt_vehiculos->execute();
+$vehiculos_select = $stmt_vehiculos->get_result();
 
 $stmt_user->close();
 ?>
@@ -153,32 +181,15 @@ $stmt_user->close();
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Historial de Viajes</h1>
                         
-                        <!-- BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
-                        <div class="relative group">
-                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
-                                <i class="fas fa-question text-[10px]"></i>
-                            </button>
+                        <!--
+                             BOTÓN DE AYUDA DEL MÓDULO · RETIRADO
+                             Este «?» por pantalla se sustituyó por UNO SOLO global en la
+                             esquina inferior derecha (views/modals/ayuda.php), que además
+                             cambia de contenido según el rol y el módulo. Con estos botones
+                             repartidos, cada módulo llevaba su propia copia de la guía y se
+                             desincronizaban entre sí.
+                        -->
 
-                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
-                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
-                                    <i class="fas fa-info-circle text-neon-azul"></i> Guía Panel de Conductor
-                                </p>
-                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-plus-circle text-blue-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Solicitar / Programar Viaje (+):</b> Despacha una nueva ruta asignando vehículo y horario.</span>
-                                    </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-flag-checkered text-rose-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Finalizar Viaje:</b> Marca la llegada a destino del vehículo y libera los cupos.</span>
-                                    </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-eye text-blue-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Ficha Técnica:</b> Presiona el ojo para revisar los datos técnicos del viaje.</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Consulta el registro completo de todos tus viajes realizados y en proceso.</p>
                 </div>
@@ -264,12 +275,26 @@ $stmt_user->close();
                                                 <i class="fas fa-eye text-xs"></i>
                                             </button>
 
-                                            <?php if (!in_array(strtolower(trim($v['est_via'] ?? '')), ['finalizado', 'terminado', 'completado', 'cancelado', '0', '2', '3'])): ?>
+                                            <?php /* «Finalizar» solo si el viaje puede terminarse de verdad.
+                                                   Antes bastaba con que no estuviera cerrado, así que un
+                                                   viaje de mañana aparecía con el botón activo y el
+                                                   backend lo aceptaba aunque no hubiera salido. Aquí se usa
+                                                   la MISMA regla que aplica el servidor
+                                                   (`ViajeService::puedeFinalizar()`), de modo que botón y
+                                                   validación no puedan discrepar. */ ?>
+                                            <?php [$puedeFinalizar, $motivoFinalizar] = ViajeService::puedeFinalizar($v); ?>
+                                            <?php if ($puedeFinalizar): ?>
                                                 <button type="button" 
-                                                        onclick="confirmarFinalizarViaje(<?php echo $v['id_via']; ?>, '<?php echo htmlspecialchars($v['des_rut'] ?? 'Ruta', ENT_QUOTES, 'UTF-8'); ?>')"
+                                                        onclick="confirmarFinalizarViaje(<?php echo (int)$v['id_via']; ?>, '<?php echo htmlspecialchars($v['des_rut'] ?? 'Ruta', ENT_QUOTES, 'UTF-8'); ?>')"
                                                         class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 dark:text-rose-400 border border-rose-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition duration-150 flex items-center gap-1.5">
                                                     <i class="fas fa-flag-checkered text-xs"></i> Finalizar
                                                 </button>
+                                            <?php elseif (!in_array(strtolower(trim((string)($v['est_via'] ?? ''))), ['finalizado', 'terminado', 'completado', 'cancelado', '0', '2', '3'])): ?>
+                                                <span class="bg-slate-100 dark:bg-white/5 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-white/10 font-bold text-xs px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-not-allowed opacity-70"
+                                                      title="<?php echo htmlspecialchars($motivoFinalizar, ENT_QUOTES, 'UTF-8'); ?>"
+                                                      aria-disabled="true">
+                                                    <i class="fas fa-flag-checkered text-xs"></i> Finalizar
+                                                </span>
                                             <?php endif; ?>
                                         </div>
                                     </td>
@@ -439,6 +464,7 @@ $stmt_user->close();
             </div>
 
             <form method="POST" action="" id="formFinalizarViajeModal">
+                <?= Auth::campoToken() ?>
                 <input type="hidden" name="id_viaje" id="inputFinalizarId">
                 <input type="hidden" name="finalizar_viaje" value="1">
 

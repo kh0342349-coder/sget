@@ -28,8 +28,9 @@ ViajeService::cerrarVencidos();
 
 $vehiculos = VehiculoService::todos();
 $total     = count($vehiculos);
-$disponibles = count(array_filter($vehiculos, fn($v) => (int)$v['est_veh'] === Config::VEH_DISPONIBLE));
-$fuera      = $total - $disponibles;
+$disponibles = count(array_filter($vehiculos, fn($v) => VehiculoService::operativo((string)$v['est_veh'])));
+$enTaller   = count(array_filter($vehiculos, fn($v) => $v['est_veh'] === Config::VEH_MANTENIMIENTO));
+$fuera       = $total - $disponibles;
 $capacidad  = array_sum(array_map(fn($v) => (int)$v['cap_veh'], $vehiculos));
 
 $tituloPagina = 'Control de Flota';
@@ -77,7 +78,7 @@ include __DIR__ . '/../views/partials/head.php';
         <div class="sget-toolbar">
             <div class="sget-search">
                 <i class="fas fa-magnifying-glass"></i>
-                <input type="search" id="buscarVehiculo" class="sget-input" placeholder="Buscar placa o modelo… (Ctrl+K)">
+                <input type="search" id="buscarVehiculo" class="sget-input" placeholder="Buscar placa o modelo… (Ctrl+K)" autocomplete="off" spellcheck="false">
             </div>
         </div>
 
@@ -109,7 +110,7 @@ include __DIR__ . '/../views/partials/head.php';
                         <tbody>
                             <?php foreach ($vehiculos as $v):
                                 $id     = (int)$v['id_veh'];
-                                $estado = (int)$v['est_veh'];
+                                $estado = VehiculoService::normalizar((string)$v['est_veh']);
                                 $disp   = $estado === Config::VEH_DISPONIBLE;
                                 $datos  = [
                                     'id_veh'  => $id,
@@ -117,6 +118,7 @@ include __DIR__ . '/../views/partials/head.php';
                                     'mode_veh'=> $v['mode_veh'],
                                     'cap_veh' => (int)$v['cap_veh'],
                                     'est_veh' => $estado,
+                                    '__existia' => true,
                                     'titulo'  => 'Editar Vehículo #' . $id,
                                 ];
                             ?>

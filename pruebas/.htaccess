@@ -1,0 +1,28 @@
+# ---------------------------------------------------------------------------
+# PRUEBAS · SOLO DESDE ESTE EQUIPO
+# ---------------------------------------------------------------------------
+# Esta carpeta NO forma parte de la aplicacion: sus scripts insertan,
+# actualizan y BORRAN datos, y ademas abren sesiones falsas para poder
+# inspeccionar modulos internos. Servida desde el webroot, cualquiera podia
+# llamarlos con una peticion GET y tocar la base de datos desde fuera.
+#
+# CAPA 1 (esta): solo responde a peticiones del propio equipo.
+# CAPA 2 (pruebas/_guardia.php): ademas exige el interruptor
+#   pruebas/.habilitar y la variable SGET_PRUEBAS=1.
+#
+# Para trabajar con ellas hay que habilitarlo a proposito:
+#     touch pruebas/.habilitar
+#     set SGET_PRUEBAS=1
+#
+# En la entrega debe quedar ASI: nunca con el interruptor activado.
+# ---------------------------------------------------------------------------
+
+<IfModule mod_authz_core.c>
+    Require local
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Allow from 127.0.0.1
+    Deny from all
+</IfModule>

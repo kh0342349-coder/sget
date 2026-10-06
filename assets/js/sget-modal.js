@@ -88,6 +88,7 @@
 
             document.body.classList.add('sget-modal-abierto');
             this._activarOverlay(true);
+            this._bloquearFondo(true);
 
             // Foco en el primer campo útil
             setTimeout(function () {
@@ -150,6 +151,7 @@
                 document.body.classList.remove('sget-modal-abierto');
             }
             this._activarOverlay(true);
+            this._bloquearFondo(this.pila.length > 0);
 
             // Devolver el foco al elemento que abrió el modal
             if (el._origen && document.contains(el._origen)) {
@@ -320,15 +322,33 @@
         /* ---------------------------------------------------------------- */
         confirmar: function (opts) {
             opts = opts || {};
+
+            /* El icono se NORMALIZA porque las dos formas son habituales en el
+               proyecto y se mezclaban sin querer:
+                 · sget-page.js pasa  `fa-flag-checkered`
+                 · otros puntos pasan `flag-checkered`
+               Antes se hacía siempre `'fa-' + icono`, así que el primer caso
+               producía `fa-fa-flag-checkered`: una clase que no existe en
+               Font Awesome. El resultado era que NINGÚN modal de confirmación
+               del sistema mostraba icono (borrar, finalizar, suspender,
+               eliminar reporte…). */
+            var iconoCrudo = opts.icono || 'fa-triangle-exclamation';
+            var icono = (String(iconoCrudo).indexOf('fa-') === 0) ? iconoCrudo : 'fa-' + iconoCrudo;
+            if (icono === 'fa-fa-' ) icono = 'fa-triangle-exclamation';
+
+            /* `peligro` es la forma actual; `claseOkIsDanger` la que usaba
+               sget-page.js. Se aceptan las dos para que ninguna quede sin efecto. */
+            var peligroso = !!(opts.peligro || opts.claseOkIsDanger);
+
             return new Promise(function (resolve) {
                 var id = opts.id || 'sgetConfirm';
                 var wrap = Modal._crearConfirmacion(id, {
-                    icono: 'fa-' + (opts.icono || 'fa-triangle-exclamation'),
-                    claseIcono: opts.tipo === 'peligro' ? 'sget-modal__icono--peligro' : 'sget-modal__icono--aviso',
+                    icono: icono,
+                    claseIcono: peligroso ? 'sget-modal__icono--peligro' : 'sget-modal__icono--aviso',
                     titulo: opts.titulo || '¿Confirmas la acción?',
                     cuerpo: opts.cuerpo || '',
                     textoOk: opts.textoOk || 'Sí, continuar',
-                    claseOk: opts.tipo === 'peligro' ? 'sget-btn--peligro' : 'sget-btn--primario',
+                    claseOk: peligroso ? 'sget-btn--peligro' : 'sget-btn--primario',
                     extras: ''
                 });
                 Modal._enlazarConfirmacion(wrap, function () { resolve(true); });
@@ -430,7 +450,7 @@
                             '<button type="button" class="sget-modal__cerrar" data-sget-cancelar aria-label="Cerrar">' +
                                 '<i class="fas fa-times"></i></button>' +
                         '</div>' +
-                        '<div class="sget-modal__body" data-sget-cuerpo></div>' +
+                        '<div class="sget-modal__body sget-scroll" data-sget-cuerpo></div>' +
                         '<div class="sget-modal__foot">' +
                             '<button type="button" class="sget-btn ' + (cfg.extras || 'sget-btn--neutro') + '" data-sget-cancelar>Cancelar</button>' +
                             '<button type="button" class="sget-btn ' + cfg.claseOk + '" data-sget-ok>' + cfg.textoOk + '</button>' +
@@ -486,6 +506,36 @@
         },
 
         /* ---------------------------------------------------------------- */
+        /* Bloqueo del FONDO                                               */
+        /* ---------------------------------------------------------------- */
+        /**
+         * Deja el resto de la página sin interacción mientras hay un diálogo.
+         *
+         * Usa el atributo `inert` cuando el navegador lo soporta: es la forma
+         * estándar de decir «esto no recibe foco ni clics», y además saca el
+         * contenido del orden de tabulación (con solo `pointer-events` el
+         * teclado seguía recorriendo el sidebar por detrás del modal).
+         *
+         * Además cierra el menú lateral en móvil: si no, se quedaba abierto
+         * sobre el velo y parecía un segundo panel.
+         */
+        _bloquearFondo: function (bloquear) {
+            var fondo = document.querySelector('.sget-shell')
+                     || document.getElementById('main-content-wrapper');
+
+            if (bloquear) {
+                document.body.classList.remove('sidebar-open');
+                if (fondo) {
+                    fondo.inert = true;
+                    fondo.setAttribute('aria-hidden', 'true');
+                }
+            } else if (fondo) {
+                fondo.inert = false;
+                fondo.removeAttribute('aria-hidden');
+            }
+        },
+
+        /* ---------------------------------------------------------------- */
         /* Accesibilidad                                                     */
         /* ---------------------------------------------------------------- */
         _anunciar: function (texto) {
@@ -535,9 +585,12 @@
      * lo que se quiere. Es idempotente.
      */
     function montarEnBody() {
-        Array.prototype.forEach.call(document.querySelectorAll('[data-sget-capa]'), function (capa) {
-            if (capa.parentElement !== document.body) document.body.appendChild(capa);
-        });
+        Array.prototype.forEach.call(
+            document.querySelectorAll('[data-sget-capa], [data-sget-flotante]'),
+            function (capa) {
+                if (capa.parentElement !== document.body) document.body.appendChild(capa);
+            }
+        );
     }
 
     /* Arranque: delegación de eventos + atajos                             */
@@ -548,13 +601,12 @@
         montarEnBody();
         if (window.MutationObserver) {
             new MutationObserver(function () {
-                if (document.querySelector('[data-sget-capa]')) {
-                    var fuera = Array.prototype.filter.call(
-                        document.querySelectorAll('[data-sget-capa]'),
-                        function (c) { return c.parentElement !== document.body; }
-                    );
-                    if (fuera.length) montarEnBody();
-                }
+                if (!document.querySelector('[data-sget-capa], [data-sget-flotante]')) return;
+                var fuera = Array.prototype.filter.call(
+                    document.querySelectorAll('[data-sget-capa], [data-sget-flotante]'),
+                    function (c) { return c.parentElement !== document.body; }
+                );
+                if (fuera.length) montarEnBody();
             }).observe(document.documentElement, { childList: true, subtree: true });
         }
 
@@ -619,6 +671,86 @@
             return null;
         }
     };
+
+    /* ====================================================================== */
+    /* BUSCADORES SIEMPRE VACÍOS                                             */
+    /* ====================================================================== */
+    /*
+     * POR QUÉ VIVE AQUÍ Y NO EN UN MÓDULO CONCRETO
+     *   `sget-modal.js` es el ÚNICO script que cargan todas las pantallas,
+     *   incluidas las heredadas de `Conductor/` y `Pasajero/`. Poner la
+     *   limpieza en `sget-cru.js` dejaba sin proteger justo los buscadores de
+     *   esas páginas, que son las que seguían «rellenándose solas».
+     *
+     * LAS TRES CAUSAS DEL RELLENO INVOLUNTARIO
+     *   1. Autocompletado del navegador: Chrome restaura campos de formulario
+     *      al recargar y al volver atrás.
+     *   2. BFCache: al navegar atrás se restaura la página desde memoria, con
+     *      el texto intacto y sin volver a ejecutar el HTML.
+     *   3. `autocomplete="off"` por sí solo no es suficiente: Chrome lo ignora
+     *      cuando el campo tiene `name` dentro de un formulario GET.
+     *
+     * EXCEPCIÓN
+     *   Los filtros que son de SERVIDOR (registro de auditoría, panel de
+     *   información) marcan el campo con `data-sget-valor-inicial`, porque ahí
+     *   el texto describe las filas que se están mostrando. En esos casos solo
+     *   se fuerzan los atributos, nunca se vacía ni se renombra el campo: si se
+     *   vaciara, la tabla y el buscador dejarían de cuadrar.
+     */
+    function limpiarBuscadores() {
+        var Selectores = [
+            '[data-sget-buscar]',
+            '[data-sget-busqueda]',
+            'input[type="search"]',
+            '.sget-search input',
+            '#inputBuscador',
+            '#buscarLog',
+            '#inputBuscadorHeader'
+        ].join(',');
+
+        var encontrados;
+        try {
+            encontrados = document.querySelectorAll(Selectores);
+        } catch (e) {
+            return;
+        }
+
+        Array.prototype.forEach.call(encontrados, function (input) {
+            if (!input || input.tagName !== 'INPUT') return;
+            if (input.hasAttribute('data-sget-valor-inicial')) return;
+
+            input.setAttribute('autocomplete', 'off');
+            input.setAttribute('autocorrect', 'off');
+            input.setAttribute('autocapitalize', 'off');
+            input.setAttribute('spellcheck', 'false');
+
+            // ¿Se envía al servidor? Si sí, `name` y valor intocables.
+            var esServidor = !!(input.form && input.form.method &&
+                input.form.method.toLowerCase() === 'get');
+            if (esServidor) return;
+
+            // Neutraliza el nombre para que el navegador no lo Complete.
+            if (!input.hasAttribute('data-sget-nombre-original')) {
+                input.setAttribute('data-sget-nombre-original', input.getAttribute('name') || '');
+            }
+            input.setAttribute('name', 'sget_q');
+            input.value = '';
+        });
+    }
+
+    Modal.limpiarBuscadores = limpiarBuscadores;
+
+    function ejecutarLimpiezaBuscadores() {
+        try { limpiarBuscadores(); } catch (e) { /* nunca romper la página */ }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', ejecutarLimpiezaBuscadores);
+    } else {
+        ejecutarLimpiezaBuscadores();
+    }
+    window.addEventListener('load', ejecutarLimpiezaBuscadores);
+    window.addEventListener('pageshow', ejecutarLimpiezaBuscadores);
 
     window.SGETModal = Modal;
 })(window, document);

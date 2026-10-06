@@ -24,7 +24,60 @@ $__anuncioModal = $__anuncioModal ?? [];
 $__esEdicion     = !empty($__anuncioModal['id_ann']);
 $v = fn(string $k, $def = '') => htmlspecialchars((string)($__anuncioModal[$k] ?? $def), ENT_QUOTES, 'UTF-8');
 $imgActual = AnuncioService::urlImagen($__anuncioModal['imagen'] ?? null);
+
+/* Id del anuncio en edición. La vista previa se sirve desde un endpoint real
+   (`procesos/anuncio_vista.php`) en vez de montar una maqueta aquí dentro: así
+   se ve exactamente lo que verá el visitante, con la misma hoja de estilos que
+   la portada. `0` = anuncio nuevo, donde todavía no hay nada que previsualizar. */
+$__idPreview  = (int)($__anuncioModal['id_ann'] ?? 0);
+$__urlPreview = Config::basePath() . '/procesos/anuncio_vista.php?id=' . $__idPreview;
 ?>
+<!-- ==========================================================================
+     VISTA PREVIA DEL ANUNCIO EN LA LANDING
+     ==========================================================================
+     Modal con un <iframe> que carga `procesos/anuncio_vista.php`.
+
+     ANTES el botón «Ver landing» mandaba al administrador a la portada real en
+     otra pestaña: se perdía el listado y el contexto, y no se distinguía lo que
+     se iba a ver de lo que ya estaba publicado.
+
+     Ahora se ve aquí mismo, sin navegar, y se conserva «Abrir la vista previa
+     aparte» para quien quiera comprobarla en su contexto. -->
+<div class="sget-modal-wrap" id="modalPreviewAnuncio" data-sget-capa data-titulo="Vista previa del anuncio">
+    <div class="sget-overlay"></div>
+
+    <div class="sget-modal sget-modal--xl" role="dialog" aria-modal="true" aria-labelledby="tituloPreviewAnuncio">
+        <header class="sget-modal__head">
+            <div>
+                <h2 class="sget-modal__titulo" id="tituloPreviewAnuncio">
+                    <span class="sget-modal__icono"><i class="fas fa-eye"></i></span>
+                    <span>Vista previa del anuncio</span>
+                </h2>
+                <p class="sget-modal__sub">Así se verá en la página de inicio de SGET. Es una maqueta: el botón no lleva a ninguna parte.</p>
+            </div>
+            <button type="button" class="sget-modal__cerrar" data-sget-cerrar aria-label="Cerrar">
+                <i class="fas fa-times"></i>
+            </button>
+        </header>
+
+        <div class="sget-modal__body sget-scroll" style="padding:0">
+            <iframe id="iframePreviewAnuncio"
+                    title="Vista previa del anuncio en la landing"
+                    src="<?= htmlspecialchars($__urlPreview, ENT_QUOTES, 'UTF-8') ?>"
+                    loading="lazy"
+                    style="display:block;width:100%;height:min(60dvh,34rem);border:0;background:#020617"></iframe>
+        </div>
+
+        <footer class="sget-modal__foot">
+            <a class="sget-btn sget-btn--neutro" href="<?= htmlspecialchars($__urlPreview, ENT_QUOTES, 'UTF-8') ?>"
+               target="_blank" rel="noopener">
+                <i class="fas fa-up-right-from-square"></i> Abrir aparte
+            </a>
+            <button type="button" class="sget-btn sget-btn--primario" data-sget-cerrar>Cerrar</button>
+        </footer>
+    </div>
+</div>
+
 <div class="sget-modal-wrap" id="modalAnuncio" data-sget-capa data-titulo="<?= $__esEdicion ? 'Editar anuncio' : 'Nuevo anuncio' ?>">
     <div class="sget-overlay"></div>
 
@@ -114,14 +167,39 @@ $imgActual = AnuncioService::urlImagen($__anuncioModal['imagen'] ?? null);
 
             <!-- ENLACE + BOTÓN -->
             <div class="sget-form-2col" style="margin-top:1rem">
+                <!--
+                    `DIRECCIÓN`: el campo conserva el diseño que ya tenía —input
+                    + botón a la derecha— porque funciona bien. Lo que se corrige
+                    es el COMPORTAMIENTO:
+
+                    · El botón no llevaba `type="button"`, así que dentro de este
+                      `<form>` se enviaba como submit y recargaba la página
+                      perdiendo todo lo escrito.
+                    · Ahora abre la PORTADA PÚBLICA en una pestaña nueva. Si
+                      quien administra aún no ha iniciado sesión, la lleva a la
+                      pantalla de acceso con un aviso, porque los enlaces
+                      internos válidos (`Admin/viajes.php`…) solo se ven con
+                      sesión iniciada.
+                -->
                 <div class="sget-field" data-campo="enlace">
                     <label class="sget-label" for="anuncio_enlace">
-                        <i class="fas fa-link"></i> Enlace del botón
+                        <i class="fas fa-link"></i> Dirección del botón
                     </label>
-                    <input type="text" id="anuncio_enlace" name="enlace" class="sget-input" maxlength="255"
-                           data-sget-campo="enlace"
-                           placeholder="Admin/viajes.php o https://…"
-                           value="<?= $v('enlace') ?>">
+                    <div style="display:flex;gap:.5rem;align-items:stretch">
+                        <input type="text" id="anuncio_enlace" name="enlace" class="sget-input" maxlength="255"
+                               data-sget-campo="enlace"
+                               placeholder="Admin/viajes.php o https://…"
+                               value="<?= $v('enlace') ?>">
+                        <button type="button" class="sget-btn sget-btn--neutro" data-sget-abrir-landing
+                                title="Abrir la portada de SGET en una pestaña nueva"
+                                aria-label="Abrir la portada de SGET">
+                            <i class="fas fa-up-right-from-square"></i> Abrir
+                        </button>
+                    </div>
+                    <p class="sget-help">
+                        Admite un módulo del panel (<code>Admin/viajes.php</code>)
+                        o una dirección web completa (<code>https://…</code>).
+                    </p>
                     <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
                 </div>
 
@@ -211,6 +289,20 @@ $imgActual = AnuncioService::urlImagen($__anuncioModal['imagen'] ?? null);
 <script>
 /* Previsualización del archivo elegido: el administrador ve la imagen ANTES de
    subirla, que es cuando más cuesta pillar un error de recorte o de formato. */
+/* El botón de DIRECCIÓN abre la portada en una pestaña nueva; sin sesión, lleva
+   a la pantalla de acceso con un aviso (los enlaces internos del panel solo
+   existen para quien ya entró). */
+document.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-sget-abrir-landing]');
+    if (!btn) return;
+
+    var url = <?= json_encode(Config::basePath()) ?> + '/index.php'<?php
+        if (!Auth::estaLogueado()) echo ' + "?aviso_portal=1"';
+    ?>;
+
+    window.open(url, '_blank', 'noopener');
+});
+
 document.addEventListener('change', function (e) {
     var input = e.target.closest('input[type="file"][data-sget-preview]');
     if (!input) return;

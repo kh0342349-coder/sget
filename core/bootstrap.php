@@ -17,6 +17,9 @@ require_once __DIR__ . '/Config.php';
 require_once __DIR__ . '/Database.php';
 require_once __DIR__ . '/Fecha.php';
 require_once __DIR__ . '/Flash.php';
+require_once __DIR__ . '/Password.php';
+require_once __DIR__ . '/Upload.php';
+require_once __DIR__ . '/Recaptcha.php';
 require_once __DIR__ . '/Auth.php';
 
 // --- Servicios -----------------------------------------------------------
@@ -31,6 +34,8 @@ require_once dirname(__DIR__) . '/services/CalificacionService.php';
 require_once dirname(__DIR__) . '/services/ReporteService.php';
 require_once dirname(__DIR__) . '/services/AnuncioService.php';
 require_once dirname(__DIR__) . '/services/ViajeService.php';
+require_once dirname(__DIR__) . '/services/DisponibilidadService.php';
+require_once dirname(__DIR__) . '/services/TicketService.php';
 
 // --- Legado (se mantienen hasta migrar pagina por pagina) ---------------
 require_once dirname(__DIR__) . '/helpers/Logger.php';

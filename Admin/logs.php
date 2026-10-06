@@ -110,11 +110,11 @@ include __DIR__ . '/../views/partials/head.php';
         <section class="sget-grid sget-grid--kpi">
             <?php
             $kpis = [
-                ['fa-list',          'var(--sget-azul)',    'Eventos',       number_format($resumen['total'], 0, ',', '.')],
-                ['fa-calendar-day',  'var(--sget-morado)',  'Hoy',           number_format($resumen['hoy'], 0, ',', '.')],
-                ['fa-calendar-week', 'var(--sget-emerald)', 'Últimos 7 días', number_format($resumen['semana'], 0, ',', '.')],
-                ['fa-triangle-exclamation', 'var(--sget-ambars)', 'Críticos', number_format($resumen['criticos'], 0, ',', '.')],
-                ['fa-users',         'var(--sget-azul)',    'Usuarios',      number_format($resumen['usuarios'], 0, ',', '.')],
+                ['fa-list',          'var(--sget-azul)',    'Eventos',       number_format((int)$resumen['total'], 0, ',', '.')],
+                ['fa-calendar-day',  'var(--sget-morado)',  'Hoy',           number_format((int)$resumen['hoy'], 0, ',', '.')],
+                ['fa-calendar-week', 'var(--sget-emerald)', 'Últimos 7 días', number_format((int)$resumen['semana'], 0, ',', '.')],
+                ['fa-triangle-exclamation', 'var(--sget-ambars)', 'Críticos', number_format((int)$resumen['criticos'], 0, ',', '.')],
+                ['fa-users',         'var(--sget-azul)',    'Usuarios',      number_format((int)$resumen['usuarios'], 0, ',', '.')],
             ];
             foreach ($kpis as [$icono, $color, $titulo, $valor]): ?>
                 <div class="sget-card sget-kpi">
@@ -158,7 +158,20 @@ include __DIR__ . '/../views/partials/head.php';
         <form method="GET" class="sget-toolbar" style="align-items:flex-end" data-sget-form-solo>
             <div class="sget-search" style="flex:2 1 14rem">
                 <i class="fas fa-magnifying-glass"></i>
-                <input type="search" name="q" id="buscarLog" value="<?= htmlspecialchars($filtros['q'], ENT_QUOTES, 'UTF-8') ?>"
+                <!--
+                    Filtro de SERVIDOR: el texto que hay aquí describe las
+                    filas que se están mostrando abajo. Por eso este campo está
+                    exento de «empezar vacío»: borrarlo sin recargar dejaría la
+                    tabla filtrada con el buscador en blanco, que es peor.
+
+                    Aun así, `data-sget-valor-inicial` se fija solo si la URL
+                    trae el filtro. Si el usuario vuelve con un enlace limpio
+                    (`/Admin/logs.php`), la caja aparece vacía.
+                -->
+                <input type="search" name="q" id="buscarLog"
+                       value="<?= htmlspecialchars($filtros['q'], ENT_QUOTES, 'UTF-8') ?>"
+                       <?= $filtros['q'] !== '' ? 'data-sget-valor-inicial' : '' ?>
+                       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
                        class="sget-input" placeholder="Buscar descripción, usuario, IP o navegador… (Ctrl+K)">
             </div>
 
@@ -189,12 +202,12 @@ include __DIR__ . '/../views/partials/head.php';
 
             <div class="sget-field" style="flex:0 1 9rem">
                 <label class="sget-label" for="f_desde">Desde</label>
-                <input type="date" id="f_desde" name="desde" class="sget-input" value="<?= htmlspecialchars($filtros['desde'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="date" id="f_desde" name="desde" class="sget-input" autocomplete="off" spellcheck="false" value="<?= htmlspecialchars($filtros['desde'], ENT_QUOTES, 'UTF-8') ?>">
             </div>
 
             <div class="sget-field" style="flex:0 1 9rem">
                 <label class="sget-label" for="f_hasta">Hasta</label>
-                <input type="date" id="f_hasta" name="hasta" class="sget-input" value="<?= htmlspecialchars($filtros['hasta'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="date" id="f_hasta" name="hasta" class="sget-input" autocomplete="off" spellcheck="false" value="<?= htmlspecialchars($filtros['hasta'], ENT_QUOTES, 'UTF-8') ?>">
             </div>
 
             <button type="submit" class="sget-btn sget-btn--primario"><i class="fas fa-filter"></i> Filtrar</button>
@@ -221,7 +234,7 @@ include __DIR__ . '/../views/partials/head.php';
                 <?php if ($filtros['q']): ?>
                     <span class="sget-badge sget-badge--neutro">“<?= $filtros['q'] ?>”</span>
                 <?php endif; ?>
-                <span class="sget-help" style="margin-left:auto"><?= number_format($resultado['total'], 0, ',', '.') ?> evento(s) coinciden</span>
+                <span class="sget-help" style="margin-left:auto"><?= number_format((int)$resultado['total'], 0, ',', '.') ?> evento(s) coinciden</span>
             </div>
         <?php endif; ?>
 
@@ -326,7 +339,7 @@ include __DIR__ . '/../views/partials/head.php';
                     </a>
                     <span class="sget-label" style="padding:0 .5rem">
                         Página <?= $resultado['pagina'] ?> de <?= $resultado['paginas'] ?>
-                        · <?= number_format($resultado['total'], 0, ',', '.') ?> evento(s)
+                        · <?= number_format((int)$resultado['total'], 0, ',', '.') ?> evento(s)
                     </span>
                     <a class="sget-btn sget-btn--fantasma sget-btn--sm"
                        href="<?= htmlspecialchars($urlCon(['pag' => $resultado['pagina'] + 1]), ENT_QUOTES, 'UTF-8') ?>"

@@ -387,7 +387,11 @@
             if (restante <= 0) {
                 clearInterval(intervaloConteoFinal);
                 borrarBloqueoCliente();
-                window.location.href = obtenerRutaRaiz('assets/cerrar.php');
+                /* Se marca el motivo porque `assets/cerrar.php` solo admite GET
+                   para el cierre que dispara la propia aplicación (el manual
+                   exige POST con token, para que un enlace externo no pueda
+                   cerrarle la sesión a nadie). */
+                window.location.href = obtenerRutaRaiz('assets/cerrar.php?motivo=inactividad');
             }
         }, 250);
     }

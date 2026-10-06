@@ -1,4 +1,5 @@
 <?php
+
 /**
  * pruebas/api.php
  * -----------------------------------------------------------------------------
@@ -14,6 +15,8 @@
  */
 declare(strict_types=1);
 
+
+require_once __DIR__ . '/_guardia.php';
 $base = rtrim($argv[1] ?? 'http://127.0.0.1:8899', '/');
 $jar  = sys_get_temp_dir() . '/sget_cookies.txt';
 @unlink($jar);
@@ -64,7 +67,7 @@ check('La página emite un token CSRF', $token !== '');
 
 echo "\n=== Protección sin token ===\n";
 [$c, $j] = http($base . '/api/index.php', ['modulo' => 'ruta', 'accion' => 'guardar', 'nom_rut' => 'X']);
-check('Rechaza peticiones sin token (419)', $c === 419, "código {$c}");
+check('Rechaza peticiones sin token (403, no 419: Apache devuelve 500 con códigos no estándar)', $c === 403, "código {$c}");
 
 echo "\n=== Validación de ruta ===\n";
 [$c, $j] = http($base . '/api/index.php', [

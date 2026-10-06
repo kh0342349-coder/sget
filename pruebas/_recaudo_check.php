@@ -1,4 +1,5 @@
 <?php
+
 /**
  * pruebas/_recaudo_check.php
  * -----------------------------------------------------------------------------
@@ -9,6 +10,8 @@
  */
 declare(strict_types=1);
 
+
+require_once __DIR__ . '/_guardia.php';
 $remoto = $_SERVER['REMOTE_ADDR'] ?? '';
 if (!in_array($remoto, ['127.0.0.1', '::1'], true) || !is_file(__DIR__ . '/.habilitar')) {
     http_response_code(404);

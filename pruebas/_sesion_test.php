@@ -1,4 +1,5 @@
 <?php
+
 /**
  * pruebas/_sesion_test.php
  * -----------------------------------------------------------------------------
@@ -27,6 +28,8 @@
  */
 declare(strict_types=1);
 
+
+require_once __DIR__ . '/_guardia.php';
 $remoto = $_SERVER['REMOTE_ADDR'] ?? '';
 $local  = in_array($remoto, ['127.0.0.1', '::1'], true);
 

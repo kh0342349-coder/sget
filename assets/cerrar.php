@@ -25,6 +25,37 @@ $motivos = [
 
 $descripcion = $motivos[$motivo] ?? $motivos['manual'];
 
+/* -----------------------------------------------------------------------------
+ * PROTECCIÓN ANTICSRF
+ * -----------------------------------------------------------------------------
+ * Antes este endpoint aceptaba un GET cualquiera. Eso significa que bastaba una
+ * imagen en un correo o una web cualquiera para cerrarle la sesión al usuario.
+ * Es un ataque real (y en el caso de SGET, molesto de verdad: pierde el panel
+ * de trabajo).
+ *
+ * Reglas:
+ *   · POST  -> exige token válido. Es lo que usan los formularios.
+ *   · GET   -> SOLO se admite el cierre por inactividad, que es el que dispara
+ *     la propia aplicación. Un cierre manual por GET se rechaza.
+ * -------------------------------------------------------------------------- */
+$esPost = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
+
+if ($esPost) {
+    if (!Auth::validarToken((string)($_POST['_token'] ?? ''))) {
+        http_response_code(403);
+        exit('La sesión del formulario caducó. Recarga la página e inténtalo de nuevo.');
+    }
+} elseif ($motivo !== 'inactividad') {
+    http_response_code(405);
+    header('Allow: POST');
+    exit('El cierre de sesión debe hacerse con un formulario (POST).');
+}
+
+if (!Auth::estaLogueado()) {
+    header('Location: ' . Config::basePath() . '/index.php');
+    exit;
+}
+
 if (Auth::estaLogueado()) {
     Logger::registrar(
         Database::pdo(),

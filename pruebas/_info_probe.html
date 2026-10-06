@@ -40,13 +40,13 @@ async function run() {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab') || 'general';
 
-    for (const t of ['general', 'viajes', 'usuarios', 'rutas', 'ganancias']) {
+    for (const t of ['general', 'viajes', 'pasajeros', 'usuarios', 'rutas', 'ganancias']) {
         await cargar(marco.contentWindow, '../Admin/reportes.php?tab=' + t + '&rango=30');
         const doc = marco.contentDocument;
         const win = marco.contentWindow;
 
         const pestanas = doc.querySelectorAll('.sget-tabs .sget-tab').length;
-        anotar(pestanas === 5, 'tab=' + t + ': hay 5 pestañas de sección', 'pestañas=' + pestanas);
+        anotar(pestanas === 6, 'tab=' + t + ': hay 6 pestañas de sección', 'pestañas=' + pestanas);
 
         const activa = doc.querySelector('.sget-tabs .sget-tab[aria-selected="true"]');
         anotar(activa && activa.textContent.trim().length > 0, 'tab=' + t + ': hay pestaña activa');
@@ -54,6 +54,22 @@ async function run() {
         const cuerpo = doc.querySelector('.sget-main');
         anotar(cuerpo && cuerpo.textContent.length > 200, 'tab=' + t + ': la página tiene contenido',
                cuerpo ? cuerpo.textContent.trim().length + ' car.' : 'sin .sget-main');
+
+        /* La pestaña de pasajeros es la que responde «¿quiénes viajaron y quién
+           no se presentó?». Se comprueba que trae los cuatro datos que la
+           distingen: puestos, embarcaron, no presentación y sin definir. */
+        if (t === 'pasajeros') {
+            const etiquetas = Array.from(doc.querySelectorAll('.sget-kpi__valor, .sget-label'))
+                .map(n => n.textContent.trim().toLowerCase());
+            for (const clave of ['puestos', 'embarcaron', 'no se presentaron', 'sin definir']) {
+                anotar(etiquetas.some(x => x.indexOf(clave) > -1),
+                       'tab=pasajeros: muestra el indicador «' + clave + '»');
+            }
+            anotar(doc.querySelector('select[name="viaje"]') !== null,
+                   'tab=pasajeros: se puede elegir un viaje concreto');
+            anotar(/no se present/i.test(cuerpo ? cuerpo.textContent : ''),
+                   'tab=pasajeros: explica la no-presentación');
+        }
 
         // Errores PHP inyectados por el bootstrap en modo depuración
         const err = doc.documentElement.innerHTML.match(/ERROR PHP: ([^<\n]*)/);

@@ -31,15 +31,31 @@ final class CalificacionService
     /* Consulta                                                            */
     /* ================================================================== */
 
-    /** ¿Este pasajero puede calificar este viaje? */
+    /**
+     * ¿Este pasajero puede calificar este viaje?
+     *
+     * Reglas (todas en backend; el botón del formulario no protege nada):
+     *   1. Que el viaje exista y tenga conductor asignado.
+     *   2. Que el pasajero tenga una reserva VIVA en ese viaje (no cancelada).
+     *   3. Que el viaje esté FINALIZADO. No se puede calificar un viaje
+     *      programado ni uno en curso: la nota mide una experiencia que aún no
+     *      ha ocurrido. Un viaje cancelado tampoco.
+     *   4. Que no exista ya una calificación de ese pasajero para ese viaje.
+     *
+     * @return array{ok:bool, motivo?:string, conductor?:int, ruta?:string}
+     */
     public static function puedeCalificar(int $idPasajero, int $idViaje): array
     {
         if ($idPasajero <= 0 || $idViaje <= 0) {
             return ['ok' => false, 'motivo' => 'Datos incompletos.'];
         }
 
+        /* La comprobación en PHP da un mensaje claro al usuario, pero NO es la
+           barrera: dos peticiones simultáneas pasarían las dos por aquí. La
+           garantía real es la restricción `UNIQUE (id_via_cal, id_usu_rem)` de
+           la tabla `calificacion`, y el error 1062 se traduce abajo. */
         $yaCalifico = (int) Database::scalar(
-            "SELECT COUNT(*) FROM calificacion WHERE id_usu_des = ? AND id_via_cal = ?",
+            "SELECT COUNT(*) FROM calificacion WHERE id_usu_rem = ? AND id_via_cal = ?",
             [$idPasajero, $idViaje]
         );
         if ($yaCalifico > 0) {
@@ -47,17 +63,28 @@ final class CalificacionService
         }
 
         $reserva = Database::one(
-            "SELECT v.id_usu_via, r.nom_rut
+            "SELECT v.id_usu_via, v.est_via, r.nom_rut
                FROM reserva res
                INNER JOIN viaje v ON v.id_via = res.id_via_res
                LEFT JOIN rutas r   ON r.id_rut = v.id_rut_via
-              WHERE res.id_usu_res = ? AND res.id_via_res = ? AND res.estado_pago = ?
+              WHERE res.id_usu_res = ? AND res.id_via_res = ? AND res.estado_pago <> ?
               LIMIT 1",
-            [$idPasajero, $idViaje, Config::RES_CONFIRMADA]
+            [$idPasajero, $idViaje, Config::RES_CANCELADA]
         );
 
         if (!$reserva) {
-            return ['ok' => false, 'motivo' => 'Necesitas una reserva confirmada en ese viaje para calificarlo.'];
+            return ['ok' => false, 'motivo' => 'Necesitas una reserva tuya en ese viaje para calificarlo.'];
+        }
+
+        /* El viaje tiene que haber TERMINADO. Antes no se comprobaba y se podía
+           calificar un viaje que aún no salía, lo que convertía el ranking de
+           conductores en ruido. */
+        $estado = (string)$reserva['est_via'];
+        if ($estado === Config::VIA_CANCELADO) {
+            return ['ok' => false, 'motivo' => 'Ese viaje fue cancelado, así que no se puede calificar.'];
+        }
+        if ($estado !== Config::VIA_FINALIZADO) {
+            return ['ok' => false, 'motivo' => 'Solo puedes calificar un viaje cuando ya haya terminado.'];
         }
 
         if ((int)$reserva['id_usu_via'] <= 0) {
@@ -67,7 +94,10 @@ final class CalificacionService
         return ['ok' => true, 'conductor' => (int)$reserva['id_usu_via'], 'ruta' => (string)$reserva['nom_rut']];
     }
 
-    /** Viajes del pasajero que puede calificar (con y sin nota puesta). */
+    /**
+     * Viajes del pasajero que puede calificar (con y sin nota puesta).
+     * Solo los FINALIZADOS y sin una calificación previa registrada por él.
+     */
     public static function pendientes(int $idPasajero, int $limite = 50): array
     {
         return Database::all(
@@ -81,14 +111,16 @@ final class CalificacionService
                INNER JOIN viaje v   ON v.id_via   = res.id_via_res
                INNER JOIN usuario u ON u.id_usu   = v.id_usu_via
                LEFT JOIN rutas r    ON r.id_rut   = v.id_rut_via
-              WHERE res.id_usu_res = ? AND res.estado_pago = ?
+              WHERE res.id_usu_res = ?
+                AND res.estado_pago <> ?
+                AND v.est_via = ?
               ORDER BY v.fec_via DESC, v.hor_sal_via DESC
               LIMIT " . (int)$limite,
-            [$idPasajero, $idPasajero, $idPasajero, Config::RES_CONFIRMADA]
+            [$idPasajero, $idPasajero, $idPasajero, Config::RES_CANCELADA, Config::VIA_FINALIZADO]
         );
     }
 
-    /** Reseñas recibidas por un conductor. */
+    /** Reseñas recibidas por un conductor (`id_usu_des` = quien fue calificado). */
     public static function deConductor(int $idConductor, int $limite = 100): array
     {
         return Database::all(
@@ -105,14 +137,14 @@ final class CalificacionService
         );
     }
 
-    /** Promedio y total de Qualification de un conductor. */
+    /** Promedio y total de calificación de un conductor. */
     public static function resumen(int $idConductor): array
     {
         $fila = Database::one(
             "SELECT COUNT(*) total, ROUND(AVG(pun_cal), 2) promedio,
                     SUM(CASE WHEN pun_cal >= 4 THEN 1 ELSE 0 END) buenas,
                     SUM(CASE WHEN pun_cal <= 2 THEN 1 ELSE 0 END) malas
-               FROM calificacion WHERE id_usu_rem = ?",
+               FROM calificacion WHERE id_usu_des = ?",
             [$idConductor]
         ) ?: ['total' => 0, 'promedio' => null, 'buenas' => 0, 'malas' => 0];
 
@@ -132,7 +164,7 @@ final class CalificacionService
                     COUNT(c.id_cal) reseñas,
                     ROUND(AVG(c.pun_cal), 2) promedio
                FROM usuario u
-               INNER JOIN calificacion c ON c.id_usu_rem = u.id_usu
+               INNER JOIN calificacion c ON c.id_usu_des = u.id_usu
               WHERE u.id_rol_usu = ?
               GROUP BY u.id_usu, u.nom_usu
               ORDER BY promedio DESC, reseñas DESC
@@ -170,6 +202,14 @@ final class CalificacionService
                 [$idViaje, $idPasajero, (int)$permiso['conductor'], $puntos, $comentario !== '' ? $comentario : null]
             );
         } catch (Throwable $e) {
+            /* 1062 = duplicate key. Es la BARREERA REAL contra la doble
+               calificación: la comprobación de `puedeCalificar()` se ejecuta
+               fuera de cualquier transacción, así que dos peticiones simultáneas
+               la superarían las dos. La restricción UNIQUE del motor es la que
+               resuelve la carrera, y aquí se traduce a un mensaje claro. */
+            if (Database::errorEs($e, [1062])) {
+                return ['ok' => false, 'mensaje' => 'Ya calificaste este viaje.'];
+            }
             error_log('[SGET][CalificacionService::registrar] ' . $e->getMessage());
             return ['ok' => false, 'mensaje' => 'No se pudo guardar la calificación.'];
         }

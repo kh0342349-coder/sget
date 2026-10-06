@@ -72,18 +72,54 @@ final class ViajeService
         );
     }
 
-    public static function conductoresDisponibles(): array
+    /**
+     * Conductores con su disponibilidad REAL para la fecha/hora del viaje.
+     *
+     * ANTES: `COALESCE(est_con_usu,1) = 1 AND id_usu NOT IN (SELECT id_usu_via
+     * FROM viaje WHERE est_via IN ('Programado','En curso'))`. Eso tenía dos
+     * fallos opuestos: un viaje de MAÑANA bloqueaba al conductor desde HOY, y
+     * dos viajes del mismo día siempre se rechazaban aunque no se solaparan.
+     *
+     * AHORA delega en `DisponibilidadService`, la MISMA lógica que valida al
+     * guardar. El selector y el backend no pueden discrepar.
+     *
+     * @param string $fecha  'Y-m-d' (vacío = hoy)
+     * @param string $hora   'H:i:s' (vacío = ahora)
+     */
+    public static function conductoresDisponibles(string $fecha = '', string $hora = '', int $exceptoIdViaje = 0): array
     {
-        return Database::all(
-            "SELECT u.id_usu, u.nom_usu, u.tel_usu
-               FROM usuario u
-              WHERE u.id_rol_usu = ?
-                AND u.estado = 1
-                AND COALESCE(u.est_con_usu, 1) = ?
-                AND u.id_usu NOT IN (SELECT id_usu_via FROM viaje WHERE est_via IN ('Programado','En curso'))
-              ORDER BY u.nom_usu ASC",
-            [Config::ROL_CONDUCTOR, Config::CON_DISPONIBLE]
+        $ventana = self::ventanaDeConsulta($fecha, $hora);
+        return DisponibilidadService::conductores(
+            date('Y-m-d', $ventana['inicio']),
+            date('H:i:s', $ventana['inicio']),
+            $exceptoIdViaje
         );
+    }
+
+    /** Normaliza fecha/hora del formulario; vacío = ahora. */
+    private static function ventanaDeConsulta(string $fecha, string $hora): array
+    {
+        $fecha = trim($fecha);
+        $hora  = trim($hora);
+        if ($fecha !== '') {
+            try {
+                $fecha = Fecha::fecha($fecha);
+            } catch (ValueError $e) {
+                $fecha = date('Y-m-d');
+            }
+        } else {
+            $fecha = date('Y-m-d');
+        }
+        if ($hora !== '') {
+            try {
+                $hora = (string)Fecha::hora($hora, 'hora', true);
+            } catch (ValueError $e) {
+                $hora = date('H:i:s');
+            }
+        } else {
+            $hora = date('H:i:s');
+        }
+        return ['inicio' => strtotime($fecha . ' ' . $hora)];
     }
 
     public static function capacidadRestante(int $idViaje, int $idVehiculo): ?int
@@ -95,6 +131,39 @@ final class ViajeService
             [$idViaje]
         );
         return max(0, $cap - $reservadas);
+    }
+
+    /**
+     * ¿Este usuario es el conductor de este viaje?
+     *
+     * Es la PUERTA que hace falta antes de dejar ver el manifiesto de pasajeros
+     * a un conductor: sin ella, cualquier conductor autenticado podría pedir el
+     * manifiesto de cualquier viaje por el API y ver la lista de pasajeros
+     * (documentos y teléfonos) de viajes que no son suyos. El admin pasa
+     * siempre.
+     *
+     * @param int $idUsuario 0 = el usuario de la sesión
+     */
+    public static function esConductorDelViaje(int $idViaje, int $idUsuario = 0): bool
+    {
+        $idUsuario = $idUsuario > 0 ? $idUsuario : Auth::id();
+        if ($idUsuario <= 0 || $idViaje <= 0) return false;
+
+        return (int) Database::scalar(
+            "SELECT COUNT(*) FROM viaje WHERE id_via = ? AND id_usu_via = ?",
+            [$idViaje, $idUsuario]
+        ) > 0;
+    }
+
+    /**
+     * El manifiesto de pasajeros es de uso del admin y del CONDUCTOR DEL VIAJE.
+     * Cualquier otro rol recibe el mensaje de siempre, sin revelar si el viaje
+     * existe o no.
+     */
+    public static function puedeVerManifiesto(int $idViaje): bool
+    {
+        if (Auth::rol() === Config::ROL_ADMIN) return true;
+        return self::esConductorDelViaje($idViaje);
     }
 
     /* ================================================================== */
@@ -136,21 +205,33 @@ final class ViajeService
             $v->agrega('fec_via', $e->getMessage());
         }
 
-        // Disponibilidad real del conductor y del vehiculo
+        /* Disponibilidad real del conductor y del vehículo.
+           ANTES la comprobación era «¿tiene ALGÚN viaje abierto?», sin mirar
+           fecha ni hora: un viaje mañana a las 10:00 bloqueaba al conductor
+           desde hoy, y dos viajes del mismo día siempre chocaban aunque uno
+           terminara antes de que empezara el otro.
+
+           Ahora se compara la VENTANA HORARIA completa (salida → llegada +
+           margen) del viaje nuevo contra la de cada viaje existente. Dos viajes
+           del mismo día son válidos siempre que sus ventanas no se solapen, y
+           un viaje de otro día nunca bloquea por sí solo.
+
+           En una EDICIÓN se excluye el propio viaje, si no nunca se podría
+           cambiar nada de un viaje que ya tiene conductor y vehículo. */
         if (!$v->falla()) {
-            if ($id === 0) {
-                if (!self::_recursoLibre('conductor', (int)$post['id_usu_via'])) {
-                    $v->agrega('id_usu_via', 'El conductor ya está asignado a otro viaje activo.');
-                }
-                if (!self::_recursoLibre('vehiculo', (int)$post['id_veh'])) {
-                    $v->agrega('id_veh', 'El vehículo ya está asignado a otro viaje activo.');
-                }
+            $ventana = self::ventanaDelPost($post, $idRutaPrevia = (int) Database::scalar(
+                'SELECT id_rut_via FROM viaje WHERE id_via = ?',
+                [$id]
+            ));
+
+            $rConductor = DisponibilidadService::comprobarConductor((int)$post['id_usu_via'], $ventana, $id);
+            if (!$rConductor['ok']) {
+                $v->agrega('id_usu_via', $rConductor['mensaje']);
             }
-            if (!self::_vehiculoOperativo((int)$post['id_veh'])) {
-                $v->agrega('id_veh', 'El vehículo seleccionado está fuera de servicio.');
-            }
-            if (!self::_conductorActivo((int)$post['id_usu_via'])) {
-                $v->agrega('id_usu_via', 'El conductor seleccionado está inactivo.');
+
+            $rVehiculo = DisponibilidadService::comprobarVehiculo((int)$post['id_veh'], $ventana, $id);
+            if (!$rVehiculo['ok']) {
+                $v->agrega('id_veh', $rVehiculo['mensaje']);
             }
         }
 
@@ -158,29 +239,68 @@ final class ViajeService
     }
 
     /**
-     * Verifica que un recurso (conductor o vehículo) no esté asignado a otro
-     * viaje abierto. La columna se resuelve desde una lista blanca: nunca se
-     * interpola texto procedente de la petición.
+     * Ventana temporal del viaje que se quiere guardar.
+     *
+     * La duración se resuelve con la MISMA prioridad que usa el resto del
+     * sistema (llegada del viaje → duración de la ruta → defecto), de modo que
+     * «cuándo choca» y «cuándo termina» nunca dan números distintos.
      */
-    private static function _recursoLibre(string $recurso, int $id): bool
+    private static function ventanaDelPost(array $post, int $idRutaPrevia = 0): array
     {
-        $columnas = [
+        $duracionRuta = 0;
+        if ($idRutaPrevia > 0) {
+            $duracionRuta = (int) (Database::scalar(
+                'SELECT duracion_min FROM rutas WHERE id_rut = ?',
+                [$idRutaPrevia]
+            ) ?? 0);
+        }
+
+        return DisponibilidadService::ventana([
+            'fec_via'      => (string)($post['fec_via'] ?? ''),
+            'hor_sal_via'  => (string)($post['hor_sal_via'] ?? ''),
+            'hor_lleg_via' => (string)($post['hor_lleg_via'] ?? ''),
+            'duracion_min' => $duracionRuta,
+        ]);
+    }
+
+    /**
+     * Verifica que un recurso (conductor o vehículo) no tenga OTRO viaje que se
+     * solape con la ventana del nuevo viaje.
+     *
+     * Antes miraba `est_via IN ('Programado','En curso')` y nada más: sin fecha,
+     * sin hora y sin duración. Era un «¿tiene algo abierto?» en vez de un
+     * «¿choca en este horario?». Toda la lógica real está ahora en
+     * `DisponibilidadService`; este método se conserva como_atajo interno para
+     * no romper las llamadas existentes.
+     *
+     * @param string   $recurso  `conductor` | `vehiculo`
+     * @param int      $id       conductor o vehículo
+     * @param int      $exceptoIdViaje  viaje en edición (se excluye)
+     * @param array    $ventana  ventana del viaje nuevo
+     */
+    private static function _recursoLibre(string $recurso, int $id, int $exceptoIdViaje = 0, array $ventana = []): bool
+    {
+        $columna = match ($recurso) {
             'conductor' => 'id_usu_via',
             'vehiculo'  => 'id_veh',
-        ];
-        if (!isset($columnas[$recurso])) {
-            throw new InvalidArgumentException("Recurso no permitido: {$recurso}");
+            default     => throw new InvalidArgumentException("Recurso no permitido: {$recurso}"),
+        };
+        unset($columna);   // la columna la resuelve el servicio, con lista blanca
+
+        if ($ventana === []) {
+            $ventana = DisponibilidadService::ventana([
+                'fec_via'     => date('Y-m-d'),
+                'hor_sal_via' => date('H:i:s'),
+            ]);
         }
-        $col = $columnas[$recurso];
-        $sql = "SELECT COUNT(*) FROM viaje
-                 WHERE {$col} = ? AND est_via IN ('Programado','En curso')";
-        return (int) Database::scalar($sql, [$id]) === 0;
+
+        return DisponibilidadService::conflictos($recurso, $id, $ventana, $exceptoIdViaje) === [];
     }
 
     private static function _vehiculoOperativo(int $id): bool
     {
         $e = Database::scalar("SELECT est_veh FROM vehiculo WHERE id_veh = ?", [$id]);
-        return $e !== null && (int)$e === Config::VEH_DISPONIBLE;
+        return $e !== null && VehiculoService::operativo((string) $e);
     }
 
     private static function _conductorActivo(int $id): bool
@@ -200,7 +320,22 @@ final class ViajeService
             return ['ok' => false, 'errores' => $v->errores(), 'mensaje' => $v->primerError()];
         }
 
-        $id      = (int)($post['id_via'] ?? 0);
+        /* `$eraEdicion` se calcula ANTES de escribir.
+           El fallo que corregía esto: `$id` vale el id recién insertado en un alta,
+           así que la comprobación posterior `if ($id > 0)` era SIEMPRE cierta y
+           TODOS los altas respondían «Viaje actualizado correctamente». */
+        $id        = (int)($post['id_via'] ?? 0);
+        $eraEdicion = $id > 0;
+
+        /* Estado previo del viaje, leído ANTES del UPDATE: sin esto no se puede
+           saber después qué cambió, porque la consulta devolvería los valores
+           nuevos y el conductor nunca recibiría el aviso de su reasignación. */
+        $previo = $eraEdicion ? self::porId($id) : null;
+        if ($eraEdicion && !$previo) {
+            return ['ok' => false, 'errores' => ['id_via' => 'El viaje que intentas editar ya no existe.'],
+                    'mensaje' => 'El viaje que intentas editar ya no existe.'];
+        }
+
         $idRuta  = (int)$post['id_rut_via'];
         $idUsu   = (int)$post['id_usu_via'];
         $idVeh   = (int)$post['id_veh'];
@@ -213,6 +348,15 @@ final class ViajeService
             $cupos = (int) (Database::scalar("SELECT cap_veh FROM vehiculo WHERE id_veh = ?", [$idVeh]) ?? 0);
         }
 
+        /* Ventana temporal del viaje: es la que se usa para el bloqueo de
+           concurrencia y para decidir si el recurso queda ocupado. */
+        $ventana = DisponibilidadService::ventana([
+            'fec_via'      => $fec,
+            'hor_sal_via'  => $hora,
+            'hor_lleg_via' => $llegada,
+            'duracion_min' => (int)(Database::scalar('SELECT duracion_min FROM rutas WHERE id_rut = ?', [$idRuta]) ?? 0),
+        ]);
+
         // Tarifa: si el administrador la deja en 0, se hereda la tarifa de la ruta
         if ($val <= 0) {
             $val = RutaService::tarifa($idRuta) ?? 0.0;
@@ -221,20 +365,86 @@ final class ViajeService
         try {
             Database::begin();
 
-            if ($id > 0) {
-                // Liberar los recursos que se reemplazan
-                $previo = self::porId($id);
-                if ($previo) {
-                    if ((int)$previo['id_usu_via'] !== $idUsu) self::_liberarConductor((int)$previo['id_usu_via']);
-                    if ((int)($previo['id_veh'] ?? 0) !== $idVeh) self::_liberarVehiculo((int)($previo['id_veh'] ?? 0));
-                }
+            /* ------------------------------------------------------------------
+               BLOQUEO CONTRA ASIGNACIONES SIMULTÁNEAS
+               ------------------------------------------------------------------
+               El problema real que se corrige aquí:
+
+                   Admin A  -> comprueba que el vehículo 7 está libre  -> sí
+                   Admin B  -> comprueba que el vehículo 7 está libre  -> sí
+                   A        -> inserta el viaje con id_veh = 7
+                   B        -> inserta el viaje con id_veh = 7
+
+               `validar()` se ejecuta FUERA de la transacción, así que las dos
+               comprobaciones ven el mismo estado y el sistema acaba con un
+               vehículo en dos viajes incompatibles a la vez.
+
+              La solución es la misma que en `ReservaService::crear()`:
+               `SELECT … FOR UPDATE` sobre el recurso. InnoDB bloquea la fila
+               hasta que la transacción termine, de modo que la segunda
+               transacción ESPERA y, cuando se despierta, ya ve el viaje que
+               escribió la primera. La validación se repite dentro del
+               bloqueo: el mensaje al usuario se mantiene y, sobre todo, la
+               garantía deja de depender del orden de llegada de los dos
+               administradores.
+
+               El orden de los bloqueos es SIEMPRE conductor → vehículo. Un orden
+               fijo es lo que evita un interbloqueo: si cada transacción toma
+               los dos en el mismo orden, ninguna puede quedar esperando
+               mientras la otra tiene el recurso que necesita.
+            ------------------------------------------------------------------- */
+            $conductorBloqueado = Database::one(
+                'SELECT id_usu FROM usuario WHERE id_usu = ? FOR UPDATE',
+                [$idUsu]
+            );
+            if (!$conductorBloqueado) {
+                Database::rollback();
+                return ['ok' => false, 'errores' => ['id_usu_via' => 'El conductor seleccionado ya no existe.'],
+                        'mensaje' => 'El conductor seleccionado ya no existe.'];
+            }
+
+            $vehiculoBloqueado = Database::one(
+                'SELECT id_veh, est_veh FROM vehiculo WHERE id_veh = ? FOR UPDATE',
+                [$idVeh]
+            );
+            if (!$vehiculoBloqueado) {
+                Database::rollback();
+                return ['ok' => false, 'errores' => ['id_veh' => 'El vehículo seleccionado ya no existe.'],
+                        'mensaje' => 'El vehículo seleccionado ya no existe.'];
+            }
+
+            // Revalidación DENTRO del bloqueo (fuera, ya se hizo una pasada).
+            // Ahora compara la ventana REAL del viaje nuevo, no «tiene algo
+            // abierto»: así dos administradores pueden crear viajes el mismo
+            // día con el mismo conductor siempre que no se solapen.
+            $rConductor = DisponibilidadService::comprobarConductor($idUsu, $ventana, $id);
+            if (!$rConductor['ok']) {
+                Database::rollback();
+                return ['ok' => false, 'errores' => ['id_usu_via' => $rConductor['mensaje']],
+                        'mensaje' => $rConductor['mensaje']];
+            }
+
+            $rVehiculo = DisponibilidadService::comprobarVehiculo($idVeh, $ventana, $id);
+            if (!$rVehiculo['ok']) {
+                Database::rollback();
+                return ['ok' => false, 'errores' => ['id_veh' => $rVehiculo['mensaje']],
+                        'mensaje' => $rVehiculo['mensaje']];
+            }
+
+            if ($eraEdicion) {
+                /* Estado: un viaje que ya estaba «En curso» o «Cancelado» no
+                   vuelve a «Programado» por editarlo. Antes sí: se perdía el
+                   rastro de que había salido. */
+                $nuevoEstado = in_array((string)($previo['est_via'] ?? ''), Config::VIA_ESTADOS_CERRADOS, true)
+                    ? (string)$previo['est_via']
+                    : Config::VIA_PROGRAMADO;
 
                 Database::query(
                     "UPDATE viaje
                         SET id_rut_via = ?, id_usu_via = ?, id_veh = ?, fec_via = ?, hor_sal_via = ?,
                             hor_lleg_via = ?, val_via = ?, cup_tot = ?, cup_dis = ?, est_via = ?
                       WHERE id_via = ?",
-                    [$idRuta, $idUsu, $idVeh, $fec, $hora, $llegada, $val, $cupos, $cupos, Config::VIA_PROGRAMADO, $id]
+                    [$idRuta, $idUsu, $idVeh, $fec, $hora, $llegada, $val, $cupos, $cupos, $nuevoEstado, $id]
                 );
             } else {
                 $id = Database::insert(
@@ -249,9 +459,6 @@ final class ViajeService
                 );
             }
 
-            self::_ocuparConductor($idUsu);
-            self::_ocuparVehiculo($idVeh);
-
             Database::commit();
         } catch (Throwable $e) {
             Database::rollback();
@@ -260,10 +467,80 @@ final class ViajeService
                     'mensaje' => 'No se pudo guardar el viaje: ' . $e->getMessage()];
         }
 
+        /* ------------------------------------------------------------------------
+           SINCRONIZACIÓN DE RECURSOS (FUERA de la transacción)
+           ------------------------------------------------------------------------
+           Se hace después del COMMIT y NO es transaccional a propósito: al
+           liberar y ocupar son dos UPDATEs sobre filas ajenas al viaje, y si
+           fallara dentro de la transacción se perderían ambas cosas a la vez.
+           El peor caso razonable es que una unidad quede «Disponible» mientras
+           ya tiene un viaje: se corrige en el siguiente guardado y no se
+           duplican ni se pierden reservas ni datos de este viaje.
+        ---------------------------------------------------------------------- */
+        $cambios = [];
+
+        /* ------------------------------------------------------------------------
+           ESTADO DE LOS RECURSOS
+           ------------------------------------------------------------------------
+           Se recalcula desde las VENTANAS REALES, no con un «ocupar/liberar»
+           a ciegas. Motivo: si al editar un viaje se le quita un vehículo, ese
+           vehículo no queda automáticamente libre si OTRO viaje suyo sigue
+           dentro de su ventana; y al revés, un viaje de mañana NO debe dejar
+           al conductor bloqueado desde hoy.
+
+           Por eso, tras guardar, se recalculan solo los dos recursos afectados
+           (el anterior y el nuevo de cada cosa). El resto de la flota ya lo
+           recalcula `sincronizarEstado()`.
+        ---------------------------------------------------------------------- */
+        $afectados = [
+            'conductor' => [$idUsu],
+            'vehiculo'  => [$idVeh],
+        ];
+
+        if ($eraEdicion) {
+            $conductorPrevio = (int)($previo['id_usu_via'] ?? 0);
+            $vehiculoPrevio  = (int)($previo['id_veh'] ?? 0);
+
+            if ($conductorPrevio !== $idUsu) {
+                $afectados['conductor'][] = $conductorPrevio;
+                $cambios[] = 'conductor';
+            }
+            if ($vehiculoPrevio !== $idVeh) {
+                $afectados['vehiculo'][] = $vehiculoPrevio;
+                $cambios[] = 'vehiculo';
+            }
+        }
+
+        foreach ($afectados as $recurso => $ids) {
+            foreach (array_unique($ids) as $idRecurso) {
+                if ($idRecurso <= 0) {
+                    continue;
+                }
+                $ocupado = DisponibilidadService::ocupadoAhora($recurso, $idRecurso);
+
+                if ($recurso === 'conductor') {
+                    Database::query(
+                        'UPDATE usuario SET est_con_usu = ? WHERE id_usu = ?',
+                        [$ocupado ? Config::CON_OCUPADO : Config::CON_DISPONIBLE, $idRecurso]
+                    );
+                } else {
+                    // Solo se toca si el administrador no laRETIRÓ del servicio.
+                    Database::query(
+                        'UPDATE vehiculo SET est_veh = ?
+                          WHERE id_veh = ? AND est_veh IN (?, ?)',
+                        [
+                            $ocupado ? Config::VEH_ASIGNADO : Config::VEH_DISPONIBLE,
+                            $idRecurso,
+                            Config::VEH_ASIGNADO,
+                            Config::VEH_DISPONIBLE,
+                        ]
+                    );
+                }
+            }
+        }
+
         // Aviso al conductor. Se hace FUERA de la transacción: si el buzón falla,
         // el viaje ya quedó guardado y no se debe perder por un simple aviso.
-        // En una edición solo se avisa si el conductor o la salida cambiaron, para
-        // no bombardear al conductor con avisos de cada guardado.
         $detalle = Database::one(
             "SELECT r.nom_rut, r.ori_rut, r.des_rut, v.cup_tot, veh.pla_veh
                FROM viaje v
@@ -273,12 +550,17 @@ final class ViajeService
             [$id]
         ) ?: [];
 
+        /* En una edición solo se avisa si cambió algo que de verdad le importa al
+           conductor. La comparación usa `$previo` (el estado ANTIGUO), no una
+           consulta posterior al UPDATE: con esa comprobación posterior el conductor nunca se
+           enteraba de que le habían cambiado el horario o la unidad. */
         $cambioRelevante = true;
-        if ($id > 0 && isset($post['__editado'])) {
-            $previo = self::porId($id) ?: [];
+        if ($eraEdicion) {
             $cambioRelevante = (int)($previo['id_usu_via'] ?? 0) !== $idUsu
                 || (string)($previo['fec_via'] ?? '') !== $fec
-                || (string)($previo['hor_sal_via'] ?? '') !== $hora;
+                || (string)($previo['hor_sal_via'] ?? '') !== $hora
+                || (int)($previo['id_veh'] ?? 0) !== $idVeh
+                || (string)($previo['nom_rut'] ?? '') !== (string)($detalle['nom_rut'] ?? '');
         }
 
         if ($cambioRelevante) {
@@ -289,22 +571,25 @@ final class ViajeService
                 'salida'  => Fecha::legible($fec . ' ' . $hora),
                 'placa'   => (string)($detalle['pla_veh'] ?? ''),
                 'cupos'   => (int)($detalle['cup_tot'] ?? $cupos),
+                'cambios' => $cambios,
             ]);
         }
-
-        // El mensaje depende de si era alta o edición. Antes usaba `$id > 0`,
-        // pero `$id` ya vale el id nuevo tras el INSERT: TODOS los altas
-        // respondían "Viaje actualizado correctamente".
-        $eraEdicion = $id > 0;
 
         Logger::registrar(
             Database::pdo(),
             $eraEdicion ? 'EDITAR_VIAJE' : 'CREAR_VIAJE',
-            sprintf('Viaje #%d programado para el %s %s (conductor %d / vehiculo %d)',
-                $id, $fec, $hora, $idUsu, $idVeh)
+            sprintf('Viaje #%d %s para el %s %s (conductor %d / vehiculo %d)',
+                $id, $eraEdicion ? 'actualizado' : 'programado', $fec, $hora, $idUsu, $idVeh)
         );
 
-        return ['ok' => true, 'id' => $id, 'mensaje' => $eraEdicion ? 'Viaje actualizado correctamente.' : 'Viaje programado correctamente.'];
+        $mensaje = 'Viaje programado correctamente.';
+        if ($eraEdicion) {
+            $mensaje = $cambioRelevante
+                ? 'Viaje actualizado correctamente. Se notificó al conductor del cambio.'
+                : 'Viaje actualizado correctamente.';
+        }
+
+        return ['ok' => true, 'id' => $id, 'mensaje' => $mensaje];
     }
 
     /* ================================================================== */
@@ -425,19 +710,75 @@ final class ViajeService
     /* Finalizacion                                                        */
     /* ================================================================== */
 
+    /**
+     * ¿Se puede FINALIZAR este viaje a mano?
+     *
+     * ANTES la única condición era «que no esté ya cerrado», así que un viaje
+     * programado para MAÑANA se podía terminar hoy desde la lista: aparecía un
+     * botón «Terminar» que no tenía sentido, y el backend lo aceptaba igual
+     * porque no miraba la hora. El resultado eran viajes «finalizados» que
+     * nunca salieron y con los pasajeros notificados de un trayecto inexistente.
+     *
+     * Regla vigente: para terminar un viaje tiene que haber SALIDO. Si aún no ha
+     * salido, lo correcto es CANCELARLO (que además notifica y libera).
+     *
+     * @return array{0:bool, 1:string}  [permitido, motivo del rechazo]
+     */
+    public static function puedeFinalizar(array $viaje): array
+    {
+        if ((int)($viaje['id_via'] ?? 0) <= 0) {
+            return [false, 'El viaje no existe.'];
+        }
+        if (in_array((string)($viaje['est_via'] ?? ''), Config::VIA_ESTADOS_CERRADOS, true)) {
+            return [false, 'Este viaje ya está cerrado; no se puede volver a finalizar.'];
+        }
+
+        [$yaSalio, $instante] = Fecha::yaSalio(
+            (string)($viaje['fec_via'] ?? ''),
+            (string)($viaje['hor_sal_via'] ?? ''),
+            Config::TOLERANCIA_SALIDA_MIN
+        );
+
+        if (!$yaSalio) {
+            $salida = $instante !== '' ? Fecha::legible($instante) : 'su hora de salida';
+            return [false, sprintf(
+                'Este viaje sale el %s: todavía no ha salido, así que no se puede marcar como finalizado. Si no va a salir, cancélalo.',
+                $salida
+            )];
+        }
+
+        return [true, ''];
+    }
+
     public static function finalizar(int $idViaje): array
     {
         $viaje = self::porId($idViaje);
         if (!$viaje) return ['ok' => false, 'mensaje' => 'El viaje no existe.'];
-        if (in_array($viaje['est_via'], Config::VIA_ESTADOS_CERRADOS, true)) {
-            return ['ok' => false, 'mensaje' => 'El viaje ya está cerrado.'];
+
+        /* CONTROL POR OBJETO: se comprueba sobre ESTE viaje, no solo el rol.
+           Es la misma regla que usa la interfaz para pintar el botón, así que
+           no puede pasar «lo vi en la lista y el servidor me dice que no». */
+        [$ok, $motivo] = self::puedeFinalizar($viaje);
+        if (!$ok) {
+            return ['ok' => false, 'mensaje' => $motivo];
         }
 
         Database::begin();
-        Database::query("UPDATE viaje SET est_via = ? WHERE id_via = ?", [Config::VIA_FINALIZADO, $idViaje]);
+        Database::query(
+            "UPDATE viaje SET est_via = ?, salio = 1 WHERE id_via = ?",
+            [Config::VIA_FINALIZADO, $idViaje]
+        );
         self::_liberarConductor((int)$viaje['id_usu_via']);
         self::_liberarVehiculo((int)($viaje['id_veh'] ?? 0));
         Database::commit();
+
+        // El estado de la flota se recalcula desde las ventanas reales: si el
+        // conductor tenía OTRO viaje en marcha, no debe quedar libre.
+        try {
+            DisponibilidadService::refrescarEstados();
+        } catch (Throwable $e) {
+            error_log('[SGET][finalizar] ' . $e->getMessage());
+        }
 
         Logger::registrar(Database::pdo(), 'FINALIZAR_VIAJE', "Viaje #{$idViaje} finalizado por " . Auth::nombre() . '.');
 
@@ -470,7 +811,30 @@ final class ViajeService
             Fecha::legible($viaje['fec_via'] . ' ' . $viaje['hor_sal_via'])
         );
 
-        return ['ok' => true, 'mensaje' => "Viaje #{$idViaje} marcado «En curso»."];
+        /* ---------------------------------------------------------------
+           AVISO DE VIAJE PERDIDO
+           Al arrancar la unidad, quien tenía puesto y no embarcó se queda
+           con las manos vacías y sin enterarse: se le avisa de una vez, aquí.
+           `ReservaService::avisarViajePerdido()` solo notifica a los puestos
+           con `embarco` sin decidir y sella la marca para que la
+           sincronización de estado (que corre en cada apertura de un módulo)
+           no lo repita. Un fallo aquí NO puede tumbar el arranque del viaje.
+        ---------------------------------------------------------------- */
+        $perdidos = 0;
+        try {
+            $r = ReservaService::avisarViajePerdido($idViaje);
+            $perdidos = (int)($r['avisados'] ?? 0);
+        } catch (Throwable $e) {
+            error_log('[SGET][ViajeService::marcarEnCurso] ' . $e->getMessage());
+        }
+
+        return [
+            'ok'       => true,
+            'avisados' => $perdidos,
+            'mensaje'  => $perdidos > 0
+                ? sprintf('Viaje #%d marcado «En curso». Se avisó a %d pasajero(s) de que su viaje salió sin ellos.', $idViaje, $perdidos)
+                : "Viaje #{$idViaje} marcado «En curso».",
+        ];
     }
 
     /* ================================================================== */
@@ -487,9 +851,28 @@ final class ViajeService
         $salida  = Fecha::instanteSalida($viaje['fec_via'] ?? null, $viaje['hor_sal_via'] ?? null);
         $llegada = Fecha::soloHora($viaje['hor_lleg_via'] ?? '');
 
+        /* `hor_lleg_via` es una HORA suelta, sin fecha. Compararla con
+           `strtotime()` contra un fecha y hora completas mezclaba dos bases:
+           `strtotime('09:30')` devuelve HOY a las 09:30, así que para un viaje de
+           ayer la diferencia no eran 150 minutos, sino los ~10 000 que hay
+           entre las dos fechas. El resultado era un trayecto absurdo que
+           cerraba el viaje mucho antes de tiempo (o lo mantenía abierto
+           días). Aquí se reconstruye la llegada sobre la FECHA DE SALIDA, y si
+           la hora de llegada es anterior a la de salida, el trayecto cruza la
+           medianoche y se cuenta como día siguiente. */
         if ($llegada !== '' && $salida !== null) {
-            $dif = (strtotime($llegada) - strtotime($salida)) / 60;
-            if ($dif > 0) return (int) round($dif);
+            $dia      = substr($salida, 0, 10);
+            $llegadaF = strtotime($dia . ' ' . $llegada);
+            $salidaTs = strtotime($salida);
+
+            if ($llegadaF !== false && $llegadaF <= $salidaTs) {
+                $llegadaF += 86400;   // llega al día siguiente
+            }
+
+            $min = (int) round(($llegadaF - $salidaTs) / 60);
+            if ($min > 0 && $min <= 2880) {   // 48 h: por encima, es un dato corrupto
+                return $min;
+            }
         }
 
         if (isset($viaje['duracion_min']) && (int)$viaje['duracion_min'] > 0) {
@@ -622,6 +1005,17 @@ final class ViajeService
             $cerrados[] = $id;
         }
 
+        /* El estado de las unidades se recalcula DESPUÉS de cerrar, para que un
+           recurso con dos viajes consecutivos (07:00-09:00 y 14:00-16:00) siga
+           ocupado con el segundo y solo se libere al terminar este último. */
+        if ($idsCerrar || $idsMarcar) {
+            try {
+                DisponibilidadService::refrescarEstados();
+            } catch (Throwable $e) {
+                error_log('[SGET][sincronizarEstado] ' . $e->getMessage());
+            }
+        }
+
         return ['marcar' => $marcados, 'cerrar' => count($cerrados), 'viajes' => $cerrados];
     }
 
@@ -638,24 +1032,38 @@ final class ViajeService
     /* Sincronizacion de estados (0 = ocupado, 1 = disponible)            */
     /* ================================================================== */
 
+    /** @deprecated Usa `DisponibilidadService::marcarConductorOcupado()`. */
     private static function _ocuparConductor(int $id): void
     {
-        if ($id > 0) Database::query("UPDATE usuario SET est_con_usu = ? WHERE id_usu = ?", [Config::CON_OCUPADO, $id]);
+        DisponibilidadService::marcarConductorOcupado($id);
     }
 
+    /** @deprecated Usa `DisponibilidadService::liberarConductor()`. */
     private static function _liberarConductor(int $id): void
     {
-        if ($id > 0) Database::query("UPDATE usuario SET est_con_usu = ? WHERE id_usu = ?", [Config::CON_DISPONIBLE, $id]);
+        DisponibilidadService::liberarConductor($id);
     }
 
+    /**
+     * Ocupa un vehículo para un viaje.
+     *
+     * SOLO cambia las unidades que estaban «Disponible»: si el administrador
+     * la pasó a Mantenimiento o Fuera de servicio mientras había viajes abiertos,
+     * ese estado manda y no se pisa. Antes se escribía siempre el estado
+     * «fuera de servicio», de modo que cualquier viaje dejaba la flota llena de
+     * averías y el selector de vehículos se vaciaba.
+     *
+     * @deprecated Usa `DisponibilidadService::marcarVehiculoAsignado()`.
+     */
     private static function _ocuparVehiculo(int $id): void
     {
-        if ($id > 0) Database::query("UPDATE vehiculo SET est_veh = ? WHERE id_veh = ?", [Config::VEH_FUERA_SERVICIO, $id]);
+        DisponibilidadService::marcarVehiculoAsignado($id);
     }
 
+    /** Libera un vehículo al cerrar el viaje, sin tocar estados ajenos. */
     private static function _liberarVehiculo(int $id): void
     {
-        if ($id > 0) Database::query("UPDATE vehiculo SET est_veh = ? WHERE id_veh = ?", [Config::VEH_DISPONIBLE, $id]);
+        DisponibilidadService::liberarVehiculo($id);
     }
 
     /* ================================================================== */

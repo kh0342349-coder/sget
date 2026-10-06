@@ -1,16 +1,19 @@
 <?php
 date_default_timezone_set('America/Bogota');
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+if (!class_exists('Auth')) {
+    require_once __DIR__ . '/../core/bootstrap.php';
+} elseif (session_status() === PHP_SESSION_NONE) {
+    Auth::iniciar();
 }
 
 include '../assets/conexion.php'; 
 
 // 1. Verificación de seguridad (Solo Conductor - Rol 2)
-if (!isset($_SESSION['documento']) || $_SESSION['rol'] != 2) {
-    header("Location: ../index.php");
-    exit();
-}
+/* La guardia vive en `Auth`: una sola política de autorización para toda
+   la aplicación. Antes cada página repetía su propio
+   `if (!isset($_SESSION['documento']) || $_SESSION['rol'] != N)`. */
+Auth::requerirSesion();
+Auth::requerirRol(Config::ROL_CONDUCTOR);
 
 $documento = $_SESSION['documento'];
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Conductor";
@@ -79,36 +82,40 @@ $res_viaje = $stmt_v->get_result();
 $viaje = $res_viaje->fetch_assoc();
 $stmt_v->close();
 
-$pasajeros = [];
+/*
+ * Los pasajeros se piden al SERVICIO, no con SQL en la página.
+ *
+ * Antes esta página listaba una fila por RESERVA y pintaba el estado comparando
+ * `estado_pago == 'pagado'`. Ese valor NO existe en el ENUM, que es
+ * ('Pendiente','Confirmada','Cancelada'): el mismo tipo de error que el del
+ * recaudo, y el efecto era que TODOS los pasajeros salían como «Pendiente»,
+ * pagaran o no. Además un pasajero con 3 puestos aparecía 3 veces y el
+ * conductor no tenía forma de anotar quién se quedó en casa.
+ */
+$manifiesto = [];
 if ($viaje) {
-    // 4. Consultar pasajeros del viaje
-    $sql_pasajeros = "SELECT 
-            res.id_res,
-            res.fech_res,
-            res.metodo_pago,
-            res.valor_pagado,
-            res.estado_pago,
-            pas.nom_usu AS pasajero_nombre,
-            pas.tel_usu AS pasajero_telefono,
-            pas.corre_usu AS pasajero_correo
-        FROM reserva res
-        INNER JOIN usuario pas ON res.id_usu_res = pas.id_usu
-        WHERE res.id_via_res = ?";
-    
-    $stmt_p = $conexion->prepare($sql_pasajeros);
-    $stmt_p->bind_param("i", $viaje['id_via']);
-    $stmt_p->execute();
-    $res_pasajeros = $stmt_p->get_result();
-    
-    while ($row_p = $res_pasajeros->fetch_assoc()) {
-        $pasajeros[] = $row_p;
-    }
-    $stmt_p->close();
+    $manifiesto = ReservaService::manifiesto((int)$viaje['id_via']);
+}
+$totalPasajeros = 0;
+$embarcaron     = 0;
+$noSePresentaron= 0;
+$sinDefinir     = 0;
+foreach ($manifiesto as $m) {
+    $totalPasajeros += $m['puestos'];
+    $embarcaron     += $m['embarcaron'];
+    $noSePresentaron+= $m['no_embarcaron'];
+    $sinDefinir     += $m['sin_decidir'];
 }
 
 // Consultas secundarias para el Drawer (+)
 $rutas_select = $conexion->query("SELECT id_rut, nom_rut, val_rut FROM rutas ORDER BY nom_rut ASC");
-$vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehiculo WHERE est_veh = 1 ORDER BY pla_veh ASC");
+$stmt_vehiculos = $conexion->prepare("SELECT id_veh, pla_veh, mode_veh FROM vehiculo WHERE est_veh = ? ORDER BY pla_veh ASC");
+// `bind_param` exige variables POR REFERENCIA: pasar la constante directamente
+// es un error fatal (`Argument #2 cannot be passed by reference`).
+$stmt_vehiculos_estado = Config::VEH_DISPONIBLE;
+$stmt_vehiculos->bind_param("s", $stmt_vehiculos_estado);
+$stmt_vehiculos->execute();
+$vehiculos_select = $stmt_vehiculos->get_result();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -178,32 +185,15 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                     <div class="flex items-center gap-2.5">
                         <h1 class="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight uppercase">Reporte de Viaje Asignado</h1>
                         
-                        <!-- BOTÓN Y TARJETA FLOTANTE DE AYUDA (?) -->
-                        <div class="relative group">
-                            <button type="button" class="w-6 h-6 rounded-full bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center text-xs font-bold shadow-xs cursor-pointer">
-                                <i class="fas fa-question text-[10px]"></i>
-                            </button>
+                        <!--
+                             BOTÓN DE AYUDA DEL MÓDULO · RETIRADO
+                             Este «?» por pantalla se sustituyó por UNO SOLO global en la
+                             esquina inferior derecha (views/modals/ayuda.php), que además
+                             cambia de contenido según el rol y el módulo. Con estos botones
+                             repartidos, cada módulo llevaba su propia copia de la guía y se
+                             desincronizaban entre sí.
+                        -->
 
-                            <div class="absolute left-0 top-full mt-2 w-80 bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700/80 rounded-2xl shadow-2xl p-4 text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-200 z-50">
-                                <p class="font-bold text-slate-900 dark:text-white mb-2 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-700/60 pb-2">
-                                    <i class="fas fa-info-circle text-neon-azul"></i> Control del Servicio Asignado
-                                </p>
-                                <ul class="space-y-2 text-slate-600 dark:text-slate-300 leading-relaxed">
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-plus-circle text-blue-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Programar Viaje (+):</b> Abre el formulario deslizante para habilitar un nuevo turno o itinerario.</span>
-                                    </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-flag-checkered text-emerald-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Finalizar Viaje:</b> Cierra el trayecto actual, liberando tu estado a disponible.</span>
-                                    </li>
-                                    <li class="flex items-start gap-1.5">
-                                        <i class="fas fa-users text-indigo-500 mt-0.5 shrink-0"></i>
-                                        <span><b>Pasajeros:</b> Lista en tiempo real con datos de contacto y validación de pago.</span>
-                                    </li>
-                                </ul>
-                            </div>
-                        </div>
                     </div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Detalle del servicio, itinerario y listado oficial de pasajeros abonados.</p>
                 </div>
@@ -282,68 +272,150 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                             </ul>
                         </div>
 
-                        <!-- Botón para finalizar viaje -->
+                        <!-- Botón para finalizar viaje.
+                             Solo aparece si el viaje puede terminarse de verdad; si aún no
+                             ha salido, se explica por qué. La regla es la misma que aplica
+                             el backend (`ViajeService::puedeFinalizar()`). -->
+                        <?php [$puedeFinalizar, $motivoFinalizar] = ViajeService::puedeFinalizar($viaje); ?>
                         <div class="pt-4 border-t border-slate-100 dark:border-white/5">
-                            <button type="button" 
-                                    onclick="confirmarFinalizarReporte(<?= $viaje['id_via'] ?>, '<?= htmlspecialchars($viaje['des_rut'] ?? 'Ruta', ENT_QUOTES, 'UTF-8') ?>')"
-                                    class="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all duration-200 shadow-lg shadow-emerald-600/20 active:scale-[0.98] cursor-pointer">
-                                <i class="fas fa-flag-checkered text-sm"></i>
-                                Finalizar Viaje
-                            </button>
+                            <?php if ($puedeFinalizar): ?>
+                                <button type="button" 
+                                        onclick="confirmarFinalizarReporte(<?= (int)$viaje['id_via'] ?>, '<?= htmlspecialchars($viaje['des_rut'] ?? 'Ruta', ENT_QUOTES, 'UTF-8') ?>')"
+                                        class="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs uppercase tracking-wider transition-all duration-200 shadow-lg shadow-emerald-600/20 active:scale-[0.98] cursor-pointer">
+                                    <i class="fas fa-flag-checkered text-sm"></i>
+                                    Finalizar Viaje
+                                </button>
+                            <?php else: ?>
+                                <p class="flex items-start gap-2 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-3">
+                                    <i class="fas fa-circle-info mt-0.5 shrink-0"></i>
+                                    <span><?= htmlspecialchars($motivoFinalizar, ENT_QUOTES, 'UTF-8') ?></span>
+                                </p>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
 
                 <!-- 3. Lista de Pasajeros -->
                 <div class="bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-white/5 p-6 rounded-2xl shadow-xl space-y-4">
-                    <div class="flex items-center gap-2 border-b border-slate-100 dark:border-white/5 pb-3">
-                        <i class="fas fa-users text-emerald-500 text-lg"></i>
-                        <h2 class="font-bold text-slate-900 dark:text-white text-base">3. Pasajeros Asignados y Reservas</h2>
+                    <div class="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-white/5 pb-3 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-users text-emerald-500 text-lg"></i>
+                            <h2 class="font-bold text-slate-900 dark:text-white text-base">3. Pasajeros de este viaje</h2>
+                        </div>
+                        <?php if ($totalPasajeros > 0): ?>
+                            <div class="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider">
+                                <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/5">
+                                    <?= (int)$totalPasajeros ?> puesto(s)
+                                </span>
+                                <?php if ($embarcaron > 0): ?>
+                                    <span class="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                        <?= (int)$embarcaron ?> embarcaron
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($noSePresentaron > 0): ?>
+                                    <span class="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                                        <?= (int)$noSePresentaron ?> no se presentaron
+                                    </span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
 
-                    <?php if (count($pasajeros) > 0): ?>
+                    <?php if (!empty($manifiesto)): ?>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 flex items-start gap-2">
+                            <i class="fas fa-circle-info text-sky-500 mt-0.5"></i>
+                            Anota quién sube al bus. Los que no se presenten se marcan con un motivo: es lo que
+                            después aparece en los informes y lo que explica por qué un pasajero no figura
+                            entre los que viajaron.
+                        </p>
+
                         <div class="overflow-x-auto custom-scrollbar rounded-xl border border-slate-200 dark:border-white/5 w-full">
-                            <table class="w-full text-sm text-left border-collapse min-w-[650px]">
+                            <table class="w-full text-sm text-left border-collapse min-w-[720px]">
                                 <thead class="text-slate-500 dark:text-slate-400 uppercase text-[10px] font-black tracking-widest bg-slate-100/70 dark:bg-[#0b0f19]/50 border-b border-slate-200 dark:border-white/5">
                                     <tr>
-                                        <th class="px-5 py-3.5"># Reserva</th>
                                         <th class="px-5 py-3.5">Pasajero</th>
-                                        <th class="px-5 py-3.5">Teléfono</th>
-                                        <th class="px-5 py-3.5">Correo</th>
-                                        <th class="px-5 py-3.5">Método Pago</th>
-                                        <th class="px-5 py-3.5 text-center">Estado Pago</th>
+                                        <th class="px-5 py-3.5">Tel&eacute;fono</th>
+                                        <th class="px-5 py-3.5 text-center">Puestos</th>
+                                        <th class="px-5 py-3.5 text-center">Pago</th>
+                                        <th class="px-5 py-3.5 text-center">Embarque</th>
+                                        <th class="px-5 py-3.5 text-right">Acci&oacute;nes</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-200 dark:divide-white/5 text-slate-700 dark:text-slate-200">
-                                    <?php foreach ($pasajeros as $p): ?>
-                                    <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
-                                        <td class="px-5 py-4 font-mono font-bold text-blue-600 dark:text-neon-azul">
-                                            RES-<?= str_pad($p['id_res'], 3, '0', STR_PAD_LEFT) ?>
-                                        </td>
-                                        <td class="px-5 py-4 font-semibold capitalize text-slate-900 dark:text-white">
-                                            <?= htmlspecialchars($p['pasajero_nombre']) ?>
-                                        </td>
-                                        <td class="px-5 py-4 font-mono text-xs">
-                                            <?= htmlspecialchars($p['pasajero_telefono'] ?? 'Sin celular') ?>
-                                        </td>
-                                        <td class="px-5 py-4 text-xs text-slate-400">
-                                            <?= htmlspecialchars($p['pasajero_correo'] ?? 'Sin correo') ?>
-                                        </td>
-                                        <td class="px-5 py-4 text-xs uppercase font-medium">
-                                            <?= htmlspecialchars($p['metodo_pago'] ?? 'Efectivo') ?>
-                                        </td>
-                                        <td class="px-5 py-4 text-center">
-                                            <?php if (strtolower($p['estado_pago'] ?? '') == 'pagado'): ?>
-                                                <span class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
-                                                    <i class="fas fa-check-circle mr-1"></i> Pagado ($<?= number_format($p['valor_pagado'] ?? 0, 0) ?>)
-                                                </span>
-                                            <?php else: ?>
-                                                <span class="bg-rose-500/10 text-rose-500 dark:text-rose-400 border border-rose-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
-                                                    <i class="fas fa-clock mr-1"></i> Pendiente ($<?= number_format($p['valor_pagado'] ?? 0, 0) ?>)
-                                                </span>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
+                                    <?php foreach ($manifiesto as $m): ?>
+                                        <?php
+                                        $cancelado   = $m['cancelados'] > 0 && $m['pagados'] === 0 && $m['pendientes'] === 0;
+                                        $todoPagado  = $m['pendientes'] === 0 && !$cancelado;
+                                        $embarcado   = $m['embarcaron'] > 0 && $m['no_embarcaron'] === 0;
+                                        $noVino      = $m['no_embarcaron'] > 0 && $m['embarcaron'] === 0;
+                                        ?>
+                                        <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors<?= $cancelado ? ' opacity-50' : '' ?>">
+                                            <td class="px-5 py-4">
+                                                <div class="font-semibold capitalize text-slate-900 dark:text-white">
+                                                    <?= htmlspecialchars($m['pasajero'], ENT_QUOTES, 'UTF-8') ?>
+                                                </div>
+                                                <div class="font-mono text-[10px] text-slate-400">
+                                                    <?= htmlspecialchars($m['num_doc_usu'], ENT_QUOTES, 'UTF-8') ?>
+                                                </div>
+                                                <?php if ($m['motivo'] !== ''): ?>
+                                                    <div class="text-[10px] text-rose-500 dark:text-rose-400 mt-1">
+                                                        <i class="fas fa-circle-info"></i> <?= htmlspecialchars($m['motivo'], ENT_QUOTES, 'UTF-8') ?>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="px-5 py-4 font-mono text-xs">
+                                                <?= htmlspecialchars($m['tel_usu'] !== '' ? $m['tel_usu'] : 'Sin celular', ENT_QUOTES, 'UTF-8') ?>
+                                            </td>
+                                            <td class="px-5 py-4 text-center font-mono font-bold"><?= (int)$m['puestos'] ?></td>
+                                            <td class="px-5 py-4 text-center">
+                                                <?php if ($cancelado): ?>
+                                                    <span class="bg-slate-500/10 text-slate-500 border border-slate-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">Cancelada</span>
+                                                <?php elseif ($todoPagado): ?>
+                                                    <span class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
+                                                        <i class="fas fa-check-circle mr-1"></i> Pagada
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
+                                                        <i class="fas fa-clock mr-1"></i> <?= (int)$m['pendientes'] ?> pendiente(s)
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="px-5 py-4 text-center">
+                                                <?php if ($embarcado): ?>
+                                                    <span class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
+                                                        <i class="fas fa-user-check mr-1"></i> Embarc&oacute;
+                                                    </span>
+                                                <?php elseif ($noVino): ?>
+                                                    <span class="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
+                                                        <i class="fas fa-user-slash mr-1"></i> No se present&oacute;
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/5 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
+                                                        <i class="fas fa-question mr-1"></i> Sin definir
+                                                    </span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td class="px-5 py-4">
+                                                <?php if (!$cancelado): ?>
+                                                    <div class="flex items-center justify-end gap-2">
+                                                        <button type="button"
+                                                                class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors <?= $embarcado ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 opacity-60' : 'bg-emerald-600 hover:bg-emerald-700 text-white' ?>"
+                                                                data-sget-embarcar="1"
+                                                                data-sget-pasajero="<?= (int)$m['id_pasajero'] ?>"
+                                                                title="Marcar que este pasajero subio al bus">
+                                                            <i class="fas fa-user-check"></i> Subio
+                                                        </button>
+                                                        <button type="button"
+                                                                class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors <?= $noVino ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 opacity-60' : 'bg-rose-600 hover:bg-rose-700 text-white' ?>"
+                                                                data-sget-embarcar="0"
+                                                                data-sget-pasajero="<?= (int)$m['id_pasajero'] ?>"
+                                                                title="Marcar que este pasajero no se presento (pide un motivo)">
+                                                            <i class="fas fa-user-slash"></i> No vino
+                                                        </button>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
                                     <?php endforeach; ?>
                                 </tbody>
                             </table>
@@ -351,7 +423,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                     <?php else: ?>
                         <div class="py-12 text-center text-slate-400 dark:text-slate-500 italic">
                             <i class="fas fa-info-circle text-2xl mb-2 text-amber-500 block"></i>
-                            No hay reservas de pasajeros registradas para este viaje aún.
+                            No hay pasajeros reservados para este viaje a&uacute;n.
                         </div>
                     <?php endif; ?>
                 </div>
@@ -384,9 +456,13 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
                 <button type="button" onclick="cerrarModalConfirmar()" class="flex-1 py-2.5 bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 font-bold text-xs rounded-xl uppercase tracking-wider cursor-pointer">
                     Cancelar
                 </button>
-                <a id="btnLinkFinalizarReporte" href="#" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-600/20 text-center flex items-center justify-center">
-                    Sí, Finalizar
-                </a>
+                <form method="POST" action="finalizar_viaje.php" id="formFinalizarReporte" class="flex-1 flex">
+                    <?= Auth::campoToken() ?>
+                    <input type="hidden" name="id" id="inputFinalizarReporteId" value="">
+                    <button type="submit" class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-600/20 text-center flex items-center justify-center cursor-pointer">
+                        Sí, Finalizar
+                    </button>
+                </form>
             </div>
         </div>
     </div>
@@ -559,7 +635,7 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
         }
 
         function confirmarFinalizarReporte(idViaje, nombreRuta) {
-            document.getElementById('btnLinkFinalizarReporte').href = 'finalizar_viaje.php?id=' + idViaje;
+            document.getElementById('inputFinalizarReporteId').value = idViaje;
             document.getElementById('txtConfirmDestinoReporte').innerText = 'Confirma que el vehículo llegó a su destino (' + nombreRuta + ') para cambiar tu estado a disponible.';
 
             const overlay = document.getElementById('overlayReporte');
@@ -633,5 +709,103 @@ $vehiculos_select = $conexion->query("SELECT id_veh, pla_veh, mode_veh FROM vehi
     <!-- Motor común de modales + puente de compatibilidad con el JS heredado -->
     <script src="../assets/js/sget-modal.js?v=<?= @filemtime('../assets/js/sget-modal.js') ?: '1' ?>"></script>
     <script src="../assets/js/sget-puente.js?v=<?= @filemtime('../assets/js/sget-puente.js') ?: '1' ?>"></script>
+
+    <script>
+    /* MARCAJE DE EMBARQUE DEL CONDUCTOR
+       ---------------------------------------------------------------
+       El conductor es quien sabe en el paradero quién subió y quién no. Con esa
+       información el informe puede decir "estosDEFF viajaron" y "este se quedó
+       en casa porque…", y el pasajero recibe el aviso de que perdió el viaje.
+
+       OJO con dos cosas:
+         · hace falta el token anti-CSRF y esta página no lo tenía: sin él el API
+           responds 419 y el botón no hacía nada en silencio;
+         · el API valida que el viaje sea SUYO (ViajeService::puedeVerManifiesto),
+           así que un conductor no puede marcar pasajeros de otro viaje aunque
+           manipule la petición. */
+    (function () {
+        'use strict';
+        if (!<?= $viaje ? (int)$viaje['id_via'] : 0 ?>) return;
+
+        var ID_VIAJE = <?= $viaje ? (int)$viaje['id_via'] : 0 ?>;
+        var TOKEN   = <?= json_encode(Auth::token()) ?>;
+
+        // Motivos rápidos: el conductor elige uno y ya está escrito. Se puede
+        // escribir otro, pero casi siempre es uno de estos.
+        var MOTIVOS = [
+            'No apareció en el paradero',
+            'Llegó tarde, el bus ya había salido',
+            'Presentó una justificación',
+            'Canceló por teléfono y no avisó',
+            'Se equivocó de viaje'
+        ];
+
+        function api(accion, extra, alTerminar) {
+            var cuerpo = new FormData();
+            cuerpo.append('_token', TOKEN);
+            cuerpo.append('modulo', 'reserva');
+            cuerpo.append('accion', accion);
+            cuerpo.append('id_via', ID_VIAJE);
+            extra(cuerpo);
+            return fetch('../api/index.php', {
+                method: 'POST', body: cuerpo, credentials: 'same-origin'
+            }).then(function (r) { return r.json(); })
+              .then(function (j) {
+                  SGETModal.toast(j.mensaje, j.status === 'ok' ? 'exito' : 'error');
+                  if (j.status === 'ok' && alTerminar) alTerminar();
+              })
+              .catch(function () { SGETModal.toast('No se pudo conectar con el servidor.', 'error'); });
+        }
+        document.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-sget-embarcar]');
+            if (!btn) return;
+            e.preventDefault();
+
+            var idPasajero = btn.dataset.sgetPasajero;
+            var embarco    = btn.dataset.sgetEmbarcar === '1';
+
+            // Subió: no hay nada que preguntar, se registra y se recarga.
+            if (embarco) {
+                api('embarcar', function (c) {
+                    c.append('id', idPasajero);
+                    c.append('embarco', '1');
+                }, function () { location.reload(); });
+                return;
+            }
+
+            // No vino: el motivo es OBLIGATORIO. Sin él el informe no puede
+            // distinguir un no-show de una reserva que el pasajero canceló.
+            var opciones = MOTIVOS.map(function (m) {
+                return '<option value="' + m + '">' + m + '</option>';
+            }).join('');
+
+            SGETModal.confirmar({
+                tipo: 'peligro',
+                icono: 'fa-user-slash',
+                titulo: 'Registrar no-presentación',
+                cuerpo: '<p style="margin-bottom:.75rem">Explica por qué este pasajero no se presentó. '
+                      + 'Queda escrito en el informe del viaje.</p>'
+                      + '<select id="sgetMotivoNoPresente" class="sget-select" style="width:100%">'
+                      + '<option value="">Elige un motivo…</option>' + opciones + '</select>'
+                      + '<input id="sgetMotivoLibre" class="sget-input" style="width:100%;margin-top:.5rem" '
+                      + 'placeholder="O escribe otro motivo…" maxlength="120">',
+                textoOk: 'Registrar'
+            }).then(function () {
+                var sel  = document.getElementById('sgetMotivoNoPresente');
+                var libre= document.getElementById('sgetMotivoLibre');
+                var motivo = (libre && libre.value.trim()) || (sel ? sel.value.trim() : '');
+
+                if (!motivo) {
+                    SGETModal.toast('Elige o escribe un motivo: sin él el informe no explica nada.', 'error');
+                    return;
+                }
+                api('noPresente', function (c) {
+                    c.append('id_usu', idPasajero);
+                    c.append('motivo', motivo);
+                }, function () { location.reload(); });
+            });
+        });
+    })();
+    </script>
 </body>
 </html>

@@ -1,35 +1,31 @@
-# ---------------------------------------------------------------------------
-# SGET — Sistema Inteligente de Transporte
-# ---------------------------------------------------------------------------
-
-# Dependencias / artefactos
-/vendor/
-/node_modules/
-composer.lock
-package-lock.json
-
-# Sistema
-.DS_Store
-Thumbs.db
-*.log
-error_log
-
-# Uploads de usuarios (el contenido se sirve, pero nunca se versiona)
-/uploads/*
 !/uploads/.gitkeep
-
-# Migraciones aplicadas
 # (las migraciones en sí SÍ se versionan en /migraciones)
-
-# Pruebas: nunca subir el interruptor de pruebas ni sus cookies
-/pruebas/.habilitar
-*.cookies.txt
-
+# ---------------------------------------------------------------------------
 # Backups de base de datos
-*.sql.gz
-/backups/
-
+# Dependencias / artefactos
 # Editores
+# Interruptor de las pruebas: NUNCA se versiona (ver pruebas/.htaccess).
+# Migraciones aplicadas
+# Pruebas: nunca subir el interruptor de pruebas ni sus cookies
+# SGET — Sistema Inteligente de Transporte
+# Sistema
+# Uploads de usuarios (el contenido se sirve, pero nunca se versiona)
+*.cookies.txt
+*.log
+*.sql.gz
+*.swp
+.DS_Store
 .idea/
 .vscode/
-*.swp
+/backups/
+/node_modules/
+/pruebas/.habilitar
+/uploads/*
+/vendor/
+Thumbs.db
+composer.lock
+error_log
+package-lock.json
+pruebas/.habilitar
+pruebas/.x.png
+pruebas/_x.png
