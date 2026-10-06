@@ -121,7 +121,7 @@ $v = fn($k, $d = '') => htmlspecialchars((string)($d), ENT_QUOTES, 'UTF-8');
         });
 
         // Al abrir el modal se reinicia siempre a 5 estrellas
-        modal.addEventListener('sget:modal-abierto', function (ev) {
+        document.addEventListener('sget:modal-abierto', function (ev) {
             if (!ev.detail || ev.detail.id !== 'modalCalificar') return;
             pintar(5);
             if (window.SGETModal) window.SGETModal.limpiarErrores(form);

@@ -131,13 +131,8 @@ include __DIR__ . '/../views/partials/head.php';
             </div>
         <?php else: ?>
 
-            <!-- Buscador + filtros -->
+            <!-- Filtros por estado -->
             <div class="sget-toolbar">
-                <div class="sget-search">
-                    <i class="fas fa-magnifying-glass"></i>
-                    <input type="search" id="buscarAnuncio" class="sget-input" data-sget-buscar
-                           placeholder="Buscar por título o enlace… (Ctrl+K)" autocomplete="off" spellcheck="false">
-                </div>
                 <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="*" aria-pressed="true">Todos</button>
                 <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="1">Visibles</button>
                 <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="0">Ocultos</button>

@@ -142,7 +142,7 @@ try {
                 </div>
 
                 <h1 class="text-4xl sm:text-5xl md:text-6xl font-black tracking-tight leading-tight text-slate-900 dark:text-white">
-                    Viaja Seguro y Monitorea tu Flota en <span class="text-transparent bg-clip-text bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-600">Tiempo Real</span>
+                    Viaja Seguro y Monitorea tu Flota
                 </h1>
 
                 <p class="text-base sm:text-lg max-w-2xl mx-auto font-medium leading-relaxed text-slate-600 dark:text-slate-300">
@@ -173,11 +173,10 @@ try {
                 </div>
 
                 <!-- PRUEBAS DE CONFIANZA: sin esto el hero promete sin respaldo -->
-                <dl class="grid grid-cols-3 gap-4 sm:gap-8 max-w-lg mx-auto pt-4">
+                <dl class="grid grid-cols-2 gap-4 sm:gap-8 max-w-lg mx-auto pt-4">
                     <?php foreach ([
                         ['fa-route',        $totalRutas,               'Rutas activas'],
                         ['fa-bus',          count($viajesPublicos),     'Viajes publicados'],
-                        ['fa-shield-halved', '24/7',                   'Monitoreo'],
                     ] as [$icono, $valor, $rotulo]): ?>
                         <div class="text-center">
                             <dt class="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5">

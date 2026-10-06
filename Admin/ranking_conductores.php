@@ -40,7 +40,7 @@ $resultado_ranking = $conexion->query($query_ranking);
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <!-- CSS MODULAR DEL PANEL (antes: style_admin.css, que no existia en esta carpeta) -->
     <link rel="stylesheet" href="../assets/css/01-base.css">
-    <link rel="stylesheet" href="../assets/css/02-layout.css">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/02-layout.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/03-componentes.css">
     <link rel="stylesheet" href="../assets/css/04-modales.css">
     <link rel="stylesheet" href="../assets/css/05-tablas.css">

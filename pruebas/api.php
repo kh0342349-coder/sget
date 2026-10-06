@@ -83,7 +83,7 @@ $nombre = 'APITEST-' . bin2hex(random_bytes(3));
 [$c, $j] = http($base . '/api/index.php', [
     '_token' => $token, 'modulo' => 'ruta', 'accion' => 'guardar',
     'nom_rut' => $nombre, 'ori_rut' => 'Ciudad_ORIGEN', 'des_rut' => 'Ciudad_DESTINO',
-    'dis_rut' => '45.5', 'val_rut' => '9900.00', 'hora_salida' => '06:15',
+    'dis_rut' => '45.5', 'val_rut' => '9900.00',
 ]);
 check('Crea la ruta (200)', $c === 200, "código {$c} · " . json_encode($j));
 $idRuta = (int)($j['datos']['id'] ?? 0);
@@ -96,8 +96,10 @@ $htmlViajes = (string)curl_exec($ch);
 curl_close($ch);
 check('La ruta aparece en el selector del modal de viaje',
     str_contains($htmlViajes, 'value="' . $idRuta . '"'));
-check('El selector trae la hora de salida de la ruta',
-    str_contains($htmlViajes, 'data-hora="06:15"'));
+check('La ruta nueva no impone la hora de salida del viaje',
+    str_contains($htmlViajes, 'data-hora=""'));
+check('El formulario de viaje solicita su propia hora de salida',
+    str_contains($htmlViajes, 'name="hor_sal_via"') && str_contains($htmlViajes, 'required'));
 
 echo "\n=== Protección del módulo por rol ===\n";
 // El API exige sesión; sin cookie debe devolver 401 y NO crear nada

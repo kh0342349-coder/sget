@@ -14,7 +14,10 @@ $tituloPagina = $tituloPagina ?? basename($_SERVER['PHP_SELF'] ?? 'SGET', '.php'
 $cssExtra     = $cssExtra     ?? [];
 
 // Versión de assets: cambia al desplegar para romper la caché del navegador
-$v  = filemtime(Config::raiz('assets/css/01-base.css')) ?: '1';
+$v  = max(
+    (int)(filemtime(Config::raiz('assets/css/01-base.css')) ?: 1),
+    (int)(filemtime(Config::raiz('assets/css/02-layout.css')) ?: 1)
+);
 $mv = filemtime(Config::raiz('assets/js/sget-modal.js')) ?: '1';
 ?>
 <!DOCTYPE html>

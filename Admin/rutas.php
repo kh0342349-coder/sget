@@ -51,7 +51,7 @@ include __DIR__ . '/../views/partials/head.php';
                 <h1 class="sget-page-title"><i class="fas fa-route text-sky-500"></i> Gestión de Rutas</h1>
                 <p class="sget-page-sub">
                     Registra cada trayecto con su <strong>ciudad de salida</strong>, <strong>ciudad de destino</strong>,
-                    distancia, tarifa base y hora de salida por defecto.
+                    distancia y tarifa base.
                 </p>
             </div>
             <div class="sget-page-actions">
@@ -79,12 +79,8 @@ include __DIR__ . '/../views/partials/head.php';
             </div>
         </section>
 
-        <!-- Buscador + filtros -->
+        <!-- Filtros por estado -->
         <div class="sget-toolbar">
-            <div class="sget-search">
-                <i class="fas fa-magnifying-glass"></i>
-                <input type="search" id="buscarRuta" class="sget-input" data-sget-buscar" placeholder="Buscar ruta, salida o destino… (Ctrl+K)" autocomplete="off" spellcheck="false">
-            </div>
             <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="*">Todas</button>
             <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="1">Activas</button>
             <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="0">Suspendidas</button>
@@ -106,7 +102,6 @@ include __DIR__ . '/../views/partials/head.php';
                     $id     = (int)$r['id_rut'];
                     $imgUrl = RutaService::urlImagen($r['img_rut'] ?? null);
                     $estado = (int)($r['estado'] ?? 1);
-                    $hora   = Fecha::soloHora($r['hora_salida'] ?? '');
                     $datos  = [
                         'id_rut'      => $id,
                         'nom_rut'     => $r['nom_rut'],
@@ -114,7 +109,6 @@ include __DIR__ . '/../views/partials/head.php';
                         'des_rut'     => $r['des_rut'],
                         'dis_rut'     => $r['dis_rut'],
                         'val_rut'     => $r['val_rut'],
-                        'hora_salida' => $hora,
                         'img_actual'  => $r['img_rut'],
                         'estado'      => (string)$estado,
                         'titulo'      => 'Editar Ruta #' . $id,
@@ -140,7 +134,7 @@ include __DIR__ . '/../views/partials/head.php';
                         </span>
                     </header>
 
-                    <div class="sget-form-3col" style="margin-top:1rem;gap:.5rem">
+                    <div class="sget-form-2col" style="margin-top:1rem;gap:.5rem">
                         <div>
                             <p class="sget-label">Tarifa</p>
                             <p class="sget-mono" style="font-size:.875rem;font-weight:800">$<?= number_format((float)$r['val_rut'], 0, ',', '.') ?></p>
@@ -148,10 +142,6 @@ include __DIR__ . '/../views/partials/head.php';
                         <div>
                             <p class="sget-label">Distancia</p>
                             <p class="sget-mono" style="font-size:.875rem"><?= (float)$r['dis_rut'] > 0 ? number_format((float)$r['dis_rut'], 1, ',', '.') . ' km' : '—' ?></p>
-                        </div>
-                        <div>
-                            <p class="sget-label">Salida</p>
-                            <p class="sget-mono" style="font-size:.875rem"><?= $hora !== '' ? $hora : '—' ?></p>
                         </div>
                     </div>
 

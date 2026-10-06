@@ -156,25 +156,6 @@ include __DIR__ . '/../views/partials/head.php';
 
         <!-- ============================ FILTROS ============================== -->
         <form method="GET" class="sget-toolbar" style="align-items:flex-end" data-sget-form-solo>
-            <div class="sget-search" style="flex:2 1 14rem">
-                <i class="fas fa-magnifying-glass"></i>
-                <!--
-                    Filtro de SERVIDOR: el texto que hay aquí describe las
-                    filas que se están mostrando abajo. Por eso este campo está
-                    exento de «empezar vacío»: borrarlo sin recargar dejaría la
-                    tabla filtrada con el buscador en blanco, que es peor.
-
-                    Aun así, `data-sget-valor-inicial` se fija solo si la URL
-                    trae el filtro. Si el usuario vuelve con un enlace limpio
-                    (`/Admin/logs.php`), la caja aparece vacía.
-                -->
-                <input type="search" name="q" id="buscarLog"
-                       value="<?= htmlspecialchars($filtros['q'], ENT_QUOTES, 'UTF-8') ?>"
-                       <?= $filtros['q'] !== '' ? 'data-sget-valor-inicial' : '' ?>
-                       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
-                       class="sget-input" placeholder="Buscar descripción, usuario, IP o navegador… (Ctrl+K)">
-            </div>
-
             <div class="sget-field" style="flex:1 1 12rem">
                 <label class="sget-label" for="f_accion">Acción</label>
                 <select id="f_accion" name="accion" class="sget-select">

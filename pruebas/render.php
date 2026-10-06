@@ -176,7 +176,7 @@ echo "\n=== Módulos refactorizados (rol Admin) ===\n";
 iniciarSesion($base, Config::ROL_ADMIN);
 
 $modulos = [
-    '/Admin/rutas.php'     => ['Gestión de Rutas', 'modalRuta', 'ori_rut', 'des_rut', 'hora_salida', 'dis_rut', '01-base.css', '04-modales.css'],
+    '/Admin/rutas.php'     => ['Gestión de Rutas', 'modalRuta', 'ori_rut', 'des_rut', 'dis_rut', 'val_rut', '01-base.css', '04-modales.css'],
     '/Admin/vehiculos.php' => ['Control de Flota',   'modalVehiculo', 'pla_veh', 'est_veh', '05-tablas.css'],
     '/Admin/usuarios.php'  => ['Administración de Usuarios', 'modalUsuario', 'id_rol_usu', 'sget-tab'],
     '/Admin/viajes.php'    => ['Despacho de Viajes', 'modalViaje', 'fec_via', 'hor_sal_via', 'sget-page.js', '07-transiciones.css'],
@@ -189,6 +189,21 @@ foreach ($modulos as $ruta => $esperados) {
 
     foreach ($esperados as $aguja) {
         check("{$ruta} contiene «{$aguja}»", str_contains($html, $aguja));
+    }
+    if ($ruta === '/Admin/viajes.php') {
+        $camposViaje = ['id_rut_via', 'id_usu_via', 'id_veh', 'fec_via', 'hor_sal_via', 'hor_lleg_via', 'val_via'];
+        $precargaCompleta = true;
+        foreach ($camposViaje as $campoViaje) {
+            $precargaCompleta = $precargaCompleta
+                && str_contains($html, 'data-sget-campo="' . $campoViaje . '"');
+        }
+        check('El modal de viaje declara todos los campos para precarga', $precargaCompleta);
+        check('El modal actualiza disponibilidad al abrirse',
+            str_contains($html, "document.addEventListener('sget:modal-abierto'")
+            && str_contains($html, "e.detail.id !== 'modalViaje'"));
+    }
+    if ($ruta === '/Admin/rutas.php') {
+        check('El formulario de rutas no solicita hora de salida', !str_contains($html, 'name="hora_salida"'));
     }
     check("{$ruta} incluye el modal de ayuda",    str_contains($html, 'id="modalAyuda"'));
     check("{$ruta} incluye el buzón de avisos",   str_contains($html, 'id="modalNotificaciones"'));

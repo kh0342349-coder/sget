@@ -26,7 +26,9 @@ $idPasajero = Auth::id();
 
 $historial = Database::all(
     'SELECT v.*, rt.nom_rut, res.fech_res, res.id_res, res.valor_pagado, res.metodo_pago,
-            res.estado_pago, c.id_cal, v.id_usu_via, u.nom_usu AS nombre_conductor
+            res.estado_pago, res.embarco, res.embarque_fec, res.es_temporal,
+            res.punto_abordaje, res.destino_abordaje, res.cantidad_puestos, res.asientos_asignados,
+            c.id_cal, v.id_usu_via, u.nom_usu AS nombre_conductor
        FROM reserva res
        INNER JOIN viaje v   ON res.id_via_res = v.id_via
        INNER JOIN rutas rt  ON v.id_rut_via  = rt.id_rut
@@ -57,7 +59,7 @@ $rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY no
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
     <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
-    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/02-layout.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
@@ -138,14 +140,6 @@ $rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY no
                         <i class="fas fa-history text-blue-500 text-sm"></i> Registro de Reservas
                     </h3>
 
-                    <!-- Buscador -->
-                    <div class="relative w-full sm:w-72">
-                        <span class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
-                            <i class="fas fa-search text-xs"></i>
-                        </span>
-                        <input type="text" id="inputBuscador" placeholder="Buscar por ruta, estado o fecha..." data-i18n-placeholder-es="Buscar por ruta, estado o fecha..." data-i18n-placeholder-en="Search by route, status, or date..." 
-                               class="w-full pl-9 pr-4 py-2 text-xs bg-slate-100 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-200 rounded-xl border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" autocomplete="off" spellcheck="false">
-                    </div>
                 </div>
 
                 <!-- Tabla de Historial con Scrollbar Horizontal -->
@@ -155,7 +149,7 @@ $rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY no
                             <tr>
                                 <th class="px-6 py-3.5">Ruta</th>
                                 <th class="px-6 py-3.5">Fecha / Hora</th>
-                                <th class="px-6 py-3.5">Valor Pagado</th>
+                                <th class="px-6 py-3.5">Valor del pasaje</th>
                                 <th class="px-6 py-3.5">Estado</th>
                                 <th class="px-6 py-3.5 text-center">Acción</th>
                             </tr>
@@ -165,6 +159,17 @@ $rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY no
                                 <?php foreach ($historial as $v):
                                     $sePuedeCalificar = ((string)$v['est_via'] === Config::VIA_FINALIZADO);
                                     $yaCalificado = !is_null($v['id_cal']);
+                                    $pagoPendienteAbordar = $v['estado_pago'] === Config::RES_PENDIENTE
+                                        && stripos((string)$v['metodo_pago'], 'efectivo') !== false;
+                                    $estadoPagoLabel = $v['estado_pago'] === Config::RES_CONFIRMADA ? 'PAGADO'
+                                        : ($v['estado_pago'] === Config::RES_CANCELADA ? 'CANCELADA'
+                                            : ($pagoPendienteAbordar ? 'PENDIENTE AL ABORDAR' : 'PENDIENTE DE PAGO'));
+                                    $estadoPagoClase = $v['estado_pago'] === Config::RES_CONFIRMADA ? 'sget-badge--exito'
+                                        : ($v['estado_pago'] === Config::RES_CANCELADA ? 'sget-badge--neutro' : 'sget-badge--aviso');
+                                    $embarque = $v['embarco'] === null ? null : (int)$v['embarco'];
+                                    $estadoEmbarqueLabel = $embarque === 1 ? 'ABORDADO' : ($embarque === 0 ? 'NO ABORDÓ' : 'NO CONFIRMADO');
+                                    $estadoEmbarqueClase = $embarque === 1 ? 'sget-badge--exito'
+                                        : ($embarque === 0 ? 'sget-badge--error' : 'sget-badge--neutro');
                                     $jsonViaje = htmlspecialchars(json_encode($v, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8');
                                 ?>
                                     <tr class="fila-viaje hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
@@ -179,6 +184,10 @@ $rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY no
                                                         <?php echo htmlspecialchars($v['nom_rut']); ?>
                                                     </span>
                                                     <span class="text-[10px] text-slate-400">Reserva #<?php echo $v['id_via']; ?></span>
+                                                    <?php if (!empty($v['es_temporal'])): ?>
+                                                        <span class="sget-badge sget-badge--info" style="margin-top:.25rem">Abordaje en ruta</span>
+                                                        <span class="sget-help block"><?= htmlspecialchars((string)$v['punto_abordaje'] . ' → ' . (string)$v['destino_abordaje'], ENT_QUOTES, 'UTF-8') ?></span>
+                                                    <?php endif; ?>
                                                 </div>
                                             </div>
                                         </td>
@@ -209,6 +218,10 @@ $rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY no
                                                     <?php echo htmlspecialchars($v['est_via']); ?>
                                                 </span>
                                             <?php endif; ?>
+                                            <div class="mt-1 flex flex-wrap justify-center gap-1">
+                                                <span class="sget-badge <?= $estadoPagoClase ?>" data-sget-pago-reserva="<?= (int)$v['id_res'] ?>"><?= $estadoPagoLabel ?></span>
+                                                <span class="sget-badge <?= $estadoEmbarqueClase ?>" data-sget-embarque-reserva="<?= (int)$v['id_res'] ?>"><?= $estadoEmbarqueLabel ?></span>
+                                            </div>
                                         </td>
 
                                         <!-- Acción -->

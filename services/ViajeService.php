@@ -315,6 +315,14 @@ final class ViajeService
 
     public static function guardar(array $post): array
     {
+        /* RESTRICCIÓN ESTRICTA AL ROL CONDUCTOR: los conductores NO pueden
+           crear ni programar viajes. La interfaz ya oculta el botón; este
+           bloqueo en el backend impide cualquier intento por POST o API. */
+        if (Auth::rol() === Config::ROL_CONDUCTOR) {
+            return ['ok' => false, 'errores' => ['general' => 'Los conductores no pueden crear ni programar viajes.'],
+                    'mensaje' => 'Restricción de rol: los conductores no pueden programar viajes.'];
+        }
+
         $v = self::validar($post);
         if ($v->falla()) {
             return ['ok' => false, 'errores' => $v->errores(), 'mensaje' => $v->primerError()];

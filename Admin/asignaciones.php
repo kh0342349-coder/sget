@@ -149,14 +149,6 @@ include __DIR__ . '/../views/partials/head.php';
             </div>
         <?php else: ?>
 
-            <div class="sget-toolbar">
-                <div class="sget-search">
-                    <i class="fas fa-magnifying-glass"></i>
-                    <input type="search" id="buscarViajeRecaudo" class="sget-input"
-                           placeholder="Buscar por ruta, conductor o placa… (Ctrl+K)" autocomplete="off" spellcheck="false">
-                </div>
-            </div>
-
             <section class="sget-grid sget-grid--ancho">
                 <?php foreach ($viajes as $v):
                     $id       = (int)$v['id_via'];
@@ -578,6 +570,12 @@ include __DIR__ . '/../views/partials/head.php';
                         var cancelado = m.cancelados > 0 && m.pagados === 0 && m.pendientes === 0;
                         var todoPagado = m.pendientes === 0 && !cancelado;
                         var total = Number(m.debe || 0);
+                        var tramoTemporal = Number(m.es_temporal) === 1
+                            ? '<br><span class="sget-badge sget-badge--info">Temporal · ' +
+                                esc((m.tramos_temporales || []).map(function (tramo) {
+                                    return tramo.origen + ' → ' + tramo.destino;
+                                }).join(', ')) + '</span>'
+                            : '';
 
                         var estadoPago = cancelado
                             ? '<span class="sget-badge sget-badge--error">Cancelada</span>'
@@ -605,7 +603,7 @@ include __DIR__ . '/../views/partials/head.php';
                                   'data-puestos="' + m.pendientes + '"><i class="fas fa-cash-register"></i></button>');
 
                         return '<tr' + (cancelado ? ' style="opacity:.55"' : '') + '>' +
-                            '<td data-label="Pasajero" class="sget-truncar">' + esc(m.pasajero) +
+                            '<td data-label="Pasajero" class="sget-truncar">' + esc(m.pasajero) + tramoTemporal +
                                 (m.tel_usu ? '<br><span class="sget-help sget-mono">' + esc(m.tel_usu) + '</span>' : '') + '</td>' +
                             '<td data-label="Documento" class="sget-mono sget-suave">' + esc(m.num_doc_usu) + '</td>' +
                             '<td data-label="Puestos" class="sget-centro sget-mono" style="font-weight:800">' + m.puestos + '</td>' +

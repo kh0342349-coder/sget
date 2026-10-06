@@ -36,7 +36,8 @@ $totalViajes = (int) Database::scalar(
 
 /* 2. Últimos 5 viajes con su calificación, para poder mostrar el botón. */
 $historial = Database::all(
-    'SELECT v.*, rt.nom_rut, res.fech_res, res.id_res,
+        'SELECT v.*, rt.nom_rut, res.fech_res, res.id_res, res.estado_pago, res.metodo_pago, res.embarco,
+            res.es_temporal, res.punto_abordaje, res.destino_abordaje, res.cantidad_puestos, res.asientos_asignados,
             c.id_cal, v.id_usu_via, u.nom_usu AS nombre_conductor
        FROM reserva res
        INNER JOIN viaje v      ON res.id_via_res = v.id_via
@@ -73,7 +74,7 @@ $viajesReportables = ReporteService::viajesReportables($idPasajero);
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
     <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
-    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/02-layout.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
@@ -208,15 +209,34 @@ $viajesReportables = ReporteService::viajesReportables($idPasajero);
                                     <?php /* Solo un viaje FINALIZADO se puede calificar: la nota mide una
                                          experiencia que ya ocurrió. El backend lo vuelve a comprobar
                                          en `CalificacionService::puedeCalificar()`. */ ?>
-                                    $sePuedeCalificar = ((string)$v['est_via'] === Config::VIA_FINALIZADO);
-                                    $yaCalificado = !is_null($v['id_cal']); ?>
+                                    <?php
+                                        $sePuedeCalificar = ((string)$v['est_via'] === Config::VIA_FINALIZADO);
+                                        $yaCalificado = !is_null($v['id_cal']);
+                                        $pagoPendienteAbordar = $v['estado_pago'] === Config::RES_PENDIENTE
+                                            && stripos((string)$v['metodo_pago'], 'efectivo') !== false;
+                                        $estadoPagoLabel = $v['estado_pago'] === Config::RES_CONFIRMADA ? 'PAGADO'
+                                            : ($v['estado_pago'] === Config::RES_CANCELADA ? 'CANCELADA'
+                                                : ($pagoPendienteAbordar ? 'PENDIENTE AL ABORDAR' : 'PENDIENTE DE PAGO'));
+                                        $estadoPagoClase = $v['estado_pago'] === Config::RES_CONFIRMADA ? 'sget-badge--exito'
+                                            : ($v['estado_pago'] === Config::RES_CANCELADA ? 'sget-badge--neutro' : 'sget-badge--aviso');
+                                        $embarque = $v['embarco'] === null ? null : (int)$v['embarco'];
+                                        $estadoEmbarqueLabel = $embarque === 1 ? 'ABORDADO' : ($embarque === 0 ? 'NO ABORDÓ' : 'NO CONFIRMADO');
+                                        $estadoEmbarqueClase = $embarque === 1 ? 'sget-badge--exito'
+                                            : ($embarque === 0 ? 'sget-badge--error' : 'sget-badge--neutro');
+                                    ?>
                                     <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
                                         <td class="px-6 py-4">
                                             <div class="flex items-center gap-3">
                                                 <div class="w-8 h-8 bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-lg flex items-center justify-center text-xs">
                                                     <i class="fas fa-map-marker-alt"></i>
                                                 </div>
-                                                <span class="font-bold text-slate-900 dark:text-white capitalize text-xs"><?php echo htmlspecialchars($v['nom_rut']); ?></span>
+                                                <div>
+                                                    <span class="font-bold text-slate-900 dark:text-white capitalize text-xs"><?php echo htmlspecialchars($v['nom_rut']); ?></span>
+                                                    <?php if (!empty($v['es_temporal'])): ?>
+                                                        <span class="sget-badge sget-badge--info" style="margin-top:.25rem">Abordaje en ruta</span>
+                                                        <span class="sget-help block"><?= htmlspecialchars((string)$v['punto_abordaje'] . ' → ' . (string)$v['destino_abordaje'], ENT_QUOTES, 'UTF-8') ?></span>
+                                                    <?php endif; ?>
+                                                </div>
                                             </div>
                                         </td>
                                         <td class="px-6 py-4 text-slate-500 dark:text-slate-400 text-xs font-mono"><?php echo date('d/m/Y', strtotime((string)$v['fech_res'])); ?></td>
@@ -231,6 +251,10 @@ $viajesReportables = ReporteService::viajesReportables($idPasajero);
                                                     <?php echo htmlspecialchars($v['est_via']); ?>
                                                 </span>
                                             <?php endif; ?>
+                                            <div class="mt-1 flex flex-wrap justify-center gap-1">
+                                                <span class="sget-badge <?= $estadoPagoClase ?>" data-sget-pago-reserva="<?= (int)$v['id_res'] ?>"><?= $estadoPagoLabel ?></span>
+                                                <span class="sget-badge <?= $estadoEmbarqueClase ?>" data-sget-embarque-reserva="<?= (int)$v['id_res'] ?>"><?= $estadoEmbarqueLabel ?></span>
+                                            </div>
                                         </td>
                                         <td class="px-6 py-4 text-center">
                                             <div class="inline-flex flex-wrap items-center justify-center gap-2">

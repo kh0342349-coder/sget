@@ -114,7 +114,7 @@ $stmt_user->close();
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
     <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
-    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/02-layout.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
@@ -194,10 +194,6 @@ $stmt_user->close();
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Consulta el registro completo de todos tus viajes realizados y en proceso.</p>
                 </div>
 
-                <!-- BOTÓN PRINCIPAL ACCIÓN CON MODAL DRAWER (+) -->
-                <button onclick="abrirModalSolicitar()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto">
-                    <i class="fas fa-plus-circle text-sm"></i> Programar Viaje
-                </button>
             </div>
             
             <!-- Tabla con scrollbar horizontal -->

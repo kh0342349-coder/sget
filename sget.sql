@@ -284,6 +284,7 @@ CREATE TABLE `reportes_pasajeros` (
   PRIMARY KEY (`id_rep`),
   KEY `fk_reportes_usuario` (`id_usu_rep`),
   KEY `fk_reportes_viaje` (`id_via_rep`),
+  KEY `idx_reportes_estado_fecha` (`estado`,`fecha`),
   CONSTRAINT `fk_reportes_usuario` FOREIGN KEY (`id_usu_rep`) REFERENCES `usuario` (`id_usu`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_reportes_viaje` FOREIGN KEY (`id_via_rep`) REFERENCES `viaje` (`id_via`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -320,11 +321,17 @@ CREATE TABLE `reserva` (
   `cancelado_por` int(11) DEFAULT NULL,
   `fec_cancelacion` datetime DEFAULT NULL,
   `aviso_viaje_perdido` tinyint(1) NOT NULL DEFAULT 0,
+  `es_temporal` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Reserva creada por el conductor durante el viaje',
+  `punto_abordaje` varchar(120) DEFAULT NULL,
+  `destino_abordaje` varchar(120) DEFAULT NULL,
+  `registrada_por` int(11) DEFAULT NULL,
   PRIMARY KEY (`id_res`),
   KEY `fk_reserva_viaje` (`id_via_res`),
   KEY `fk_reserva_usuario` (`id_usu_res`),
   KEY `ix_reserva_viaje_estado` (`id_via_res`,`estado_pago`),
   KEY `ix_reserva_usuario_viaje` (`id_usu_res`,`id_via_res`),
+  KEY `ix_reserva_usuario_estado_fecha` (`id_usu_res`,`estado_pago`,`fech_res`),
+  KEY `ix_reserva_temporal_viaje` (`id_via_res`,`es_temporal`),
   KEY `ix_reserva_embarco` (`embarco`),
   KEY `fk_reserva_cancelador` (`cancelado_por`),
   CONSTRAINT `fk_reserva_cancelador` FOREIGN KEY (`cancelado_por`) REFERENCES `usuario` (`id_usu`) ON DELETE SET NULL ON UPDATE CASCADE,
@@ -504,6 +511,7 @@ CREATE TABLE `usuario` (
   UNIQUE KEY `uq_usuario_correo` (`corre_usu`),
   UNIQUE KEY `uq_usuario_google` (`google_id`),
   KEY `fk_usuario_rol` (`id_rol_usu`),
+  KEY `idx_usuario_rol_estado` (`id_rol_usu`,`estado`),
   CONSTRAINT `fk_usuario_rol` FOREIGN KEY (`id_rol_usu`) REFERENCES `rol` (`id_rol`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=31 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -625,6 +633,7 @@ CREATE TABLE `viaje` (
   KEY `fk_viaje_usuario` (`id_usu_via`),
   KEY `fk_viaje_vehiculo` (`id_veh`),
   KEY `idx_viaje_salida` (`est_via`,`fec_via`,`hor_sal_via`),
+  KEY `idx_viaje_ruta_estado` (`id_rut_via`,`est_via`,`fec_via`),
   KEY `idx_viaje_conductor` (`id_usu_via`,`est_via`,`fec_via`),
   CONSTRAINT `fk_viaje_rutas` FOREIGN KEY (`id_rut_via`) REFERENCES `rutas` (`id_rut`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_viaje_usuario` FOREIGN KEY (`id_usu_via`) REFERENCES `usuario` (`id_usu`) ON DELETE CASCADE ON UPDATE CASCADE,

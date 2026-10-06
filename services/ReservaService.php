@@ -43,6 +43,8 @@ declare(strict_types=1);
 
 final class ReservaService
 {
+    private const MENSAJE_RESERVA_DUPLICADA = 'Ya cuentas con una reserva activa para este viaje. No es posible reservar el mismo viaje más de una vez.';
+
     /* ================================================================== */
     /* Consultas                                                           */
     /* ================================================================== */
@@ -52,7 +54,7 @@ final class ReservaService
     {
         $v = Database::one(
             "SELECT cup_tot, cup_dis,
-                    (SELECT COUNT(*) FROM reserva r WHERE r.id_via_res = v.id_via AND r.estado_pago <> ?) AS ocupados
+                    (SELECT COALESCE(SUM(cantidad_puestos),0) FROM reserva r WHERE r.id_via_res = v.id_via AND r.estado_pago <> ? AND r.id_res IS NOT NULL) AS ocupados
                FROM viaje v WHERE v.id_via = ?",
             [Config::RES_CANCELADA, $idViaje]
         );
@@ -94,8 +96,9 @@ final class ReservaService
     public static function porViaje(int $idViaje): array
     {
         return Database::all(
-            "SELECT res.id_res, res.fech_res, res.metodo_pago, res.valor_pagado, res.estado_pago, res.fecha_pago,
+                "SELECT res.id_res, res.fech_res, res.metodo_pago, res.valor_pagado, res.estado_pago, res.fecha_pago,
                     res.embarco, res.motivo_cancelacion, res.fec_cancelacion, res.aviso_viaje_perdido,
+                    res.es_temporal, res.punto_abordaje, res.destino_abordaje, res.registrada_por,
                     u.id_usu AS id_pasajero, u.nom_usu AS pasajero, u.num_doc_usu, u.tel_usu,
                     v.val_via
                FROM reserva res
@@ -119,8 +122,9 @@ final class ReservaService
     public static function manifiesto(int $idViaje): array
     {
         $filas = Database::all(
-            "SELECT res.id_res, res.id_usu_res, res.estado_pago, res.embarco,
-                    res.valor_pagado, res.metodo_pago, res.fech_res,
+                "SELECT res.id_res, res.id_usu_res, res.estado_pago, res.embarco,
+                    res.valor_pagado, res.metodo_pago, res.fech_res, res.es_temporal,
+                    res.punto_abordaje, res.destino_abordaje, res.registrada_por,
                     res.motivo_cancelacion,
                     u.nom_usu AS pasajero, u.num_doc_usu, u.tel_usu
                FROM reserva res
@@ -141,8 +145,12 @@ final class ReservaService
                     'tel_usu'      => $f['tel_usu'] !== null ? (string)$f['tel_usu'] : '',
                     'puestos'      => 0,
                     'ids'          => [],
+                    'ids_por_embarcar' => [],
+                    'es_temporal'  => false,
+                    'tramos_temporales' => [],
                     'pagados'      => 0,
                     'pendientes'   => 0,
+                    'pendientes_al_abordar' => 0,
                     'cancelados'   => 0,
                     'embarcaron'   => 0,
                     'no_embarcaron'=> 0,
@@ -155,7 +163,15 @@ final class ReservaService
             $p = &$porPasajero[$id];
             $estado = (string)$f['estado_pago'];
             $p['ids'][] = (int)$f['id_res'];
-            $p['puestos']++;
+            $puestos = (int)($f['cantidad_puestos'] ?? 1);
+            $p['puestos'] += $puestos;
+            if ((int)($f['es_temporal'] ?? 0) === 1) {
+                $p['es_temporal'] = true;
+                $p['tramos_temporales'][] = [
+                    'origen' => (string)($f['punto_abordaje'] ?? ''),
+                    'destino' => (string)($f['destino_abordaje'] ?? ''),
+                ];
+            }
 
             if ($estado === Config::RES_CANCELADA) {
                 $p['cancelados']++;
@@ -163,6 +179,13 @@ final class ReservaService
             } else {
                 $p['debe'] += (float)($f['valor_pagado'] ?? 0);
                 $p[$estado === Config::RES_CONFIRMADA ? 'pagados' : 'pendientes']++;
+                if ($estado === Config::RES_PENDIENTE
+                    && in_array(mb_strtolower(trim((string)$f['metodo_pago'])), ['efectivo', 'efectivo al abordar', 'pago al abordar'], true)) {
+                    $p['pendientes_al_abordar']++;
+                }
+                if ($estado === Config::RES_CONFIRMADA && ($f['embarco'] === null || $f['embarco'] === '')) {
+                    $p['ids_por_embarcar'][] = (int)$f['id_res'];
+                }
             }
 
             // `embarco` va por PUESTO: si un pasajero compró 3 y solo subió
@@ -251,9 +274,7 @@ final class ReservaService
 
         $mismo = self::pasajeroYaReservo($idViaje, $idPasajero);
         if ($mismo > 0) {
-            return "Ya tienes {$mismo} puesto(s) apartado(s) en este viaje. "
-                 . "No se puede volver a apartar en el mismo viaje; si necesitas "
-                 . "más puestos, pídeselos al administrador para que los agregue a tu reserva.";
+            return self::MENSAJE_RESERVA_DUPLICADA;
         }
 
         $choque = Database::one(
@@ -383,8 +404,20 @@ final class ReservaService
                 return $falla('El viaje ya no está disponible.');
             }
 
+            // Repetir la comprobación bajo el bloqueo evita que dos solicitudes
+            // simultáneas del mismo pasajero creen reservas para el mismo viaje.
+            $reservaActiva = (int) Database::scalar(
+                'SELECT COUNT(*) FROM reserva
+                  WHERE id_via_res = ? AND id_usu_res = ? AND estado_pago <> ?',
+                [$idViaje, $idPasajero, Config::RES_CANCELADA]
+            );
+            if ($reservaActiva > 0) {
+                Database::rollback();
+                return $falla(self::MENSAJE_RESERVA_DUPLICADA);
+            }
+
             $ocupados = (int) Database::scalar(
-                'SELECT COUNT(*) FROM reserva WHERE id_via_res = ? AND estado_pago <> ?',
+                'SELECT COALESCE(SUM(cantidad_puestos), 0) FROM reserva WHERE id_via_res = ? AND estado_pago <> ?',
                 [$idViaje, Config::RES_CANCELADA]
             );
             $libres = max(0, (int)$bloqueado['cup_tot'] - $ocupados);
@@ -397,23 +430,23 @@ final class ReservaService
             }
 
             /* ---------------------------------------------------------------
-               3) Inserción de los puestos
+               3) Inserción agrupada: un registro por reserva (puede ser
+                  1 puesto o varios). Se guarda cantidad_puestos y la lista
+                  de asientos asignados.
                --------------------------------------------------------------- */
-            $ids = [];
-            for ($i = 0; $i < $puestos; $i++) {
-                $ids[] = Database::insert(
-                    "INSERT INTO reserva (id_via_res, id_usu_res, fech_res, metodo_pago, valor_pagado, estado_pago, fecha_pago)
-                     VALUES (?, ?, NOW(), ?, ?, ?, ?)",
-                    [
-                        $idViaje, $idPasajero, $metodo,
-                        // El valor pactado se guarda SIEMPRE, confirmado o no:
-                        // es lo que el pasajero debe y lo que el mostrador cobra.
-                        $valor > 0 ? $valor : null,
-                        $estado,
-                        $confirmar ? date('Y-m-d H:i:s') : null,
-                    ]
-                );
-            }
+            $asientos = range(1, $puestos);
+            $ids = Database::insert(
+                "INSERT INTO reserva (id_via_res, id_usu_res, fech_res, metodo_pago, valor_pagado, estado_pago, fecha_pago, cantidad_puestos, asientos_asignados)
+                 VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?)",
+                [
+                    $idViaje, $idPasajero, $metodo,
+                    $valor > 0 ? ($valor * $puestos) : null,
+                    $estado,
+                    $confirmar ? date('Y-m-d H:i:s') : null,
+                    $puestos,
+                    implode(',', array_map('strval', $asientos)),
+                ]
+            );
 
             Database::query('UPDATE viaje SET cup_dis = ? WHERE id_via = ?', [$libres - $puestos, $idViaje]);
 
@@ -424,7 +457,8 @@ final class ReservaService
             return $falla('No se pudo registrar la reserva. Inténtalo de nuevo.');
         }
 
-        $primerId = (int)($ids[0] ?? 0);
+        $primerId = (int)$ids;
+        $ids = [$ids];
         $ruta = trim(($viaje['nom_rut'] ?? '') . ' (' . ($viaje['ori_rut'] ?? '?') . ' → ' . ($viaje['des_rut'] ?? '?') . ')');
 
         if ($confirmar && $primerId > 0) {
@@ -573,6 +607,127 @@ final class ReservaService
         ];
     }
 
+    /** Confirma en una sola transacción el pago en efectivo y el abordaje. */
+    public static function cobrarYEmbarcarPasajero(int $idViaje, int $idPasajero): array
+    {
+        $falla = static fn(string $mensaje): array => ['ok' => false, 'mensaje' => $mensaje, 'cobradas' => 0];
+        if (Auth::rol() !== Config::ROL_CONDUCTOR || Auth::id() <= 0) {
+            return $falla('Solo el conductor asignado puede confirmar el pago y el abordaje.');
+        }
+        if ($idViaje <= 0 || $idPasajero <= 0) {
+            return $falla('No se pudo identificar el viaje y el pasajero.');
+        }
+
+        try {
+            Database::begin();
+            $viaje = Database::one(
+                'SELECT v.id_via, v.id_usu_via, v.est_via, v.fec_via, v.hor_sal_via,
+                        r.nom_rut, r.ori_rut, r.des_rut
+                   FROM viaje v
+                   LEFT JOIN rutas r ON r.id_rut = v.id_rut_via
+                  WHERE v.id_via = ? FOR UPDATE',
+                [$idViaje]
+            );
+            if (!$viaje || (int)$viaje['id_usu_via'] !== Auth::id()) {
+                Database::rollback();
+                return $falla('Solo puedes confirmar pasajeros de tus propios viajes.');
+            }
+            if (!in_array((string)$viaje['est_via'], [Config::VIA_PROGRAMADO, Config::VIA_EN_CURSO], true)) {
+                Database::rollback();
+                return $falla('El viaje ya no admite confirmaciones de pago o abordaje.');
+            }
+
+            $reservas = Database::all(
+                'SELECT id_res, estado_pago, metodo_pago, valor_pagado, embarco
+                   FROM reserva
+                  WHERE id_via_res = ? AND id_usu_res = ? AND estado_pago <> ?
+                  ORDER BY id_res ASC FOR UPDATE',
+                [$idViaje, $idPasajero, Config::RES_CANCELADA]
+            );
+            if (!$reservas) {
+                Database::rollback();
+                return $falla('No hay reservas activas de este pasajero en el viaje.');
+            }
+
+            $pendientes = array_values(array_filter(
+                $reservas,
+                static fn(array $reserva): bool => (string)$reserva['estado_pago'] === Config::RES_PENDIENTE
+            ));
+            if (!$pendientes) {
+                Database::rollback();
+                return $falla('Este pasajero no tiene pagos pendientes para confirmar.');
+            }
+
+            foreach ($pendientes as $reserva) {
+                $metodo = mb_strtolower(trim((string)$reserva['metodo_pago']));
+                if (!in_array($metodo, ['efectivo', 'efectivo al abordar', 'pago al abordar'], true)) {
+                    Database::rollback();
+                    return $falla('El pago de este pasajero debe confirmarse desde el módulo de recaudo.');
+                }
+                if ((float)($reserva['valor_pagado'] ?? 0) <= 0) {
+                    Database::rollback();
+                    return $falla('La reserva no tiene un importe válido para cobrar.');
+                }
+                if ((int)($reserva['embarco'] ?? -1) === 0) {
+                    Database::rollback();
+                    return $falla('El pasajero ya está marcado como no presentado.');
+                }
+            }
+
+            $primerId = (int)$pendientes[0]['id_res'];
+            $total = 0.0;
+            foreach ($reservas as $reserva) {
+                $idReserva = (int)$reserva['id_res'];
+                if ((string)$reserva['estado_pago'] === Config::RES_PENDIENTE) {
+                    $total += (float)$reserva['valor_pagado'];
+                    Database::query(
+                        'UPDATE reserva
+                            SET estado_pago = ?, metodo_pago = ?, fecha_pago = NOW()
+                          WHERE id_res = ? AND estado_pago = ?',
+                        [Config::RES_CONFIRMADA, 'Efectivo', $idReserva, Config::RES_PENDIENTE]
+                    );
+                }
+                if ($reserva['embarco'] === null || $reserva['embarco'] === '') {
+                    Database::query(
+                        'UPDATE reserva
+                            SET embarco = 1, embarque_por = ?, embarque_fec = NOW()
+                          WHERE id_res = ? AND embarco IS NULL',
+                        [Auth::id(), $idReserva]
+                    );
+                }
+            }
+            Database::commit();
+        } catch (Throwable $e) {
+            Database::rollback();
+            error_log('[SGET][ReservaService::cobrarYEmbarcarPasajero] ' . $e->getMessage());
+            return $falla('No se pudo confirmar el pago y el abordaje. Inténtalo de nuevo.');
+        }
+
+        $ruta = trim((string)($viaje['nom_rut'] ?? '') . ' (' . (string)($viaje['ori_rut'] ?? '?') . ' → ' . (string)($viaje['des_rut'] ?? '?') . ')');
+        NotificacionService::notificarReservaConfirmada($idPasajero, [
+            'id_res' => $primerId,
+            'id_via' => $idViaje,
+            'ruta' => $ruta,
+            'fec_via' => (string)$viaje['fec_via'],
+            'hor_sal_via' => (string)$viaje['hor_sal_via'],
+            'valor' => $total,
+            'metodo' => 'Efectivo al abordar',
+        ]);
+        Logger::registrar(Database::pdo(), 'CONFIRMAR_PAGO_Y_EMBARQUE', sprintf(
+            'Pasajero #%d · viaje #%d · %d puesto(s), $%s, confirmado y embarcado por %s.',
+            $idPasajero, $idViaje, count($pendientes), number_format($total, 0, ',', '.'), Auth::nombre()
+        ));
+
+        return [
+            'ok' => true,
+            'cobradas' => count($pendientes),
+            'mensaje' => sprintf(
+                'Pago de $%s confirmado y abordaje registrado para %d puesto(s).',
+                number_format($total, 0, ',', '.'), count($pendientes)
+            ),
+        ];
+    }
+
     /** Puestos PENDIENTES de un pasajero en un viaje. */
     private static function puestosPendientesDe(int $idViaje, int $idPasajero, int $incluirId): array
     {
@@ -615,13 +770,19 @@ final class ReservaService
      * @param string $motivo     obligatorio si NO embarcó
      * @return array{ok:bool, mensaje:string}
      */
-    public static function marcarEmbarque(int $idReserva, bool $embarco, string $motivo = ''): array
+    public static function marcarEmbarque(int $idReserva, bool $embarco, string $motivo = '', ?int $idViaje = null): array
     {
         $res = self::porId($idReserva);
         if (!$res) return ['ok' => false, 'mensaje' => 'La reserva no existe.'];
+        if ($idViaje !== null && (int)$res['id_via_res'] !== $idViaje) {
+            return ['ok' => false, 'mensaje' => 'La reserva no pertenece al viaje indicado.'];
+        }
 
         if ($res['estado_pago'] === Config::RES_CANCELADA) {
             return ['ok' => false, 'mensaje' => 'Esa reserva está cancelada: no hay embarque que registrar.'];
+        }
+        if ($embarco && $res['estado_pago'] === Config::RES_PENDIENTE) {
+            return ['ok' => false, 'mensaje' => 'Confirma el pago antes de registrar el abordaje.'];
         }
         if (!$embarco) {
             $motivo = trim($motivo);
@@ -914,6 +1075,158 @@ final class ReservaService
         return ['ok' => true, 'id' => $id, 'mensaje' => 'Pasajero ocasional registrado.'];
     }
 
+    /** Registra en la ruta a una persona que aborda durante un viaje en curso. */
+    public static function agregarTemporalEnRuta(int $idViaje, array $datos): array
+    {
+        $falla = static fn(string $mensaje): array => ['ok' => false, 'mensaje' => $mensaje, 'id_res' => 0];
+        if (Auth::rol() !== Config::ROL_CONDUCTOR || Auth::id() <= 0) {
+            return $falla('Solo el conductor asignado puede agregar pasajeros en ruta.');
+        }
+
+        $nombre = trim((string)($datos['nombre'] ?? ''));
+        $documento = strtoupper(trim((string)($datos['documento'] ?? '')));
+        $telefono = trim((string)($datos['telefono'] ?? ''));
+        $origen = trim((string)($datos['punto_abordaje'] ?? ''));
+        $destino = trim((string)($datos['destino_abordaje'] ?? ''));
+        $metodo = trim((string)($datos['metodo_pago'] ?? ''));
+        $valor = (float)($datos['valor_pagado'] ?? 0);
+
+        if (mb_strlen($nombre) < 3 || mb_strlen($nombre) > 100) {
+            return $falla('Escribe el nombre del pasajero (3 a 100 caracteres).');
+        }
+        if (mb_strlen($documento) > 30 || mb_strlen($telefono) > 30) {
+            return $falla('El documento o el teléfono excede el tamaño permitido.');
+        }
+        if ($origen === '' || mb_strlen($origen) > 120 || $destino === '' || mb_strlen($destino) > 120) {
+            return $falla('Indica un punto de abordaje y un destino válidos.');
+        }
+        if ($valor <= 0 || $valor > 99999999) {
+            return $falla('El valor del pasaje debe ser mayor que cero.');
+        }
+        if (!in_array($metodo, ['Efectivo', 'Pago al abordar'], true)) {
+            return $falla('Selecciona Efectivo o Pago al abordar.');
+        }
+
+        $conductorId = Auth::id();
+        $pagadoAhora = $metodo === 'Efectivo';
+        $estadoPago = $pagadoAhora ? Config::RES_CONFIRMADA : Config::RES_PENDIENTE;
+        $marcaTiempo = date('Y-m-d H:i:s');
+
+        try {
+            Database::begin();
+            $viaje = Database::one(
+                'SELECT v.id_via, v.id_usu_via, v.est_via, v.cup_tot,
+                        r.nom_rut, r.ori_rut, r.des_rut
+                   FROM viaje v
+                   LEFT JOIN rutas r ON r.id_rut = v.id_rut_via
+                  WHERE v.id_via = ? FOR UPDATE',
+                [$idViaje]
+            );
+            if (!$viaje || (int)$viaje['id_usu_via'] !== $conductorId) {
+                Database::rollback();
+                return $falla('Solo puedes agregar pasajeros a tus propios viajes.');
+            }
+            if ((string)$viaje['est_via'] !== Config::VIA_EN_CURSO) {
+                Database::rollback();
+                return $falla('Solo se pueden agregar pasajeros cuando el viaje está en curso.');
+            }
+
+            $ocupados = (int) Database::scalar(
+                'SELECT COALESCE(SUM(cantidad_puestos), 0) FROM reserva WHERE id_via_res = ? AND estado_pago <> ?',
+                [$idViaje, Config::RES_CANCELADA]
+            );
+            if ($ocupados >= (int)$viaje['cup_tot']) {
+                Database::rollback();
+                return $falla('El viaje ya no tiene cupos disponibles.');
+            }
+
+            $pasajero = self::pasajeroOcasional($nombre, $documento, $telefono);
+            if (empty($pasajero['ok'])) {
+                Database::rollback();
+                return $falla((string)$pasajero['mensaje']);
+            }
+            $idPasajero = (int)$pasajero['id'];
+            $duplicada = (int) Database::scalar(
+                'SELECT COUNT(*) FROM reserva
+                  WHERE id_via_res = ? AND id_usu_res = ? AND estado_pago <> ?',
+                [$idViaje, $idPasajero, Config::RES_CANCELADA]
+            );
+            if ($duplicada > 0) {
+                Database::rollback();
+                return $falla('Este pasajero ya tiene una reserva activa para este viaje.');
+            }
+
+            $idReserva = Database::insert(
+                'INSERT INTO reserva
+                    (id_via_res, id_usu_res, fech_res, metodo_pago, valor_pagado, estado_pago,
+                     fecha_pago, embarco, embarque_por, embarque_fec, es_temporal,
+                     punto_abordaje, destino_abordaje, registrada_por)
+                 VALUES (?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)',
+                [
+                    $idViaje,
+                    $idPasajero,
+                    $metodo,
+                    $valor,
+                    $estadoPago,
+                    $pagadoAhora ? $marcaTiempo : null,
+                    $pagadoAhora ? 1 : null,
+                    $pagadoAhora ? $conductorId : null,
+                    $pagadoAhora ? $marcaTiempo : null,
+                    $origen,
+                    $destino,
+                    $conductorId,
+                ]
+            );
+            Database::query('UPDATE viaje SET cup_dis = ? WHERE id_via = ?', [
+                max(0, (int)$viaje['cup_tot'] - $ocupados - 1), $idViaje,
+            ]);
+            Database::commit();
+        } catch (Throwable $e) {
+            Database::rollback();
+            error_log('[SGET][ReservaService::agregarTemporalEnRuta] ' . $e->getMessage());
+            return $falla('No se pudo registrar al pasajero temporal. Inténtalo de nuevo.');
+        }
+
+        $conductor = Auth::nombre();
+        $hora = date('H:i:s');
+        $ruta = trim((string)($viaje['nom_rut'] ?? '') . ' (' . (string)($viaje['ori_rut'] ?? '?') . ' → ' . (string)($viaje['des_rut'] ?? '?') . ')');
+        $detalle = sprintf(
+            'El Conductor %s agregó un pasajero temporal (Monto: $%s) en el Viaje #%d a las %s. Pasajero: %s. Abordaje: %s. Destino: %s. Método: %s. Ruta: %s.',
+            $conductor,
+            number_format($valor, 2, ',', '.'),
+            $idViaje,
+            $hora,
+            $nombre,
+            $origen,
+            $destino,
+            $pagadoAhora ? 'Efectivo pagado' : 'Pago al abordar pendiente',
+            $ruta
+        );
+
+        $administradores = array_map(
+            static fn(array $fila): int => (int)$fila['id_usu'],
+            Database::all('SELECT id_usu FROM usuario WHERE id_rol_usu = ? AND estado = ?', [Config::ROL_ADMIN, Config::USU_ACTIVO])
+        );
+        NotificacionService::enviarVarios(
+            $administradores,
+            NotificacionService::TIPO_RECAUDO,
+            'Pasajero temporal agregado en ruta',
+            $detalle,
+            $idViaje
+        );
+        Logger::registrar(Database::pdo(), 'PASAJERO_TEMPORAL_RUTA', $detalle, $conductorId, $conductor, 'Conductor');
+
+        return [
+            'ok' => true,
+            'id_res' => $idReserva,
+            'estado_pago' => $estadoPago,
+            'embarco' => $pagadoAhora ? 1 : null,
+            'mensaje' => $pagadoAhora
+                ? 'Pasajero temporal registrado, pagado y abordado.'
+                : 'Pasajero temporal registrado. El pago y el abordaje quedan pendientes de confirmación.',
+        ];
+    }
+
     /* ================================================================== */
     /* Interno                                                             */
     /* ================================================================== */
@@ -921,7 +1234,7 @@ final class ReservaService
     private static function ocupadosEn(int $idViaje): int
     {
         return (int) Database::scalar(
-            "SELECT COUNT(*) FROM reserva WHERE id_via_res = ? AND estado_pago <> ?",
+            "SELECT COALESCE(SUM(cantidad_puestos), 0) FROM reserva WHERE id_via_res = ? AND estado_pago <> ?",
             [$idViaje, Config::RES_CANCELADA]
         );
     }

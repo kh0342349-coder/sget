@@ -16,7 +16,6 @@
  *   ori_rut       Ciudad de SALIDA   (obligatorio)
  *   des_rut       Ciudad de DESTINO  (obligatorio)
  *   dis_rut       Distancia en km
- *   hora_salida   Hora de salida por defecto de los viajes de la ruta
  *   duracion_min  Duración estimada del trayecto (define el cierre automático)
  *   val_rut       Tarifa base
  * -----------------------------------------------------------------------------
@@ -38,7 +37,7 @@ $v = fn(string $k, $def = '') => htmlspecialchars((string)($__rutaModal[$k] ?? $
                     <span class="sget-modal__icono"><i class="fas fa-route"></i></span>
                     <span data-sget-texto="titulo"><?= $__esEdicion ? 'Editar Ruta #' . (int)$__rutaModal['id_rut'] : 'Registrar Nueva Ruta' ?></span>
                 </h2>
-                <p class="sget-modal__sub">Define el trayecto, la tarifa, la hora y la duración del recorrido.</p>
+                <p class="sget-modal__sub">Define el trayecto, la distancia, la tarifa y la duración estimada.</p>
             </div>
             <button type="button" class="sget-modal__cerrar" data-sget-cerrar aria-label="Cerrar">
                 <i class="fas fa-times"></i>
@@ -83,8 +82,8 @@ $v = fn(string $k, $def = '') => htmlspecialchars((string)($__rutaModal[$k] ?? $
                 </div>
             </div>
 
-            <!-- Distancia / hora de salida / tarifa -->
-            <div class="sget-form-3col" style="margin-top:1rem">
+            <!-- Distancia / tarifa -->
+            <div class="sget-form-2col" style="margin-top:1rem">
                 <div class="sget-field" data-campo="dis_rut">
                     <label class="sget-label" for="ruta_dis">
                         <i class="fas fa-ruler-horizontal"></i> Distancia (km) <span class="sget-label__opt">(opc.)</span>
@@ -92,15 +91,6 @@ $v = fn(string $k, $def = '') => htmlspecialchars((string)($__rutaModal[$k] ?? $
                     <input type="number" id="ruta_dis" name="dis_rut" class="sget-input sget-input--mono"
                            step="0.1" min="0" max="99999" placeholder="0.0"
                            data-estimar-duracion value="<?= $v('dis_rut') ?>">
-                    <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
-                </div>
-
-                <div class="sget-field" data-campo="hora_salida">
-                    <label class="sget-label" for="ruta_hora">
-                        <i class="fas fa-clock"></i> Hora de salida <span class="sget-label__opt">(opc.)</span>
-                    </label>
-                    <input type="time" id="ruta_hora" name="hora_salida" class="sget-input sget-input--mono"
-                           value="<?= htmlspecialchars(Fecha::soloHora($__rutaModal['hora_salida'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                     <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
                 </div>
 

@@ -47,7 +47,7 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
                     <label class="sget-label" for="viaje_ruta">
                         <i class="fas fa-route"></i> Ruta programada <span class="sget-label__req">*</span>
                     </label>
-                    <select id="viaje_ruta" name="id_rut_via" class="sget-select" required data-sget-autofocus>
+                    <select id="viaje_ruta" name="id_rut_via" class="sget-select" required data-sget-autofocus data-sget-campo="id_rut_via">
                         <option value="">Selecciona una ruta…</option>
                         <?php foreach ($__rutas as $r):
                             $tarifa = (float)$r['val_rut'];
@@ -72,7 +72,7 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
                         <label class="sget-label" for="viaje_conductor">
                             <i class="fas fa-user-tie"></i> Conductor <span class="sget-label__req">*</span>
                         </label>
-                        <select id="viaje_conductor" name="id_usu_via" class="sget-select" required>
+                        <select id="viaje_conductor" name="id_usu_via" class="sget-select" required data-sget-campo="id_usu_via">
                             <option value="">Selecciona un conductor…</option>
                             <?php foreach ($__conductores as $c): ?>
                                 <option value="<?= (int)$c['id_usu'] ?>"
@@ -92,7 +92,7 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
                         <label class="sget-label" for="viaje_veh">
                             <i class="fas fa-bus-simple"></i> Vehículo <span class="sget-label__req">*</span>
                         </label>
-                        <select id="viaje_veh" name="id_veh" class="sget-select" required>
+                        <select id="viaje_veh" name="id_veh" class="sget-select" required data-sget-campo="id_veh">
                             <option value="">Selecciona una placa…</option>
                             <?php foreach ($__vehiculos as $ve): ?>
                                 <option value="<?= (int)$ve['id_veh'] ?>"
@@ -119,7 +119,7 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
                         <label class="sget-label" for="viaje_fecha">
                             <i class="fas fa-calendar-day"></i> Fecha de salida <span class="sget-label__req">*</span>
                         </label>
-                        <input type="date" id="viaje_fecha" name="fec_via" class="sget-input" required
+                        <input type="date" id="viaje_fecha" name="fec_via" class="sget-input" required data-sget-campo="fec_via"
                                min="<?= date('Y-m-d') ?>"
                                value="<?= $v('fec_via') ? htmlspecialchars(Fecha::soloFecha($__viaje['fec_via'] ?? ''), ENT_QUOTES, 'UTF-8') : '' ?>">
                         <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
@@ -129,7 +129,7 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
                         <label class="sget-label" for="viaje_hora">
                             <i class="fas fa-clock"></i> Hora de salida <span class="sget-label__req">*</span>
                         </label>
-                        <input type="time" id="viaje_hora" name="hor_sal_via" class="sget-input sget-input--mono" required
+                        <input type="time" id="viaje_hora" name="hor_sal_via" class="sget-input sget-input--mono" required data-sget-campo="hor_sal_via"
                                value="<?= $v('hor_sal_via') ? htmlspecialchars(Fecha::soloHora($__viaje['hor_sal_via'] ?? ''), ENT_QUOTES, 'UTF-8') : '' ?>">
                         <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
                     </div>
@@ -141,14 +141,14 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
                         <label class="sget-label" for="viaje_llegada">
                             <i class="fas fa-flag-checkered"></i> Hora estimada de llegada <span class="sget-label__opt">(opc.)</span>
                         </label>
-                        <input type="time" id="viaje_llegada" name="hor_lleg_via" class="sget-input sget-input--mono"
+                        <input type="time" id="viaje_llegada" name="hor_lleg_via" class="sget-input sget-input--mono" data-sget-campo="hor_lleg_via"
                                value="<?= $v('hor_lleg_via') ? htmlspecialchars(Fecha::soloHora($__viaje['hor_lleg_via'] ?? ''), ENT_QUOTES, 'UTF-8') : '' ?>">
                         <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
                     </div>
 
                     <div class="sget-field" data-campo="val_via">
                         <label class="sget-label" for="viaje_tarifa">Tarifa del pasaje <span class="sget-label__req">*</span></label>
-                        <input type="number" id="viaje_tarifa" name="val_via" class="sget-input sget-input--mono"
+                        <input type="number" id="viaje_tarifa" name="val_via" class="sget-input sget-input--mono" data-sget-campo="val_via"
                                step="0.01" min="1" max="99999999" required placeholder="0.00" value="<?= $v('val_via') ?>">
                         <span class="sget-help">Si lo dejas en 0 se hereda la tarifa de la ruta.</span>
                         <span class="sget-error"><i class="fas fa-circle-exclamation"></i><span></span></span>
@@ -279,7 +279,8 @@ $__vehiculos = VehiculoService::disponiblesParaDespacho();
         fecha.addEventListener('change', pedir);
         hora.addEventListener('change', pedir);
 
-        modal.addEventListener('sget:modal-abierto', function () {
+        document.addEventListener('sget:modal-abierto', function (e) {
+            if (!e.detail || e.detail.id !== 'modalViaje') return;
             if (fecha.value && hora.value) refrescar();
         });
     }

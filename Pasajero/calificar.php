@@ -91,7 +91,7 @@ $rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY no
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
     <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
-    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/02-layout.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
@@ -246,9 +246,16 @@ $rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY no
                                                 <i class="fas fa-hashtag"></i> Viaje #<?php echo $vp['id_via']; ?>
                                             </span>
                                         </div>
-                                        <a href="calificar.php?id_via=<?php echo $vp['id_via']; ?>&id_cond=<?php echo $vp['id_cond']; ?>" class="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl shadow-md transition-all whitespace-nowrap">
+                                        <button type="button"
+                                                data-sget-modal="modalCalificar"
+                                                data-sget-datos="<?= htmlspecialchars(json_encode([
+                                                    'id_via_cal' => (int)$vp['id_via'],
+                                                    'viaje'      => (string)$vp['nom_rut'] . ' · ' . Fecha::legible($vp['fec_via'], false) . ' ' . Fecha::soloHora($vp['hor_sal_via']),
+                                                    'conductor'  => 'Conductor: ' . $vp['nombre_conductor'],
+                                                ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>"
+                                                class="px-4 py-2.5 bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-black text-[10px] uppercase tracking-wider rounded-xl shadow-md transition-all whitespace-nowrap">
                                             Calificar
-                                        </a>
+                                        </button>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
@@ -524,6 +531,8 @@ $rutasDisponibles = Database::all('SELECT id_rut, nom_rut FROM rutas ORDER BY no
             });
         });
     </script>
+
+    <?php include __DIR__ . '/../views/modals/calificar.php'; ?>
 
     <!-- Motor común de modales + puente de compatibilidad con el JS heredado -->
     <script src="../assets/js/sget-modal.js?v=<?= @filemtime('../assets/js/sget-modal.js') ?: '1' ?>"></script>

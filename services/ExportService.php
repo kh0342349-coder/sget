@@ -116,11 +116,12 @@ final class ExportService
                 'etiqueta' => 'reservas',
                 'permiso'  => 'asignaciones',
                 'columnas' => ['id_res', 'id_via_res', 'nom_rut', 'nom_via', 'fec_via', 'hor_sal_via',
-                               'pasajero', 'num_doc_usu', 'metodo_pago', 'valor_pagado', 'estado_pago',
-                               'fecha_pago', 'embarco'],
+                                                             'pasajero', 'num_doc_usu', 'metodo_pago', 'valor_pagado', 'estado_pago',
+                                                             'fecha_pago', 'embarco', 'es_temporal', 'punto_abordaje', 'destino_abordaje'],
                 'sql' => 'SELECT r.id_res, r.id_via_res, rt.nom_rut, v.nom_via, v.fec_via, v.hor_sal_via,
                                  u.nom_usu AS pasajero, u.num_doc_usu,
-                                 r.metodo_pago, r.valor_pagado, r.estado_pago, r.fecha_pago, r.embarco
+                                                                 r.metodo_pago, r.valor_pagado, r.estado_pago, r.fecha_pago, r.embarco,
+                                                                 r.es_temporal, r.punto_abordaje, r.destino_abordaje
                             FROM reserva r
                             LEFT JOIN usuario u ON u.id_usu   = r.id_usu_res
                             LEFT JOIN viaje v   ON v.id_via   = r.id_via_res
@@ -418,7 +419,9 @@ final class ExportService
             'id_res' => 'ID Reserva', 'id_via_res' => 'ID Viaje', 'fec_res' => 'Fecha del viaje',
             'pasajero' => 'Pasajero', 'metodo_pago' => 'Método de pago', 'valor_pagado' => 'Valor pagado',
             'estado_pago' => 'Estado del pago', 'fecha_pago' => 'Fecha del pago',
-            'embarco' => 'Embarcó', 'fecha_reserva' => 'Fecha de la reserva', 'viaje_estado' => 'Estado del viaje',
+            'embarco' => 'Embarcó', 'es_temporal' => 'Pasajero temporal',
+            'punto_abordaje' => 'Punto de abordaje', 'destino_abordaje' => 'Destino del pasajero',
+            'fecha_reserva' => 'Fecha de la reserva', 'viaje_estado' => 'Estado del viaje',
 
             'id_rep' => 'Folio', 'fecha' => 'Fecha', 'descripcion' => 'Descripción',
 

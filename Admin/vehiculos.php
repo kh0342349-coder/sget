@@ -75,13 +75,6 @@ include __DIR__ . '/../views/partials/head.php';
             </div>
         </section>
 
-        <div class="sget-toolbar">
-            <div class="sget-search">
-                <i class="fas fa-magnifying-glass"></i>
-                <input type="search" id="buscarVehiculo" class="sget-input" placeholder="Buscar placa o modelo… (Ctrl+K)" autocomplete="off" spellcheck="false">
-            </div>
-        </div>
-
         <?php if ($total === 0): ?>
             <div class="sget-vacio">
                 <span class="sget-vacio__icono"><i class="fas fa-bus"></i></span>

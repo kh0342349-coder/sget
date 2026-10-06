@@ -75,6 +75,9 @@ $migrar = function (): void {
         'VIAJES · índice de consulta de salidas' =>
             "CREATE INDEX idx_viaje_salida ON viaje (est_via, fec_via, hor_sal_via)",
 
+        'VIAJES · índice por ruta y estado' =>
+            "CREATE INDEX idx_viaje_ruta_estado ON viaje (id_rut_via, est_via, fec_via)",
+
         // ------------------------------------------------------------------
         // RESERVAS
         // ------------------------------------------------------------------
@@ -83,6 +86,9 @@ $migrar = function (): void {
 
         'RESERVAS · método de pago obligatorio' =>
             "ALTER TABLE reserva MODIFY COLUMN metodo_pago VARCHAR(50) NOT NULL DEFAULT 'Por definir'",
+
+        'RESERVAS · índice de historial del pasajero' =>
+            "CREATE INDEX idx_reserva_usuario_estado_fecha ON reserva (id_usu_res, estado_pago, fech_res)",
 
         'RESERVAS · fecha de pago coherente' =>
             "UPDATE reserva SET fecha_pago = NULL WHERE fecha_pago IS NULL OR estado_pago <> 'Confirmada'",
@@ -98,6 +104,9 @@ $migrar = function (): void {
 
         'USUARIOS · disponibilidad del conductor documentada' =>
             "ALTER TABLE usuario MODIFY COLUMN est_con_usu INT(11) NULL DEFAULT NULL COMMENT '1 = Disponible, 0 = Ocupado. NULL para otros roles.'",
+
+        'USUARIOS · índice por rol y estado' =>
+            "CREATE INDEX idx_usuario_rol_estado ON usuario (id_rol_usu, estado)",
 
         'USUARIOS · elimina columna heredada sin uso' =>
             "ALTER TABLE usuario DROP COLUMN IF EXISTS restricciones",
@@ -128,6 +137,9 @@ $migrar = function (): void {
 
         'REPORTES · estado controlado' =>
             "ALTER TABLE reportes_pasajeros MODIFY COLUMN estado VARCHAR(20) NOT NULL DEFAULT 'Abierto'",
+
+        'REPORTES · índice por estado y fecha' =>
+            "CREATE INDEX idx_reportes_estado_fecha ON reportes_pasajeros (estado, fecha)",
 
         // ------------------------------------------------------------------
         // TABLA NUEVA: NOTIFICACIONES

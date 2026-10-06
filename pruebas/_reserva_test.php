@@ -77,7 +77,8 @@ if (!$pasajero) {
     $segunda = ReservaService::crear($vA, $pasajero, 1, ['metodo' => 'Efectivo al Abordar']);
     check('Apartar OTRA VEZ en el MISMO viaje se rechaza', $segunda['ok'] === false, $segunda['mensaje']);
     check('El mensaje de «mismo viaje» explica la regla',
-        str_contains($segunda['mensaje'], 'mismo viaje'), $segunda['mensaje']);
+        $segunda['mensaje'] === 'Ya cuentas con una reserva activa para este viaje. No es posible reservar el mismo viaje más de una vez.',
+        $segunda['mensaje']);
 
     $choque = ReservaService::crear($vB, $pasajero, 1, ['metodo' => 'Efectivo al Abordar']);
     check('Apartar en OTRO viaje a la MISMA fecha y hora se rechaza', $choque['ok'] === false, $choque['mensaje']);
@@ -147,6 +148,10 @@ $vEmb = $mkViaje($manana, '07:00:00');
 $res3 = ReservaService::crear($vEmb, $libre ?: 1, 2, ['metodo' => 'Efectivo al Abordar']);
 $idA  = (int)$res3['ids'][0];
 $idB  = (int)$res3['ids'][1];
+
+$abordajeSinPago = ReservaService::marcarEmbarque($idA, true);
+check('No se puede marcar abordaje mientras el pago siga pendiente', $abordajeSinPago['ok'] === false,
+    $abordajeSinPago['mensaje']);
 
 ReservaService::confirmarPago($idA, 0, 'Efectivo');
 check('Pagar NO marca el embarque por el solo hecho de pagar',
@@ -218,10 +223,39 @@ $limpiar($vAjeno);
 $_SESSION['rol'] = Config::ROL_ADMIN;
 $_SESSION['id_usu'] = 1;
 
+echo "\n=== 6) El conductor confirma pago y abordaje en una acción ===\n";
+$vCobroConductor = $mkViaje($manana, '20:00:00');
+$resConductor = ReservaService::crear($vCobroConductor, $pasajero, 1, [
+    'metodo' => 'Efectivo al Abordar',
+]);
+$idReservaConductor = (int)$resConductor['ids'][0];
+$_SESSION['rol'] = Config::ROL_CONDUCTOR;
+$_SESSION['id_usu'] = (int)$cond['id_usu'];
+
+$confirmacionConductor = ReservaService::cobrarYEmbarcarPasajero($vCobroConductor, $pasajero);
+$estadoConfirmacion = Database::one(
+    'SELECT estado_pago, fecha_pago, embarco, embarque_por, embarque_fec
+       FROM reserva WHERE id_res = ?',
+    [$idReservaConductor]
+);
+check('El conductor confirma el cobro en efectivo', $confirmacionConductor['ok'] === true,
+    $confirmacionConductor['mensaje']);
+check('El pago queda confirmado y el puesto abordado',
+    $estadoConfirmacion['estado_pago'] === Config::RES_CONFIRMADA && (int)$estadoConfirmacion['embarco'] === 1);
+check('Se registran las horas de pago y abordaje',
+    !empty($estadoConfirmacion['fecha_pago']) && !empty($estadoConfirmacion['embarque_fec']));
+check('La confirmación queda atribuida al conductor de sesión',
+    (int)$estadoConfirmacion['embarque_por'] === (int)$cond['id_usu']);
+
+$_SESSION['rol'] = Config::ROL_ADMIN;
+$_SESSION['id_usu'] = 1;
+
 /* --- limpieza --- */
 $limpiar($vCobro);
 $limpiar($vEmb);
 $limpiar($vPerdido);
+Database::query('DELETE FROM notificacion WHERE id_via = ?', [$vCobroConductor]);
+$limpiar($vCobroConductor);
 Database::query("DELETE FROM notificacion WHERE tipo = ? AND id_not > 0 AND tipo = ?",
     [NotificacionService::TIPO_VIAJE_PERDIDO, NotificacionService::TIPO_VIAJE_PERDIDO]);
 

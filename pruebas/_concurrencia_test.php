@@ -147,8 +147,59 @@ $check('`cup_dis` queda a 0', $libres === 0, "cup_dis={$libres}");
 $check('Ningún cupo queda en negativo', $libres >= 0, "cup_dis={$libres}");
 
 /* --------------------------------------------------------------------------
- * 4) Limpieza
+ * 4) El mismo pasajero no puede duplicar el mismo viaje en paralelo
  * -------------------------------------------------------------------------- */
+$viajeDuplicado = Database::insert(
+    'INSERT INTO viaje (nom_via, fec_via, hor_sal_via, val_via, id_rut_via, id_usu_via, est_via, id_veh, cup_tot, cup_dis, salio)
+     VALUES (?, CURDATE(), DATE_ADD(CURTIME(), INTERVAL 4 HOUR), 1000, ?, ?, ?, ?, 3, 3, 0)',
+    ['Prueba reserva duplicada', $rutaId, $conductorId, Config::VIA_PROGRAMADO, $vehiculoId]
+);
+
+// Mantener la fila bloqueada permite que ambas peticiones completen su
+// prechequeo antes de que cualquiera inserte la primera reserva.
+Database::begin();
+Database::one('SELECT id_via FROM viaje WHERE id_via = ? FOR UPDATE', [$viajeDuplicado]);
+$archivoDuplicadoA = $script($viajeDuplicado, $pasajeros[0], 0);
+$archivoDuplicadoB = $script($viajeDuplicado, $pasajeros[0], 0);
+$procDuplicadoA = proc_open(PHP_BINARY . ' ' . escapeshellarg($archivoDuplicadoA), $descriptors, $pipesDuplicadoA);
+$procDuplicadoB = proc_open(PHP_BINARY . ' ' . escapeshellarg($archivoDuplicadoB), $descriptors, $pipesDuplicadoB);
+usleep(250000);
+Database::commit();
+
+$salidaDuplicadoA = stream_get_contents($pipesDuplicadoA[1]);
+stream_get_contents($pipesDuplicadoA[2]);
+proc_close($procDuplicadoA);
+$salidaDuplicadoB = stream_get_contents($pipesDuplicadoB[1]);
+stream_get_contents($pipesDuplicadoB[2]);
+proc_close($procDuplicadoB);
+@unlink($archivoDuplicadoA);
+@unlink($archivoDuplicadoB);
+
+$resultadoDuplicadoA = json_decode($salidaDuplicadoA, true);
+$resultadoDuplicadoB = json_decode($salidaDuplicadoB, true);
+$aceptadasDuplicadas = count(array_filter(
+    [$resultadoDuplicadoA, $resultadoDuplicadoB],
+    static fn($resultado): bool => is_array($resultado) && !empty($resultado['ok'])
+));
+$rechazoDuplicado = empty($resultadoDuplicadoA['ok']) ? $resultadoDuplicadoA : $resultadoDuplicadoB;
+$mensajeDuplicado = 'Ya cuentas con una reserva activa para este viaje. No es posible reservar el mismo viaje más de una vez.';
+
+$check('Solo una solicitud del pasajero para el mismo viaje se acepta', $aceptadasDuplicadas === 1,
+    "aceptadas={$aceptadasDuplicadas}");
+$check('La segunda solicitud devuelve el mensaje de reserva duplicada',
+    ($rechazoDuplicado['mensaje'] ?? '') === $mensajeDuplicado, (string)($rechazoDuplicado['mensaje'] ?? 'sin mensaje'));
+$reservasDuplicadasVivas = (int) Database::scalar(
+    'SELECT COUNT(*) FROM reserva WHERE id_via_res = ? AND id_usu_res = ? AND estado_pago <> ?',
+    [$viajeDuplicado, $pasajeros[0], Config::RES_CANCELADA]
+);
+$check('Solo queda una reserva activa del pasajero en el viaje', $reservasDuplicadasVivas === 1,
+    "reservas={$reservasDuplicadasVivas}");
+
+/* --------------------------------------------------------------------------
+ * 5) Limpieza
+ * -------------------------------------------------------------------------- */
+Database::query('DELETE FROM reserva WHERE id_via_res = ?', [$viajeDuplicado]);
+Database::query('DELETE FROM viaje WHERE id_via = ?', [$viajeDuplicado]);
 Database::query('DELETE FROM reserva WHERE id_via_res = ?', [$viajeId]);
 Database::query('DELETE FROM viaje WHERE id_via = ?', [$viajeId]);
 Database::query('DELETE FROM usuario WHERE id_usu IN (?, ?)', $pasajeros);

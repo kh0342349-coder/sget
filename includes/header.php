@@ -201,7 +201,7 @@ foreach ($catalogoOpciones as $opcion) {
 <!-- HEADER FLOTANTE TIPO CÁPSULA -->
 <header class="header-floating h-16 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 rounded-[24px] flex items-center justify-between px-6 sticky top-4 z-40 my-4 shadow-xl relative transition-all duration-300">
     
-    <div class="flex items-center gap-4 flex-1 max-w-xl">
+    <div class="header-floating__inicio flex items-center gap-4 flex-1 max-w-xl">
         <button id="btnToggleSidebar" type="button" class="w-10 h-10 flex items-center justify-center rounded-2xl bg-slate-200/50 dark:bg-white/5 text-slate-700 dark:text-slate-300 hover:bg-sky-500/20 hover:text-sky-500 transition-all border border-slate-300/50 dark:border-white/10 cursor-pointer shrink-0">
             <i class="fas fa-bars text-sm"></i>
         </button>
@@ -217,7 +217,7 @@ foreach ($catalogoOpciones as $opcion) {
         <div class="relative w-full max-w-xs md:max-w-sm ml-1">
             <div class="relative flex items-center">
                 <i class="fas fa-search absolute left-4 text-slate-400 text-xs pointer-events-none"></i>
-                <input type="text" id="inputBuscadorHeader" placeholder="Buscar función... (Ctrl + K)" autocomplete="off" class="w-full pl-10 pr-8 py-2.5 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-full text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-sky-500 transition-all shadow-inner">
+                <input type="text" id="inputBuscadorHeader" value="" placeholder="Buscar función... (Ctrl + K)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="w-full pl-10 pr-8 py-2.5 bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 rounded-full text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-sky-500 transition-all shadow-inner">
                 <span id="btnLimpiarBuscador" class="absolute right-3.5 text-slate-400 hover:text-sky-500 text-xs cursor-pointer hidden"><i class="fas fa-times"></i></span>
             </div>
             <div id="resultadosBusquedaHeader" class="absolute top-full left-0 right-0 mt-3 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden hidden z-50 max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-white/5 custom-scrollbar"></div>
@@ -230,7 +230,7 @@ foreach ($catalogoOpciones as $opcion) {
         <?php endif; ?>
     </div>
 
-    <div class="flex items-center space-x-3 sm:space-x-4 shrink-0">
+    <div class="header-floating__acciones flex items-center gap-3 sm:gap-4 shrink-0">
         <!-- BUZÓN DE NOTIFICACIONES (avisos de cancelación de viajes, etc.) -->
         <?php $__noLeidas = 0;
         if (class_exists('NotificacionService') && $idUsuarioSesión > 0) {

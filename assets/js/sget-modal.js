@@ -702,9 +702,18 @@
             '[data-sget-buscar]',
             '[data-sget-busqueda]',
             'input[type="search"]',
+            'input[type="text"][name*="q" i]',
+            'input[type="text"][name*="search" i]',
+            'input[type="text"][name*="buscar" i]',
+            'input[type="text"][name*="query" i]',
             '.sget-search input',
             '#inputBuscador',
             '#buscarLog',
+            '#inputBuscadorHeader',
+            '#buscarUsuario',
+            '#buscarRuta',
+            '#buscarVehiculo',
+            '#buscarViaje',
             '#inputBuscadorHeader'
         ].join(',');
 
@@ -715,6 +724,15 @@
             return;
         }
 
+        var params = new URLSearchParams(window.location.search || '');
+        var valorActivo = '';
+        ['q', 'search', 'buscar', 'query'].forEach(function (clave) {
+            var valor = params.get(clave);
+            if (valor !== null && String(valor).trim() !== '') {
+                valorActivo = String(valor).trim();
+            }
+        });
+
         Array.prototype.forEach.call(encontrados, function (input) {
             if (!input || input.tagName !== 'INPUT') return;
             if (input.hasAttribute('data-sget-valor-inicial')) return;
@@ -723,13 +741,29 @@
             input.setAttribute('autocorrect', 'off');
             input.setAttribute('autocapitalize', 'off');
             input.setAttribute('spellcheck', 'false');
+            if (input.form) {
+                input.form.setAttribute('autocomplete', 'off');
+            }
 
-            // ¿Se envía al servidor? Si sí, `name` y valor intocables.
+            var esBusqueda = /(?:^|_)(?:q|query|search|buscar)(?:$|_)/i.test(input.name || '') ||
+                /(?:^|[-_])(buscar|search|query|q)(?:$|[-_])/i.test(input.id || '') ||
+                input.matches('[data-sget-buscar], [data-sget-busqueda], #inputBuscadorHeader, #buscarUsuario, #buscarRuta, #buscarVehiculo, #buscarViaje');
+
+            if (!esBusqueda) return;
+
             var esServidor = !!(input.form && input.form.method &&
                 input.form.method.toLowerCase() === 'get');
-            if (esServidor) return;
 
-            // Neutraliza el nombre para que el navegador no lo Complete.
+            if (esServidor && valorActivo !== '') {
+                input.value = valorActivo;
+                return;
+            }
+
+            if (esServidor && valorActivo === '') {
+                input.value = '';
+                return;
+            }
+
             if (!input.hasAttribute('data-sget-nombre-original')) {
                 input.setAttribute('data-sget-nombre-original', input.getAttribute('name') || '');
             }

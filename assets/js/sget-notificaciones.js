@@ -27,6 +27,7 @@
        /Admin, /Conductor o /Pasajero). */
     var API = '../api/index.php';
     var INTERVALO_MS = 60000;          // sondeo del contador
+    var INTERVALO_RESERVAS_MS = 10000;  // pago/abordaje del pasajero
 
 
     function token() {
@@ -88,6 +89,53 @@
             if (antes !== undefined && ahora > antes) {
                 aviso('Tienes ' + (ahora - antes) + ' aviso(s) nuevo(s). Revisa tu buzón.', 'aviso');
             }
+        });
+    }
+
+    function leerEstadosReservas() {
+        if (!document.querySelector('[data-sget-pago-reserva]')) return;
+
+        var c = new FormData();
+        c.append('_token', token());
+        c.append('modulo', 'reserva');
+        c.append('accion', 'misEstados');
+
+        enviar(c, function (j) {
+            if (j.status !== 'ok') return;
+            var reservas = {};
+            (j.datos.reservas || []).forEach(function (reserva) {
+                reservas[String(reserva.id_res)] = reserva;
+            });
+
+            document.querySelectorAll('[data-sget-pago-reserva]').forEach(function (badge) {
+                var reserva = reservas[badge.dataset.sgetPagoReserva];
+                if (!reserva) return;
+
+                var estado = reserva.estado_pago;
+                var metodo = String(reserva.metodo_pago || '').toLowerCase();
+                var etiqueta = estado === 'Confirmada' ? 'PAGADO'
+                    : (estado === 'Cancelada' ? 'CANCELADA'
+                        : (metodo.indexOf('efectivo') !== -1 || metodo.indexOf('pago al abordar') !== -1
+                            ? 'PENDIENTE AL ABORDAR' : 'PENDIENTE DE PAGO'));
+                var clase = estado === 'Confirmada' ? 'sget-badge--exito'
+                    : (estado === 'Cancelada' ? 'sget-badge--neutro' : 'sget-badge--aviso');
+                badge.textContent = etiqueta;
+                badge.classList.remove('sget-badge--exito', 'sget-badge--aviso', 'sget-badge--neutro');
+                badge.classList.add(clase);
+            });
+
+            document.querySelectorAll('[data-sget-embarque-reserva]').forEach(function (badge) {
+                var reserva = reservas[badge.dataset.sgetEmbarqueReserva];
+                if (!reserva) return;
+
+                var embarco = reserva.embarco === null ? null : Number(reserva.embarco);
+                var etiqueta = embarco === 1 ? 'ABORDADO' : (embarco === 0 ? 'NO ABORDÓ' : 'NO CONFIRMADO');
+                var clase = embarco === 1 ? 'sget-badge--exito'
+                    : (embarco === 0 ? 'sget-badge--error' : 'sget-badge--neutro');
+                badge.textContent = etiqueta;
+                badge.classList.remove('sget-badge--exito', 'sget-badge--error', 'sget-badge--neutro');
+                badge.classList.add(clase);
+            });
         });
     }
 
@@ -244,10 +292,15 @@
 
         // 3) Sondeo del contador: un aviso nuevo salta aunque no se recargue
         setInterval(leerContador, INTERVALO_MS);
+        leerEstadosReservas();
+        setInterval(leerEstadosReservas, INTERVALO_RESERVAS_MS);
 
         // 4) Al volver a la pestaña se comprueba al instante
         document.addEventListener('visibilitychange', function () {
-            if (!document.hidden) leerContador();
+            if (!document.hidden) {
+                leerContador();
+                leerEstadosReservas();
+            }
         });
     }
 

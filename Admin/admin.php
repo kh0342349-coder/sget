@@ -126,7 +126,7 @@ $conductores_disponibles = Database::all(
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- CSS MODULAR DEL PANEL (antes: style_admin.css, que no existia en esta carpeta) -->
     <link rel="stylesheet" href="../assets/css/01-base.css">
-    <link rel="stylesheet" href="../assets/css/02-layout.css">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/02-layout.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/03-componentes.css">
     <link rel="stylesheet" href="../assets/css/04-modales.css">
     <link rel="stylesheet" href="../assets/css/05-tablas.css">

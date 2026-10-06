@@ -270,36 +270,13 @@ try {
                 }
 
                 case 'guardar':
-                    /* El conductor también puede programar SU propio viaje: es el
-                       botón «Iniciar Despacho», que antes enviaba a
-                       `guardar_viaje.php` (archivo inexistente) y por tanto no
-                       funcionaba. Solo puede Crear para sí mismo. */
-                    if (Auth::rol() === Config::ROL_CONDUCTOR) {
-                        if ((int)($_POST['id_usu_via'] ?? 0) !== Auth::id()) {
-                            Auth::json(['status' => 'error',
-                                        'mensaje' => 'Solo puedes programar viajes a tu propio nombre.'], 403);
-                        }
-                        if (!Auth::tieneAcceso('crear_viaje')) {
-                            Auth::json(['status' => 'error', 'mensaje' => 'No tienes permiso para crear viajes.'], 403);
-                        }
-                        // El formulario heredado manda `id_veh_via`; el servicio
-                        // espera `id_veh`. Se normaliza en el servidor, no en el
-                        // formulario: el backend nunca confía en lo que envía el
-                        // cliente sin adaptarlo a la regla del dominio.
-                        if (empty($_POST['id_veh']) && !empty($_POST['id_veh_via'])) {
-                            $_POST['id_veh'] = (int)$_POST['id_veh_via'];
-                        }
-                    } else {
-                        Auth::requerirAdmin();
-                    }
-
+                    Auth::requerirAdmin();
                     $r = ViajeService::guardar($_POST);
                     if (!$r['ok']) {
                         Auth::json(['status' => 'error', 'mensaje' => $r['mensaje'], 'errores' => $r['errores'] ?? []], 422);
                     }
-                    $destino = Auth::rol() === Config::ROL_CONDUCTOR ? '../Conductor/viaje_asignado.php' : 'viajes.php';
                     Auth::json(['status' => 'ok', 'mensaje' => $r['mensaje'],
-                                'redirect' => $destino . '?ok=' . urlencode($r['mensaje'])]);
+                                'redirect' => 'viajes.php?ok=' . urlencode($r['mensaje'])]);
                     break;
 
                 case 'finalizar': {
@@ -575,13 +552,48 @@ try {
 
         /* ============================================================== */
         case 'reserva': {
-            /* Cada acción vuelve a exigir SU permiso. El conductor solo llega
-               hasta las tres que se comprueban por propiedad (manifiesto,
-               embarque y no-presentación). */
-            if ($accion !== 'manifiesto' && $accion !== 'embarcar' && $accion !== 'noPresente') {
+                /* El conductor solo llega a acciones de sus propios viajes;
+                    todas vuelven a comprobar propiedad antes de leer o escribir. */
+                    if (!in_array($accion, ['manifiesto', 'embarcar', 'noPresente', 'cobrarYEmbarcar', 'misEstados', 'pasajeroEnRuta'], true)) {
                 Auth::exigir('reserva', $accion);
             }
             switch ($accion) {
+                    case 'pasajeroEnRuta': {
+                        Auth::requerirRol(Config::ROL_CONDUCTOR);
+                        $idViaje = (int)($_POST['id_via'] ?? 0);
+                        if (!ViajeService::puedeVerManifiesto($idViaje)) {
+                            Auth::json(['status' => 'error',
+                                        'mensaje' => 'Solo puedes agregar pasajeros a los viajes que conduces.'], 403);
+                        }
+                        $r = ReservaService::agregarTemporalEnRuta($idViaje, [
+                            'nombre' => (string)($_POST['nombre'] ?? ''),
+                            'documento' => (string)($_POST['documento'] ?? ''),
+                            'telefono' => (string)($_POST['telefono'] ?? ''),
+                            'punto_abordaje' => (string)($_POST['punto_abordaje'] ?? ''),
+                            'destino_abordaje' => (string)($_POST['destino_abordaje'] ?? ''),
+                            'valor_pagado' => (float)($_POST['valor_pagado'] ?? 0),
+                            'metodo_pago' => (string)($_POST['metodo_pago'] ?? ''),
+                        ]);
+                        Auth::json($r['ok']
+                            ? ['status' => 'ok', 'mensaje' => $r['mensaje'], 'datos' => ['id_res' => $r['id_res']]]
+                            : ['status' => 'error', 'mensaje' => $r['mensaje']], $r['ok'] ? 200 : 409);
+                        break;
+                    }
+                case 'misEstados': {
+                    if (Auth::rol() !== Config::ROL_PASAJERO) {
+                        Auth::json(['status' => 'error', 'mensaje' => 'Esta consulta es solo para pasajeros.'], 403);
+                    }
+                    $estados = Database::all(
+                        'SELECT id_res, estado_pago, metodo_pago, embarco, embarque_fec
+                           FROM reserva
+                          WHERE id_usu_res = ?
+                                                    ORDER BY id_res DESC',
+                        [Auth::id()]
+                    );
+                    Auth::json(['status' => 'ok', 'datos' => ['reservas' => $estados]]);
+                    break;
+                }
+
                 /* Pasajero que paga en mostrador sin tener cuenta: se le crea una
                    ficha mínima para que la reserva y el cobro queden trazables. */
                 case 'ocasional': {
@@ -654,6 +666,24 @@ try {
                            'errores' => ['valor' => $r['mensaje']]], $r['ok'] ? 200 : 409);
                     break;
 
+                case 'cobrarYEmbarcar': {
+                    Auth::requerirRol(Config::ROL_CONDUCTOR);
+                    $idViaje = (int)($_POST['id_via'] ?? 0);
+                    if (!ViajeService::puedeVerManifiesto($idViaje)) {
+                        Auth::json(['status' => 'error',
+                                    'mensaje' => 'Solo puedes confirmar pagos de los viajes que conduces.'], 403);
+                    }
+                    $r = ReservaService::cobrarYEmbarcarPasajero(
+                        $idViaje,
+                        (int)($_POST['id_usu'] ?? 0)
+                    );
+                    Auth::json($r['ok']
+                        ? ['status' => 'ok', 'mensaje' => $r['mensaje'],
+                           'datos' => ['cobradas' => $r['cobradas'] ?? 0]]
+                        : ['status' => 'error', 'mensaje' => $r['mensaje']], $r['ok'] ? 200 : 409);
+                    break;
+                }
+
                 /* --- Manifestación: quién tiene puesto en cada viaje --- */
                 case 'manifiesto': {
                     $idViaje = (int)($_POST['id'] ?? 0);
@@ -677,7 +707,8 @@ try {
                     $r = ReservaService::marcarEmbarque(
                         (int)($_POST['id'] ?? 0),
                         !empty($_POST['embarco']),
-                        (string)($_POST['motivo'] ?? '')
+                        (string)($_POST['motivo'] ?? ''),
+                        $idViaje
                     );
                     Auth::json($r['ok']
                         ? ['status' => 'ok', 'mensaje' => $r['mensaje']]

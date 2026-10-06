@@ -92,11 +92,6 @@ include __DIR__ . '/../views/partials/head.php';
         <?php else: ?>
 
             <div class="sget-toolbar">
-                <div class="sget-search">
-                    <i class="fas fa-magnifying-glass"></i>
-                    <input type="search" id="buscarReporte" class="sget-input" data-sget-buscar
-                       placeholder="Buscar por folio, pasajero o texto del reporte… (Ctrl+K)" autocomplete="off" spellcheck="false">
-                </div>
                 <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="*">Todos</button>
                 <?php foreach (ReporteService::ESTADOS as $estado): ?>
                     <button type="button" class="sget-btn sget-btn--fantasma sget-btn--sm" data-sget-filtro="<?= $estado ?>">

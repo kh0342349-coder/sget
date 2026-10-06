@@ -602,6 +602,18 @@ html.dark .landing-header__logo--oscuro { display: block; }
     .sget-recaptcha { padding: .5rem .25rem; overflow-x: auto; }
 }
 
+@media (max-width: 360px) {
+    .sget-recaptcha { overflow: visible; }
+    .sget-recaptcha .g-recaptcha {
+        transform: scale(.9);
+        transform-origin: center top;
+    }
+}
+
+@media (max-width: 300px) {
+    .sget-recaptcha .g-recaptcha { transform: scale(.78); }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Responsive general                                                          */
 /* -------------------------------------------------------------------------- */

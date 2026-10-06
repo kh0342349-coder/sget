@@ -9,8 +9,9 @@
  *   INSERT sin esos campos => MySQL guardaba cadena vacia ('') porque el motor
  *   no estaba en modo estricto. Resultado: rutas "sin salida y sin destino".
  *
- *   Ahora: origen, destino, distancia, hora de salida y tarifa son obligatorios
- *   y validados antes de escribir. No hay valores por defecto silenciosos.
+ *   Ahora: origen, destino y tarifa se validan antes de escribir. La distancia
+ *   es opcional y la hora de salida no pertenece a la ruta: cada viaje define
+ *   su propio horario. Se conserva la columna nullable para datos heredados.
  * -----------------------------------------------------------------------------
  */
 declare(strict_types=1);

@@ -12,7 +12,8 @@ Auth::requerirSesion();
 Auth::requerirRol(Config::ROL_PASAJERO);
 
 $nombreReal = $_SESSION['nombre_usuario'] ?? "Pasajero";
-$idPasajero = (int)($_SESSION['id_usu'] ?? 0);
+$idPasajero = Auth::id();
+$estadoCancelada = Config::RES_CANCELADA;
 
 // Avisos de la reserva anterior. SIN ESTE BLOQUE el pasajero no se enteraba de
 // nada: `procesar_reserva.php` redirigía aquí con el motivo en la sesión y esta
@@ -36,20 +37,20 @@ unset($_SESSION['error'], $_SESSION['exito']);
 // existe todavía) la consulta reventaba con «Unknown column».
 $sql = "SELECT b.*,
                (b.cap_veh - b.ocupados) AS disponibles,
-               (SELECT COUNT(*) FROM reserva
-                 WHERE id_via_res = b.id_via AND id_usu_res = " . (int)$idPasajero . "
-                   AND estado_pago <> 'Cancelada') AS mios,
+                             (SELECT COUNT(*) FROM reserva
+                                 WHERE id_via_res = b.id_via AND id_usu_res = ?
+                                     AND estado_pago <> ?) AS mios,
                EXISTS (SELECT 1 FROM reserva o
                          INNER JOIN viaje ov ON ov.id_via = o.id_via_res
-                        WHERE o.id_usu_res = " . (int)$idPasajero . "
-                          AND o.estado_pago <> 'Cancelada'
+                                                WHERE o.id_usu_res = ?
+                                                    AND o.estado_pago <> ?
                           AND ov.id_via <> b.id_via
                           AND DATE(ov.fec_via) = DATE(b.fec_via)
                           AND ov.hor_sal_via = b.hor_sal_via) AS choca_hora
         FROM (
             SELECT v.*, r.nom_rut, u.nom_usu, ve.cap_veh,
-                   (SELECT COUNT(*) FROM reserva
-                     WHERE id_via_res = v.id_via AND estado_pago <> 'Cancelada') AS ocupados
+                    (SELECT COUNT(*) FROM reserva
+                     WHERE id_via_res = v.id_via AND estado_pago <> ?) AS ocupados
               FROM viaje v
               LEFT JOIN rutas r     ON v.id_rut_via = r.id_rut
               LEFT JOIN usuario u   ON v.id_usu_via = u.id_usu
@@ -59,7 +60,10 @@ $sql = "SELECT b.*,
         WHERE b.cap_veh IS NULL OR b.ocupados < b.cap_veh
         ORDER BY b.fec_via ASC, b.hor_sal_via ASC";
 
-$res = $conexion->query($sql);
+    $consulta = $conexion->prepare($sql);
+    $consulta->bind_param('isiss', $idPasajero, $estadoCancelada, $idPasajero, $estadoCancelada, $estadoCancelada);
+    $consulta->execute();
+    $res = $consulta->get_result();
 ?>
 
 <!DOCTYPE html>
@@ -71,7 +75,7 @@ $res = $conexion->query($sql);
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
     <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
-    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/02-layout.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
@@ -245,7 +249,7 @@ $res = $conexion->query($sql);
                                     <!-- Botón Reservar -->
                                     <?php if ($yaApartado): ?>
                                         <span class="px-4 py-3 rounded-xl text-[10px] font-black tracking-widest uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 cursor-not-allowed"
-                                              title="Ya tienes un puesto en este viaje. No se puede volver a apartar en el mismo viaje; para anadir mas puestos, pidelos al administrador.">
+                                              title="Ya cuentas con una reserva activa para este viaje. No es posible reservar el mismo viaje más de una vez.">
                                             YA APARTADO
                                         </span>
                                     <?php elseif ($choca_hora): ?>

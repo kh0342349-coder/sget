@@ -433,13 +433,6 @@ include __DIR__ . '/../views/partials/head.php';
                 <input type="hidden" name="desde" value="<?= $e($filtros['desde']) ?>">
                 <input type="hidden" name="hasta" value="<?= $e($filtros['hasta']) ?>">
 
-                <div class="sget-field" style="flex:1 1 14rem">
-                    <label class="sget-label" for="f_q">Buscar</label>
-                    <input type="search" id="f_q" name="q" class="sget-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= $e($filtros['q']) ?>"
-                           <?= $filtros['q'] !== '' ? 'data-sget-valor-inicial' : '' ?>
-                           placeholder="Ruta, conductor, placa o # de viaje">
-                </div>
-
                 <div class="sget-field" style="flex:0 1 11rem">
                     <label class="sget-label" for="f_estado">Estado</label>
                     <select id="f_estado" name="estado" class="sget-select">
@@ -623,13 +616,6 @@ include __DIR__ . '/../views/partials/head.php';
                 <input type="hidden" name="desde" value="<?= $e($filtros['desde']) ?>">
                 <input type="hidden" name="hasta" value="<?= $e($filtros['hasta']) ?>">
 
-                <div class="sget-field" style="flex:1 1 16rem">
-                    <label class="sget-label" for="f_qp">Buscar pasajero</label>
-                    <input type="search" id="f_qp" name="q" class="sget-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= $e($filtros['q']) ?>"
-                           <?= $filtros['q'] !== '' ? 'data-sget-valor-inicial' : '' ?>
-                           placeholder="Nombre, documento o motivo de la ausencia…">
-                </div>
-
                 <div class="sget-field" style="flex:0 1 13rem">
                     <label class="sget-label" for="f_viaje">Ver un viaje concreto</label>
                     <select id="f_viaje" name="viaje" class="sget-select">
@@ -803,13 +789,6 @@ include __DIR__ . '/../views/partials/head.php';
             <form method="GET" class="sget-toolbar" data-sget-form-solo>
                 <input type="hidden" name="tab" value="usuarios">
                 <input type="hidden" name="rango" value="<?= $e($rango) ?>">
-
-                <div class="sget-field" style="flex:1 1 14rem">
-                    <label class="sget-label" for="fu_q">Buscar</label>
-                    <input type="search" id="fu_q" name="q" class="sget-input" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" value="<?= $e($filtros['q']) ?>"
-                           <?= $filtros['q'] !== '' ? 'data-sget-valor-inicial' : '' ?>
-                           placeholder="Nombre, documento, correo o teléfono">
-                </div>
 
                 <div class="sget-field" style="flex:0 1 11rem">
                     <label class="sget-label" for="fu_rol">Rol</label>

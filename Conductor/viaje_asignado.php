@@ -41,6 +41,7 @@ $sql_viaje = "SELECT
         v.est_via,
         v.cup_tot,
         v.cup_dis,
+        v.val_via,
         u.nom_usu AS conductor_nombre,
         u.num_doc_usu AS conductor_doc,
         u.tel_usu AS conductor_telefono,
@@ -126,7 +127,7 @@ $vehiculos_select = $stmt_vehiculos->get_result();
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- SISTEMA VISUAL SGET (CSS modular): tema, componentes, modales y responsive -->
     <link rel="stylesheet" href="../assets/css/01-base.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
-    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
+    <link rel="stylesheet" href="../assets/css/02-layout.css?v=<?= @filemtime('../assets/css/02-layout.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/03-componentes.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/04-modales.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
     <link rel="stylesheet" href="../assets/css/05-tablas.css?v=<?= @filemtime('../assets/css/01-base.css') ?: '1' ?>">
@@ -198,10 +199,6 @@ $vehiculos_select = $stmt_vehiculos->get_result();
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Detalle del servicio, itinerario y listado oficial de pasajeros abonados.</p>
                 </div>
 
-                <!-- BOTÓN PRINCIPAL ACCIÓN CON MODAL DRAWER (+) -->
-                <button onclick="abrirModalSolicitar()" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 dark:from-neon-azul dark:to-blue-600 hover:opacity-95 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto">
-                    <i class="fas fa-plus-circle text-sm"></i> Programar Viaje
-                </button>
             </div>
 
             <?php if ($viaje): ?>
@@ -302,10 +299,22 @@ $vehiculos_select = $stmt_vehiculos->get_result();
                             <i class="fas fa-users text-emerald-500 text-lg"></i>
                             <h2 class="font-bold text-slate-900 dark:text-white text-base">3. Pasajeros de este viaje</h2>
                         </div>
+                        <?php if ($viaje && (string)$viaje['est_via'] === Config::VIA_EN_CURSO): ?>
+                            <button type="button" class="sget-btn sget-btn--primario sget-btn--sm"
+                                    data-sget-modal="modalPasajeroTemporal">
+                                <i class="fas fa-user-plus"></i> Agregar pasajero en ruta
+                            </button>
+                        <?php endif; ?>
                         <?php if ($totalPasajeros > 0): ?>
                             <div class="flex items-center gap-2 text-[10px] font-black uppercase tracking-wider">
                                 <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-white/5">
                                     <?= (int)$totalPasajeros ?> puesto(s)
+                                </span>
+                                <?php
+                                $recaudadoTotal = array_sum(array_map(static fn($m): float => (float)($m['pagados'] ?? 0) * (float)($m['debe'] ?? 0), $manifiesto));
+                                ?>
+                                <span class="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                    <i class="fas fa-coins mr-1"></i> Recaudado: $<?= number_format($recaudadoTotal, 0, ',', '.') ?>
                                 </span>
                                 <?php if ($embarcaron > 0): ?>
                                     <span class="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
@@ -346,8 +355,10 @@ $vehiculos_select = $stmt_vehiculos->get_result();
                                         <?php
                                         $cancelado   = $m['cancelados'] > 0 && $m['pagados'] === 0 && $m['pendientes'] === 0;
                                         $todoPagado  = $m['pendientes'] === 0 && !$cancelado;
-                                        $embarcado   = $m['embarcaron'] > 0 && $m['no_embarcaron'] === 0;
-                                        $noVino      = $m['no_embarcaron'] > 0 && $m['embarcaron'] === 0;
+                                        $embarcado   = $m['embarcaron'] > 0 && $m['no_embarcaron'] === 0 && $m['sin_decidir'] === 0;
+                                        $noVino      = $m['no_embarcaron'] > 0 && $m['embarcaron'] === 0 && $m['sin_decidir'] === 0;
+                                        $pagoAlAbordar = $m['pendientes'] > 0 && $m['pendientes_al_abordar'] === $m['pendientes'];
+                                        $cobrarYEmbarcar = $pagoAlAbordar && $m['sin_decidir'] > 0 && $m['no_embarcaron'] === 0;
                                         ?>
                                         <tr class="hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors<?= $cancelado ? ' opacity-50' : '' ?>">
                                             <td class="px-5 py-4">
@@ -357,6 +368,14 @@ $vehiculos_select = $stmt_vehiculos->get_result();
                                                 <div class="font-mono text-[10px] text-slate-400">
                                                     <?= htmlspecialchars($m['num_doc_usu'], ENT_QUOTES, 'UTF-8') ?>
                                                 </div>
+                                                <?php if (!empty($m['es_temporal'])): ?>
+                                                    <span class="sget-badge sget-badge--info" style="margin-top:.25rem">Pasajero en ruta</span>
+                                                    <?php foreach ($m['tramos_temporales'] as $tramo): ?>
+                                                        <div class="sget-help">
+                                                            <?= htmlspecialchars($tramo['origen'] . ' → ' . $tramo['destino'], ENT_QUOTES, 'UTF-8') ?>
+                                                        </div>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
                                                 <?php if ($m['motivo'] !== ''): ?>
                                                     <div class="text-[10px] text-rose-500 dark:text-rose-400 mt-1">
                                                         <i class="fas fa-circle-info"></i> <?= htmlspecialchars($m['motivo'], ENT_QUOTES, 'UTF-8') ?>
@@ -374,6 +393,10 @@ $vehiculos_select = $stmt_vehiculos->get_result();
                                                     <span class="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
                                                         <i class="fas fa-check-circle mr-1"></i> Pagada
                                                     </span>
+                                                <?php elseif ($pagoAlAbordar): ?>
+                                                    <span class="bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
+                                                        <i class="fas fa-coins mr-1"></i> Pendiente al abordar
+                                                    </span>
                                                 <?php else: ?>
                                                     <span class="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
                                                         <i class="fas fa-clock mr-1"></i> <?= (int)$m['pendientes'] ?> pendiente(s)
@@ -389,6 +412,10 @@ $vehiculos_select = $stmt_vehiculos->get_result();
                                                     <span class="bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
                                                         <i class="fas fa-user-slash mr-1"></i> No se present&oacute;
                                                     </span>
+                                                <?php elseif ($m['embarcaron'] > 0 || $m['no_embarcaron'] > 0): ?>
+                                                    <span class="bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
+                                                        Embarque parcial
+                                                    </span>
                                                 <?php else: ?>
                                                     <span class="bg-slate-100 dark:bg-white/5 text-slate-500 border border-slate-200 dark:border-white/5 font-bold px-2.5 py-1 rounded-lg text-xs inline-block">
                                                         <i class="fas fa-question mr-1"></i> Sin definir
@@ -398,20 +425,31 @@ $vehiculos_select = $stmt_vehiculos->get_result();
                                             <td class="px-5 py-4">
                                                 <?php if (!$cancelado): ?>
                                                     <div class="flex items-center justify-end gap-2">
-                                                        <button type="button"
-                                                                class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors <?= $embarcado ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 opacity-60' : 'bg-emerald-600 hover:bg-emerald-700 text-white' ?>"
-                                                                data-sget-embarcar="1"
-                                                                data-sget-pasajero="<?= (int)$m['id_pasajero'] ?>"
-                                                                title="Marcar que este pasajero subio al bus">
-                                                            <i class="fas fa-user-check"></i> Subio
-                                                        </button>
-                                                        <button type="button"
-                                                                class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors <?= $noVino ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 opacity-60' : 'bg-rose-600 hover:bg-rose-700 text-white' ?>"
-                                                                data-sget-embarcar="0"
-                                                                data-sget-pasajero="<?= (int)$m['id_pasajero'] ?>"
-                                                                title="Marcar que este pasajero no se presento (pide un motivo)">
-                                                            <i class="fas fa-user-slash"></i> No vino
-                                                        </button>
+                                                        <?php if ($cobrarYEmbarcar): ?>
+                                                            <button type="button"
+                                                                    class="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-wider bg-amber-500 hover:bg-amber-400 text-slate-950 transition-colors"
+                                                                    data-sget-cobrar-embarcar="1"
+                                                                    data-sget-pasajero="<?= (int)$m['id_pasajero'] ?>">
+                                                                <i class="fas fa-money-bill-wave mr-1"></i> Confirmar pago y abordaje
+                                                            </button>
+                                                        <?php elseif ($m['pendientes'] === 0 && !empty($m['ids_por_embarcar'])): ?>
+                                                            <button type="button"
+                                                                    class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                                                                    data-sget-embarcar="1"
+                                                                    data-sget-reserva="<?= (int)$m['ids_por_embarcar'][0] ?>"
+                                                                    title="Marcar el abordaje de un puesto pagado">
+                                                                <i class="fas fa-user-check"></i> Confirmar abordaje
+                                                            </button>
+                                                        <?php endif; ?>
+                                                        <?php if ($m['sin_decidir'] > 0): ?>
+                                                            <button type="button"
+                                                                    class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors bg-rose-600 hover:bg-rose-700 text-white"
+                                                                    data-sget-embarcar="0"
+                                                                    data-sget-pasajero="<?= (int)$m['id_pasajero'] ?>"
+                                                                    title="Marcar que este pasajero no se presento (pide un motivo)">
+                                                                <i class="fas fa-user-slash"></i> No vino
+                                                            </button>
+                                                        <?php endif; ?>
                                                     </div>
                                                 <?php endif; ?>
                                             </td>
@@ -707,8 +745,21 @@ $vehiculos_select = $stmt_vehiculos->get_result();
     </script>
 
     <!-- Motor común de modales + puente de compatibilidad con el JS heredado -->
+    <?php if ($viaje && (string)$viaje['est_via'] === Config::VIA_EN_CURSO): ?>
+        <?php $viajeTemporal = [
+            'id_via' => (int)$viaje['id_via'],
+            'origen' => (string)($viaje['ori_rut'] ?? ''),
+            'destino' => (string)($viaje['des_rut'] ?? ''),
+            'tarifa' => (float)($viaje['val_via'] ?? $viaje['val_rut'] ?? 0),
+        ]; ?>
+        <?php include __DIR__ . '/../views/modals/pasajero-temporal.php'; ?>
+    <?php endif; ?>
+
     <script src="../assets/js/sget-modal.js?v=<?= @filemtime('../assets/js/sget-modal.js') ?: '1' ?>"></script>
     <script src="../assets/js/sget-puente.js?v=<?= @filemtime('../assets/js/sget-puente.js') ?: '1' ?>"></script>
+    <?php if ($viaje && (string)$viaje['est_via'] === Config::VIA_EN_CURSO): ?>
+        <script src="../assets/js/sget-pasajero-temporal.js?v=<?= @filemtime('../assets/js/sget-pasajero-temporal.js') ?: '1' ?>"></script>
+    <?php endif; ?>
 
     <script>
     /* MARCAJE DE EMBARQUE DEL CONDUCTOR
@@ -757,6 +808,15 @@ $vehiculos_select = $stmt_vehiculos->get_result();
               .catch(function () { SGETModal.toast('No se pudo conectar con el servidor.', 'error'); });
         }
         document.addEventListener('click', function (e) {
+            var cobrarYEmbarcar = e.target.closest('[data-sget-cobrar-embarcar]');
+            if (cobrarYEmbarcar) {
+                e.preventDefault();
+                api('cobrarYEmbarcar', function (c) {
+                    c.append('id_usu', cobrarYEmbarcar.dataset.sgetPasajero);
+                }, function () { location.reload(); });
+                return;
+            }
+
             var btn = e.target.closest('[data-sget-embarcar]');
             if (!btn) return;
             e.preventDefault();
@@ -767,7 +827,7 @@ $vehiculos_select = $stmt_vehiculos->get_result();
             // Subió: no hay nada que preguntar, se registra y se recarga.
             if (embarco) {
                 api('embarcar', function (c) {
-                    c.append('id', idPasajero);
+                    c.append('id', btn.dataset.sgetReserva);
                     c.append('embarco', '1');
                 }, function () { location.reload(); });
                 return;

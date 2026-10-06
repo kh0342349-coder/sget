@@ -139,10 +139,6 @@ include __DIR__ . '/../views/partials/head.php';
                 <p class="sget-page-sub">Registra, edita y controla el acceso de administradores, conductores y pasajeros.</p>
             </div>
             <div class="sget-page-actions">
-                <div class="sget-search">
-                    <i class="fas fa-magnifying-glass"></i>
-                    <input type="search" id="buscarUsuario" class="sget-input" placeholder="Buscar documento, nombre o correo… (Ctrl+K)" autocomplete="off" spellcheck="false">
-                </div>
                 <button type="button" class="sget-btn sget-btn--primario" data-sget-modal="modalUsuario" data-sget-nuevo="Registrar Nuevo Usuario">
                     <i class="fas fa-user-plus"></i> Nuevo Usuario
                 </button>
@@ -197,13 +193,6 @@ include __DIR__ . '/../views/partials/head.php';
 
 <?php include __DIR__ . '/../views/modals/usuario.php'; ?>
 
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        SGETCRUD.atajoBusqueda('buscarUsuario');
-        // La búsqueda recorre TODAS las pestañas, no solo la visible
-        SGETCRUD.buscar('buscarUsuario', '[data-sget-fila]');
-    });
-</script>
 <?php
 $jsExtra = ['sget-page.js'];
 include __DIR__ . '/../views/partials/foot.php';

@@ -110,13 +110,6 @@ include __DIR__ . '/../views/partials/head.php';
             <?php endforeach; ?>
         </section>
 
-        <div class="sget-toolbar">
-            <div class="sget-search">
-                <i class="fas fa-magnifying-glass"></i>
-                <input type="search" id="buscarViaje" class="sget-input" placeholder="Buscar ruta, conductor o placa… (Ctrl+K)" autocomplete="off" spellcheck="false">
-            </div>
-        </div>
-
         <?php if ($total === 0): ?>
             <div class="sget-vacio">
                 <span class="sget-vacio__icono"><i class="fas fa-truck-fast"></i></span>
@@ -294,9 +287,6 @@ include __DIR__ . '/../views/partials/head.php';
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        SGETCRUD.atajoBusqueda('buscarViaje');
-        SGETCRUD.buscar('buscarViaje', '[data-sget-fila]');
-
         /* Al elegir ruta: se heredan la tarifa y la hora de salida por defecto.
            Esto elimina el error de "tarifa en 0" y la hora 00:00 heredada. */
         var selRuta = document.getElementById('viaje_ruta');
@@ -322,6 +312,10 @@ include __DIR__ . '/../views/partials/head.php';
             }
         }
         if (selRuta) { selRuta.addEventListener('change', sincronizar); sincronizar(); }
+        document.addEventListener('sget:modal-abierto', function (e) {
+            if (!e.detail || e.detail.id !== 'modalViaje') return;
+            sincronizar();
+        });
     });
 </script>
 <?php

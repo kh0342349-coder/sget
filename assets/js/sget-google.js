@@ -52,6 +52,8 @@
        esperando al SDK, y ninguno pisa al otro. */
     var estado = {};
     var avisoMostrado = {};
+    var anchoVentana = document.documentElement.clientWidth;
+    var temporizadorRedimension = null;
 
     /* ------------------------------------------------------------------ */
     /* Utilidades                                                         */
@@ -308,6 +310,16 @@
         document.addEventListener('sget:idioma', function (e) {
             var nuevo = (e.detail && e.detail.idioma) || idiomaActual();
             if (nuevo !== idiomaActual()) montar(true);
+        });
+
+        window.addEventListener('resize', function () {
+            var nuevoAncho = document.documentElement.clientWidth;
+            if (nuevoAncho === anchoVentana) return;
+            anchoVentana = nuevoAncho;
+            window.clearTimeout(temporizadorRedimension);
+            temporizadorRedimension = window.setTimeout(function () {
+                if (document.querySelector('[data-sget-capa][data-abierto="1"]')) montar(true);
+            }, 150);
         });
     }
 

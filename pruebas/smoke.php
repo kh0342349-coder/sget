@@ -87,13 +87,13 @@ echo "\n=== 6. Alta real de ruta (ida y vuelta) ===\n";
 $nombre = 'SMOKE-' . bin2hex(random_bytes(3));
 $res = RutaService::guardar([
     'nom_rut' => $nombre, 'ori_rut' => 'Prueba_origen', 'des_rut' => 'Prueba_destino',
-    'dis_rut' => '88.5', 'val_rut' => '12500.50', 'hora_salida' => '05:45',
+    'dis_rut' => '88.5', 'val_rut' => '12500.50',
 ]);
 check('Ruta creada', $res['ok'] === true, json_encode($res));
 $guardada = RutaService::porId($res['id']);
 check('Guarda origen',  $guardada['ori_rut'] === 'Prueba_origen',  (string)$guardada['ori_rut']);
 check('Guarda destino', $guardada['des_rut'] === 'Prueba_destino', (string)$guardada['des_rut']);
-check('Guarda hora de salida como TIME', $guardada['hora_salida'] === '05:45:00', (string)$guardada['hora_salida']);
+check('La ruta puede guardarse sin hora de salida', $guardada['hora_salida'] === null, (string)$guardada['hora_salida']);
 check('Guarda la distancia', abs((float)$guardada['dis_rut'] - 88.5) < 0.001);
 
 echo "\n=== 7. Validación de Viajes ===\n";
